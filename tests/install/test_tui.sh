@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # tests/install/test_tui.sh - non-interactive coverage for the `install` TUI.
 #
-# The interactive TUI paths are exercised by humans. These tests cover the
-# plain / non-TTY contract: help, plain install parity with bare install.sh,
-# argument validation, gate detection, and NO_COLOR cleanliness.
+# The installer is now zero-dependency Node (bin/ + lib/) fronted by the POSIX
+# sh `install` shim. The interactive TUI paths are exercised by humans. These
+# tests cover the plain / non-TTY contract: node sources parse, the shim is sh,
+# help, plain install parity with bare install.sh, argument validation, gate
+# detection, and NO_COLOR cleanliness.
 set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -28,9 +30,13 @@ snapshot() {
     done )
 }
 
-echo "== python source compiles =="
-if python3 -m py_compile "$INSTALL"; then pass "install compiles clean"
-else fail "install compiles clean"; fi
+echo "== node sources parse and shim is POSIX sh =="
+if node --check "$REPO/bin/claude-company.js"; then pass "bin/claude-company.js parses clean"
+else fail "bin/claude-company.js parses clean"; fi
+if node --check "$REPO/lib/install-tui.js"; then pass "lib/install-tui.js parses clean"
+else fail "lib/install-tui.js parses clean"; fi
+[ "$(head -1 "$INSTALL")" = "#!/bin/sh" ] && pass "install is a POSIX sh shim" \
+  || fail "install is a POSIX sh shim"
 
 echo "== --help =="
 "$INSTALL" --help >"$WORK/help.out" 2>&1

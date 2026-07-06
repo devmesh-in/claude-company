@@ -1,30 +1,35 @@
 #!/usr/bin/env node
 "use strict";
 
-// claude-company - thin Node launcher over the Python installer TUI.
+// claude-company - the npm-native CLI entry point.
 //
-// This wrapper exists so the project can ship on npm:
 //   npm install -g claude-company   ->   claude-company install .
 //   npx claude-company install .
 //
-// It owns no install logic of its own. The `install` subcommand finds a
-// suitable Python (3.8+), then hands off to <package-root>/install, forwarding
-// every remaining argument verbatim and mirroring the child's exit / signal.
+// This wrapper owns the subcommand parse (install / help / --version) and hands
+// the `install` subcommand off to the Node installer TUI in lib/. The installer
+// itself is zero-dependency Node; no Python is needed to launch it (python3 is
+// probed inside the installer's preflight, since the enforcement hooks need it).
+
+// Runtime Node floor. `engines` only warns at install time (npm EBADENGINE is
+// non-fatal), so enforce >= 16 here where stdlib features we rely on exist.
+const MIN_NODE_MAJOR = 16;
+const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
+if (nodeMajor < MIN_NODE_MAJOR) {
+  process.stderr.write(
+    "claude-company requires Node " + MIN_NODE_MAJOR + " or newer (found " +
+    process.versions.node + "). Please upgrade Node and try again.\n");
+  process.exit(1);
+}
 
 const path = require("path");
-const fs = require("fs");
-const { spawn, spawnSync } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
-const INSTALLER = path.join(ROOT, "install");
 const PKG = require(path.join(ROOT, "package.json"));
 
 // --- minimal styling (bold + brand purple), with a dumb-terminal fallback ---
 
-const COLOR =
-  process.env.NO_COLOR === undefined &&
-  process.env.NO_COLOR !== "" &&
-  process.stdout.isTTY === true;
+const COLOR = process.env.NO_COLOR === undefined && process.stdout.isTTY === true;
 
 const PURPLE = "\x1b[38;2;139;92;246m";
 const BOLD = "\x1b[1m";
@@ -38,10 +43,6 @@ function bold(text) {
 }
 
 // --- help / version ---------------------------------------------------------
-
-function versionString() {
-  return PKG.version;
-}
 
 function helpText() {
   return [
@@ -68,103 +69,6 @@ function helpText() {
   ].join("\n");
 }
 
-// --- python discovery -------------------------------------------------------
-
-// Return an absolute-ish command name for a Python >= 3.8, or null.
-function findPython() {
-  const candidates = ["python3", "python"];
-  for (const bin of candidates) {
-    let res;
-    try {
-      res = spawnSync(bin, ["--version"], { encoding: "utf8" });
-    } catch (e) {
-      continue;
-    }
-    if (!res || res.error || res.status !== 0) {
-      continue;
-    }
-    const out = (res.stdout || "") + (res.stderr || "");
-    const m = out.match(/Python\s+(\d+)\.(\d+)/i);
-    if (!m) {
-      continue;
-    }
-    const major = parseInt(m[1], 10);
-    const minor = parseInt(m[2], 10);
-    if (major > 3 || (major === 3 && minor >= 8)) {
-      return bin;
-    }
-  }
-  return null;
-}
-
-function noPythonError() {
-  const lines = [
-    bold("claude-company needs Python 3.8+ to run its installer."),
-    "",
-    "No usable python3 or python was found on your PATH.",
-    "Install Python from https://python.org or your package manager",
-    "(brew install python, apt install python3, ...), then try again.",
-  ];
-  process.stderr.write(lines.join("\n") + "\n");
-}
-
-// --- install subcommand -----------------------------------------------------
-
-function runInstall(forwardArgs) {
-  if (!fs.existsSync(INSTALLER)) {
-    process.stderr.write(
-      bold("claude-company: bundled installer not found at ") +
-        INSTALLER +
-        "\n"
-    );
-    return 2;
-  }
-
-  const python = findPython();
-  if (!python) {
-    noPythonError();
-    return 2;
-  }
-
-  // Hand off. cwd is inherited so `.` and relative targets resolve against the
-  // user's working directory (the Python installer resolves relative paths
-  // against cwd itself). stdio inherited so the TUI/plain output flows through.
-  const child = spawn(python, [INSTALLER].concat(forwardArgs), {
-    stdio: "inherit",
-  });
-
-  const forward = (sig) => {
-    try {
-      child.kill(sig);
-    } catch (e) {
-      /* child already gone */
-    }
-  };
-  process.on("SIGINT", () => forward("SIGINT"));
-  process.on("SIGTERM", () => forward("SIGTERM"));
-
-  return new Promise((resolve) => {
-    child.on("error", (err) => {
-      process.stderr.write(
-        bold("claude-company: failed to launch installer: ") +
-          err.message +
-          "\n"
-      );
-      resolve(2);
-    });
-    child.on("exit", (code, signal) => {
-      if (signal) {
-        // Mirror the child's signal death for accurate shell semantics.
-        process.kill(process.pid, signal);
-        // If we survive (signal ignored), fall back to conventional 128+n.
-        resolve(1);
-        return;
-      }
-      resolve(code === null ? 1 : code);
-    });
-  });
-}
-
 // --- entry ------------------------------------------------------------------
 
 async function main(argv) {
@@ -178,7 +82,7 @@ async function main(argv) {
   const first = args[0];
 
   if (first === "--version" || first === "-v") {
-    process.stdout.write(versionString() + "\n");
+    process.stdout.write(PKG.version + "\n");
     return 0;
   }
   if (first === "--help" || first === "-h" || first === "help") {
@@ -186,13 +90,12 @@ async function main(argv) {
     return 0;
   }
   if (first === "install") {
-    return await runInstall(args.slice(1));
+    const installer = require(path.join(ROOT, "lib", "install-tui.js"));
+    return await installer.run(args.slice(1));
   }
 
   // Unknown subcommand.
-  process.stderr.write(
-    bold("claude-company: unknown command '" + first + "'") + "\n\n"
-  );
+  process.stderr.write(bold("claude-company: unknown command '" + first + "'") + "\n\n");
   process.stderr.write(helpText() + "\n");
   return 1;
 }

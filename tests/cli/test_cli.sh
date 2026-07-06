@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # tests/cli/test_cli.sh - coverage for the npm bin wrapper (bin/claude-company.js).
 #
-# The wrapper owns no install logic; it launches the Python installer. These
-# tests prove: version/help/unknown-command behavior, that a real install
-# through the bin matches a bare ./install, relative-target correctness, exit
-# code passthrough, the missing-Python path, and the npm pack manifest.
+# The wrapper owns the subcommand parse and hands `install` to the Node
+# installer in lib/. These tests prove: version/help/unknown-command behavior,
+# that a real install through the bin matches a bare ./install, relative-target
+# correctness, exit code passthrough, python3 preflight hard-fail, and the npm
+# pack manifest (payload present, dev-only excluded, root install is a shim).
 set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,8 +33,11 @@ OUT="$(node "$BIN" --version 2>&1)"; RC=$?
 
 # --- 2. --help -------------------------------------------------------------
 echo "== --help =="
-node "$BIN" --help >"$WORK/help.out" 2>&1; RC=$?
+node "$BIN" --help >"$WORK/help.out" 2>/dev/null; RC=$?
 [ "$RC" -eq 0 ] && pass "--help exits 0" || fail "--help exits 0 (rc=$RC)"
+# help must go to stdout so it pipes (stderr was discarded above)
+[ -s "$WORK/help.out" ] && pass "--help writes to stdout (pipeable)" \
+  || fail "--help writes to stdout (pipeable)"
 grep -qi 'install' "$WORK/help.out" && pass "--help mentions install" \
   || fail "--help mentions install"
 grep -qi 'npx' "$WORK/help.out" && pass "--help mentions npx" \
@@ -84,16 +88,20 @@ RC=$?
   || fail "nonexistent target surfaces nonzero (rc=$RC)"
 
 # --- 7. missing-python simulation ------------------------------------------
-echo "== missing python -> exit 2 with friendly message =="
-NODE_BIN="$(command -v node)"
+# The bin no longer needs Python to start; python3 is a hard preflight probe.
+# With git and bash present but python3 absent, plain-mode preflight must
+# hard-fail with exit 2 and name python3.
+echo "== missing python -> preflight exit 2 naming python3 =="
 PYENV="$WORK/nopy"; mkdir -p "$PYENV"
-ln -s "$NODE_BIN" "$PYENV/node"
+for t in node git bash; do
+  b="$(command -v "$t")"; [ -n "$b" ] && ln -s "$b" "$PYENV/$t"
+done
 T7="$WORK/t7"; mkdir -p "$T7"; git -C "$T7" init -q
 PATH="$PYENV" node "$BIN" install "$T7" --yes --plain >"$WORK/np.out" 2>"$WORK/np.err"
 RC=$?
-[ "$RC" -eq 2 ] && pass "missing python exits 2" || fail "missing python exits 2 (rc=$RC)"
-grep -qi 'Python 3.8' "$WORK/np.err" && pass "missing python prints friendly message" \
-  || { fail "missing python prints friendly message"; cat "$WORK/np.err"; }
+[ "$RC" -eq 2 ] && pass "missing python exits 2 (preflight)" || fail "missing python exits 2 (rc=$RC)"
+grep -qi 'python3' "$WORK/np.err" && pass "missing python names python3 in message" \
+  || { fail "missing python names python3 in message"; cat "$WORK/np.err"; }
 
 # --- 8. npm pack manifest --------------------------------------------------
 echo "== npm pack manifest contains payload, excludes dev-only =="
@@ -121,9 +129,14 @@ want_present "company/METHOD.md"
 want_present "install"
 want_present "install.sh"
 want_present "bin/claude-company.js"
+want_present "lib/install-tui.js"
 want_absent "^tests/"
 want_absent "^\.assets/"
 want_absent "__pycache__|\.pyc$"
+
+# The root `install` is now a POSIX sh shim, not a Python file.
+[ "$(head -1 "$INSTALL")" = "#!/bin/sh" ] && pass "packed install is a sh shim" \
+  || fail "packed install is a sh shim (got '$(head -1 "$INSTALL")')"
 
 echo
 echo "================ SUMMARY ================"
