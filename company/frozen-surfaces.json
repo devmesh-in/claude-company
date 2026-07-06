@@ -1,0 +1,17 @@
+{
+  "$comment": "Frozen-surface registry. Read by .claude/hooks/guard_frozen.py, which blocks Edit/Write to matching paths. Patterns are fnmatch globs tested against the project-relative path and the basename. Populate 'surfaces' for YOUR project during /company-init or /onboard (the architect proposes them; the owner approves). Changes to frozen surfaces go through company/change-requests/, applied by the CEO in a dedicated gated PR. The 'always' list is claude-company's own baseline and applies to every project.",
+  "version": 1,
+  "surfaces": [],
+  "always": [
+    ".env",
+    ".env.*",
+    "*.lock",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "Cargo.lock",
+    "company/state/gates.status",
+    "company/state/adherence.log"
+  ]
+}

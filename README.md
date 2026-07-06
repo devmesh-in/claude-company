@@ -1,0 +1,114 @@
+# claude-company
+
+**Drop a software company into your repo.** claude-company turns any project
+into a hierarchy-run AI engineering organization for Claude Code: a CEO (your
+main session) dispatching tech leads, who run their own teams of developers
+and QA engineers, through a hard-gated enterprise SDLC.
+
+Every popular SDLC framework ships its quality gates as prose the model is
+asked to respect. claude-company's thesis is different:
+
+> **Gates are enforced, not narrated.** Frozen surfaces are write-blocked by
+> hooks. Commits are blocked while gates are red or stale. Code before spec is
+> blocked. Editing tests to make them pass is blocked. Every block is logged.
+
+## Install (30 seconds)
+
+```bash
+git clone https://github.com/you/claude-company
+bash claude-company/install.sh /path/to/your/project
+```
+
+The installer is idempotent and non-destructive: it merges (never clobbers)
+your existing `.claude/settings.json`, `.mcp.json`, and `CLAUDE.md`, and never
+touches your project state on re-runs.
+
+Then, inside your project:
+
+```
+claude
+> /company-init     # new project: found the company (spec, architecture, gates)
+> /onboard          # existing codebase: the company adapts to YOUR repo
+> /orchestrator     # become the CEO and start shipping
+```
+
+## The hierarchy
+
+```
+You (owner)  - decide business policy, approve deploys. Nothing deploys without you.
+  CEO        - your main Claude session (/orchestrator). Dispatches, verifies
+               with evidence, integrates, reports. Codes only glue and small fixes.
+    product-manager  - turns ideas into specs with testable requirement IDs
+    architect        - module boundaries, ownership map, frozen surfaces, wave plans
+    tech-lead        - runs its OWN team: spawns developers in parallel on
+                       disjoint paths, fills the gaps between their pieces,
+                       drives QA, reports upward with evidence
+      developer      - builds exactly what the sealed brief says, in a worktree
+      qa-engineer    - drives the real app via Playwright; captures
+                       loaded/empty/error/after-action screenshots
+    auditor          - independent read-only pass before big merges
+    security-reviewer, devops-engineer, docs-librarian - staff roles
+```
+
+Tech leads genuinely spawn their own subagents (nested agents, depth capped at
+two). Producers never grade their own work: developers report, leads verify,
+QA captures, the CEO judges, the auditor double-checks the big ones.
+
+## The teeth (hooks)
+
+| Hook | Blocks |
+|---|---|
+| `guard_frozen` | Edits to frozen surfaces (`company/frozen-surfaces.json`), shipped migrations, `.env`, lockfiles |
+| `guard_commit` | `git commit`/`merge` while gates are red, stale, or unstamped; any push to main/master |
+| `guard_spec` | Source-code writes when no approved brief is active (spec before code) |
+| `guard_tests` | Editing or deleting tests that are not in the brief's scope (tests are the oracle) |
+| `no_slop` | AI-slop punctuation and filler phrases in anything written |
+| `stop_gate` | Ending the turn while the active task's gates are red or stale |
+
+Every block and every hotfix bypass is one line in
+`company/state/adherence.log` - you can watch the system actually enforce.
+All hooks fail open on internal errors: they will never brick your session.
+
+## The process (canon in `company/`)
+
+- `METHOD.md` - the five mechanisms: canon before code, hard ownership
+  boundaries, frozen surfaces via change request, gates as the definition of
+  done, verify-never-trust.
+- `GATES.md` - the gate ladder contract; you define your project's real
+  commands in `gates.config`, and `run-gates.sh` stamps results with a
+  work-tree hash so stale greens do not count.
+- `EXTENDING.md` - the module contract: adding a module never edits existing
+  code.
+- `templates/` - sealed briefs, specs with FR/BR/OQ IDs, change requests,
+  module wayfinding pages, evidence reports.
+- `state/` - STATUS (red stays red), RESUME (session handoff), WORRIES (the
+  ledger of the un-acted-on), DECISIONS (owner escalations), and the
+  adherence log.
+
+Ceremony auto-scales: a typo fix routes as `quick` (one developer, no
+ceremony, gates still gate); a feature gets a spec and a lead; a v1 build gets
+an architect, waves, and merge barriers. `hotfix` mode exists for real fires -
+hooks log instead of block, and the process catches up within a day.
+
+## What the owner keeps
+
+Deploys, prod migrations, money behavior, invariant changes, and business
+policy are never decided by any agent, including the CEO. Merge is
+integration; deploy is you.
+
+## Requirements
+
+- Claude Code with nested subagents (v2.1.172+)
+- Python 3.8+ (hooks), bash, git
+- Node/npx for the Playwright MCP (QA screenshots)
+
+## Layout
+
+```
+.claude/agents/    9 role definitions (all model: opus; CEO is your main session)
+.claude/skills/    /orchestrator /company-init /onboard /feature /standup /cr /gates
+.claude/hooks/     the 6 guards + gate stamper + session digest (+ tests in tests/)
+company/           METHOD, GATES, EXTENDING, templates, state, working artifacts
+ORCHESTRATOR.md    the CEO's private runbook (subagents never read it)
+install.sh         the drop-in installer
+```
