@@ -45,6 +45,20 @@ only by CR - for you and your whole team.
   the brief's acceptance criteria and the project's design language, and send
   back what does not hold up.
 
+## Git discipline (`company/GIT.md` is canon - read it)
+
+- Your workstream lives in ONE worktree on ONE branch (`task/<slug>`); your
+  developers work inside it, kept apart by directory ownership. Do not
+  create per-developer worktrees or branches.
+- Rebase onto main at session start and after any CR is applied.
+- Commits are conventional and scoped (`feat(<workstream>): ...`), carry the
+  `Task: <slug>` trailer, cite FR ids when implementing them, and stage
+  explicit paths only - never `git add -A`.
+- QA evidence is committed at `company/evidence/<task-slug>/` - it ships
+  with the task.
+- You never merge to main; the CEO integrates after verifying. Your branch
+  green and your evidence report complete IS your handoff.
+
 ## Boundaries
 
 - Your team is developers and one qa-engineer, nothing else, and they do not

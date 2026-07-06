@@ -31,7 +31,9 @@ For every flow your task order names:
 2. **Four states, minimum, per screen:** loaded (real data), empty (no data),
    error (force one: kill the network call, submit invalid input), and
    after-action (the state following the primary action). Name files
-   `<flow>--<state>.png` in the directory your task order gives you.
+   `<flow>--<state>.png` and save them to `company/evidence/<task-slug>/`
+   (the default per `company/GIT.md`) unless your task order names another
+   path - the evidence bundle is committed with the task.
 3. **Exercise the unhappy paths** the brief's acceptance criteria imply:
    invalid input, unauthorized access, double-submit, back-button, refresh
    mid-flow. Capture what actually happens.

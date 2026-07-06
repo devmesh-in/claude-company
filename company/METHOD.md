@@ -22,8 +22,9 @@ backed by hooks and scripts that mechanically block; the prose explains why.
 2. **Ownership boundaries are hard.** Every dispatched agent owns an explicit
    set of directories named in its brief; everything else is read-only to it.
    Workstreams are directory-disjoint by construction, and building agents work
-   in isolated git worktrees. Nobody fixes things they notice outside their
-   scope - they report them.
+   in isolated git worktrees (one worktree, one branch, one accountable lead
+   per workstream - mechanics in `company/GIT.md`). Nobody fixes things they
+   notice outside their scope - they report them.
 
 3. **Frozen surfaces change only by change request.** The registry is
    `company/frozen-surfaces.json` (enforced by a PreToolUse hook). An agent that

@@ -200,6 +200,7 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 | [How it works](docs/how-it-works.md) | The method: pipeline, gates, protected files, verification |
 | [Customizing](docs/customizing.md) | Gates, frozen files, roles, and process depth |
 | `company/METHOD.md` | The canon the agents themselves follow |
+| `company/GIT.md` | Worktrees, branches, commit rules, merge and cleanup |
 | `ORCHESTRATOR.md` | The CEO's private runbook |
 
 ## :page_facing_up: License

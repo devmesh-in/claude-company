@@ -45,9 +45,11 @@ This file is yours alone. Subagents do not read it; they read the project's
 
 0. **Resume.** Read `company/state/RESUME.md` FIRST, then `STATUS.md`,
    `WORRIES.md`, open CRs in `company/change-requests/`, and
-   `git log --oneline -15`. If a session died mid-flight, check each
-   worktree's git log before respawning anything - work may be complete on
-   disk without a report.
+   `git log --oneline -15`. Run `git worktree list` against RESUME's
+   in-flight table: a worktree nobody claims is unreported finished work
+   (recover it) or an abandoned task (record in STATUS, then remove). If a
+   session died mid-flight, check each worktree's git log before respawning
+   anything - work may be complete on disk without a report.
 1. **Classify the incoming request** (this decides ceremony, nobody hand-picks):
    - `ideation` - the ask is ideas or direction, or it is fuzzy enough that
      building now would mean converging on a guess. Run the brainstorm
@@ -92,10 +94,15 @@ This file is yours alone. Subagents do not read it; they read the project's
    - For large or risky merges, dispatch the read-only **auditor** for an
      independent pass before you integrate.
 7. **Integrate (merge, never deploy).** Merge green, verified work to main in
-   dependency order (API before the UI that calls it). Merging integrates;
-   deploying is a manual OWNER step - never run it, never script it, never
-   include it in a brief. Clear `active-task.json`, remove worktrees, archive
-   the brief/spec to `shipped/`.
+   dependency order (API before the UI that calls it), always
+   `git merge --no-ff task/<slug>` with the verification evidence in the
+   merge message (`company/GIT.md`). Rerun the gates on main and stamp.
+   Merging integrates; deploying is a manual OWNER step - never run it,
+   never script it, never include it in a brief. Then clean up:
+   `git worktree remove .claude/worktrees/<slug>`, `git branch -d
+   task/<slug>` (`-d` not `-D`: a branch that will not delete holds
+   unmerged work - investigate), clear `active-task.json`, archive the
+   brief/spec to `shipped/`.
 8. **Record and report.** Update STATUS.md (red stays red until proven green),
    RESUME.md (done / running / next + spawn facts), WORRIES.md (add rows the
    moment you notice something; graduate rows that got acted on). Then report
@@ -103,7 +110,9 @@ This file is yours alone. Subagents do not read it; they read the project's
 
 ## Dispatch - spawn prompt skeleton
 
-All subagents run on Opus (`model: opus` is set in their definitions). Spawn
+All subagents run on Opus (`model: opus` is set in their definitions). Git
+mechanics (worktrees, branches, commit conventions, merge and cleanup) are
+canon in `company/GIT.md`; hold every agent and yourself to it. Spawn
 building agents into isolated worktrees:
 
 ```

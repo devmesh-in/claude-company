@@ -73,6 +73,11 @@ You are dispatched by the CEO or a tech lead. Hold to this:
 - Add or update tests for every new behavior; when you fix a bug, note the
   failure mode in a docstring so it does not regress.
 - Confirm your diff touches only owned paths: `git diff --name-only`.
+- Commit per coherent step, per `company/GIT.md`: conventional message
+  scoped to your workstream, `Task: <slug>` trailer, FR ids in the body,
+  explicit paths staged - never `git add -A` (the symlinked node_modules
+  hazard is real). Do not end a session with uncommitted work unless your
+  report says so and why.
 
 ## Report
 

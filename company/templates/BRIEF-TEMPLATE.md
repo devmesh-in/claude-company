@@ -48,6 +48,8 @@ Universal DoD (every task) plus this task's specifics:
 - [ ] No edits outside owned directories; zero frozen surfaces patched locally
 - [ ] UI work: screen driven live, four states captured (loaded/empty/error/after-action)
 - [ ] Tests added for new behavior (tests are the oracle - never edited to pass)
+- [ ] Commits follow `company/GIT.md`: conventional, `Task: <slug>` trailer,
+      explicit paths staged
 - [ ] `MODULE.md` created/updated in each owned directory
 - [ ] Report follows `company/templates/REPORT-TEMPLATE.md`
 - [ ] <task-specific DoD lines>
