@@ -1,30 +1,23 @@
-<div align="center">
 
-<img src=".assets/banner.png" alt="Claude Company" width="100%">
 
-**An AI software company you drop into your repo.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-%3E%3D%202.1.172-orange)](https://claude.com/claude-code)
-[![Gates](https://img.shields.io/badge/gates-enforced%20by%20hooks-red)](#shield-the-rules-it-enforces)
 
-<p>
-  <a href="#bulb-about">About</a> &nbsp;&bull;&nbsp;
-  <a href="#rocket-get-started">Get Started</a> &nbsp;&bull;&nbsp;
-  <a href="#gear-how-it-works">How It Works</a> &nbsp;&bull;&nbsp;
-  <a href="#busts_in_silhouette-the-team">The Team</a> &nbsp;&bull;&nbsp;
-  <a href="#shield-the-rules-it-enforces">The Rules</a> &nbsp;&bull;&nbsp;
-  <a href="#question-faq">FAQ</a>
-</p>
+**Highly opinionated AI software company you drop into any repo.**
 
-</div>
+[License: MIT](LICENSE)
+[Claude Code](https://claude.com/claude-code)
+[Gates](#shield-the-rules-it-enforces)
+
+[About](#bulb-about)  •  [Get Started](#rocket-get-started)  •  [How It Works](#gear-how-it-works)  •  [The Team](#busts_in_silhouette-the-team)  •  [The Rules](#shield-the-rules-it-enforces)  •  [FAQ](#question-faq)
+
+
 
 ## :bulb: About
 
 You describe what you want built. A CEO agent plans the work, staffs a team of AI product managers, architects, tech leads, developers, and QA engineers, builds it, tests it in a real browser with screenshots, and reports back with proof.
 
 ```text
-you>  /orchestrator build me a waitlist page with an admin view
+You>  /orchestrator build me a waitlist page with an admin view
 
 CEO   sized the request: feature
 CEO   product-manager wrote the spec (3 options considered, picked #2)
@@ -42,14 +35,23 @@ And it is frictionless where it matters: **you are the client, not the process o
 
 ## :rocket: Get started
 
-1. Clone this repo and run the installer against your project:
+1. Install the CLI once, then install the company into any project:
+
+```bash
+npm install -g claude-company
+claude-company install .
+```
+
+Or without a global install: `npx claude-company install .`
+
+Prefer no npm at all? Clone and run the installer directly - same TUI, same result:
 
 ```bash
 git clone https://github.com/you/claude-company
-bash claude-company/install.sh /path/to/your/project
+./claude-company/install /path/to/your/project
 ```
 
-2. Open your project in Claude Code and start the company:
+1. Open your project in Claude Code and start the company:
 
 ```text
 /orchestrator build me <what you want>
@@ -57,11 +59,13 @@ bash claude-company/install.sh /path/to/your/project
 
 There is no setup step. On first contact the company onboards itself: it studies your codebase (or treats your request as the founding brief of a new one), finds your real test and lint commands, and wires them in as gates. The installer merges with your existing settings and never overwrites them; running it twice changes nothing.
 
-| Requirement | Why |
-|---|---|
-| Claude Code v2.1.172+ | Nested agents (tech leads run their own teams) |
-| Python 3.8+, bash, git | The enforcement hooks |
-| Node.js with `npx` | Browser testing with screenshots (Playwright) |
+
+| Requirement            | Why                                            |
+| ---------------------- | ---------------------------------------------- |
+| Claude Code v2.1.172+  | Nested agents (tech leads run their own teams) |
+| Python 3.8+, bash, git | The enforcement hooks                          |
+| Node.js with `npx`     | Browser testing with screenshots (Playwright)  |
+
 
 The [getting started guide](docs/getting-started.md) walks the full path from install to first delivery.
 
@@ -84,6 +88,8 @@ flowchart LR
     H -->|red| E
     H -->|green| I([Merged + delivery report])
 ```
+
+
 
 Five things happen on every build, regardless of size:
 
@@ -111,40 +117,52 @@ flowchart TD
     TL --> QA["qa-engineer<br>browser + screenshots"]
 ```
 
-| Role | Judges its own output? | Writes code? | Spawns agents? |
-|---|:---:|:---:|:---:|
-| CEO (your session) | Verifies everyone else | Glue and small fixes | Yes |
-| tech-lead | Verifies its developers | Gap-filling between pieces | Yes: its own team |
-| developer | No: reports with evidence | Yes | No |
-| qa-engineer | No: captures, never judges | No | No |
-| auditor | Independent by design | No: read-only | No |
+
+
+
+| Role               | Judges its own output?     | Writes code?               | Spawns agents?    |
+| ------------------ | -------------------------- | -------------------------- | ----------------- |
+| CEO (your session) | Verifies everyone else     | Glue and small fixes       | Yes               |
+| tech-lead          | Verifies its developers    | Gap-filling between pieces | Yes: its own team |
+| developer          | No: reports with evidence  | Yes                        | No                |
+| qa-engineer        | No: captures, never judges | No                         | No                |
+| auditor            | Independent by design      | No: read-only              | No                |
+
+
+
 
 ## :shield: The rules it enforces
 
 Each rule is a hook that blocks the action itself. When a hook blocks an agent, the message contains the recipe to become compliant, so the process self-heals instead of stalling.
 
-| Rule | What gets blocked |
-|---|---|
+
+| Rule                           | What gets blocked                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
 | Protected files stay protected | Edits to `.env`, lockfiles, shipped migrations, and any file your project marks as frozen |
-| No commit while tests fail | `git commit` when the gate suite is red, stale, or was never run |
-| No code without a plan | Source-code changes when no approved work order exists |
-| Tests are the referee | Editing or deleting tests that the current work order does not cover |
-| No AI filler in writing | Em dashes, smart quotes, and stock AI phrases in anything written |
-| No quitting early | Ending a work session while the active task's gates are red |
+| No commit while tests fail     | `git commit` when the gate suite is red, stale, or was never run                          |
+| No code without a plan         | Source-code changes when no approved work order exists                                    |
+| Tests are the referee          | Editing or deleting tests that the current work order does not cover                      |
+| No AI filler in writing        | Em dashes, smart quotes, and stock AI phrases in anything written                         |
+| No quitting early              | Ending a work session while the active task's gates are red                               |
+
 
 Every block and every hotfix bypass is one line in `company/state/adherence.log`, so enforcement is visible, not claimed. All hooks fail open: an internal error lets the action through rather than jamming your session.
 
 ## :keyboard: Commands
 
-| Command | What it does |
-|---|---|
-| `/orchestrator` | Start or resume the company. The only command you need day to day |
-| `/brainstorm` | Explore ideas in parallel and get an options memo with a recommendation |
-| `/standup` | One-screen status: done, in flight, blocked, decisions you owe |
-| `/feature` | Run one feature through the full pipeline |
-| `/gates` | Run the test gates and stamp the result |
-| `/company-init`, `/onboard` | Found the company explicitly (new project or existing codebase) |
-| `/cr` | File or decide a change request against a protected file |
+
+| Command                     | What it does                                                            |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `/orchestrator`             | Start or resume the company. The only command you need day to day       |
+| `/brainstorm`               | Explore ideas in parallel and get an options memo with a recommendation |
+| `/standup`                  | One-screen status: done, in flight, blocked, decisions you owe          |
+| `/feature`                  | Run one feature through the full pipeline                               |
+| `/gates`                    | Run the test gates and stamp the result                                 |
+| `/company-init`, `/onboard` | Found the company explicitly (new project or existing codebase)         |
+| `/cr`                       | File or decide a change request against a protected file                |
+
+
+
 
 ## :wrench: Customizing
 
@@ -152,56 +170,55 @@ Everything is a plain file you can read and edit: gates in `company/gates.config
 
 ## :question: FAQ
 
-<details>
-<summary><b>How much does it cost to run?</b></summary>
-<br>
+**How much does it cost to run?**  
+
 
 More than a single Claude session: parallel agents multiply token use. The company counters this by scaling ceremony to the task, so small fixes get one developer and no meetings.
 
-</details>
 
-<details>
-<summary><b>Does it work on an existing codebase?</b></summary>
-<br>
+
+**Does it work on an existing codebase?**  
+
 
 Yes. It reads your code, adopts your conventions, and wires your existing test commands in as gates. It adapts to your project, not the other way around.
 
-</details>
 
-<details>
-<summary><b>What if a gate is wrong or blocks me unfairly?</b></summary>
-<br>
+
+**What if a gate is wrong or blocks me unfairly?**  
+
 
 Gates are your own commands in `company/gates.config`; edit them anytime. For real emergencies there is a hotfix mode that logs instead of blocks, and the process catches up afterward.
 
-</details>
 
-<details>
-<summary><b>Can I see what it decided and why?</b></summary>
-<br>
+
+**Can I see what it decided and why?**  
+
 
 Yes. Specs record the options considered, memos record the roads not taken, decisions wait for you in `company/state/DECISIONS.md`, and the adherence log records every block.
 
-</details>
 
-<details>
-<summary><b>What does the owner keep?</b></summary>
-<br>
+
+**What does the owner keep?**  
+
 
 No agent, including the CEO, ever decides: production deploys, database migrations in production, anything involving money, weakening a protection rule, or business policy. The company merges to your main branch; shipping to users is a button only you press.
 
-</details>
+
 
 ## :books: Documentation
 
-| Document | What it covers |
-|---|---|
-| [Getting started](docs/getting-started.md) | Install to first delivery, step by step |
-| [How it works](docs/how-it-works.md) | The method: pipeline, gates, protected files, verification |
-| [Customizing](docs/customizing.md) | Gates, frozen files, roles, and process depth |
-| `company/METHOD.md` | The canon the agents themselves follow |
-| `company/GIT.md` | Worktrees, branches, commit rules, merge and cleanup |
-| `ORCHESTRATOR.md` | The CEO's private runbook |
+
+| Document                                   | What it covers                                             |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| [Getting started](docs/getting-started.md) | Install to first delivery, step by step                    |
+| [How it works](docs/how-it-works.md)       | The method: pipeline, gates, protected files, verification |
+| [Customizing](docs/customizing.md)         | Gates, frozen files, roles, and process depth              |
+| `company/METHOD.md`                        | The canon the agents themselves follow                     |
+| `company/GIT.md`                           | Worktrees, branches, commit rules, merge and cleanup       |
+| `ORCHESTRATOR.md`                          | The CEO's private runbook                                  |
+
+
+
 
 ## :page_facing_up: License
 

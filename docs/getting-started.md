@@ -12,12 +12,14 @@ This guide takes you from install to your first delivered feature. It works for 
 
 ## Step 1: install
 
-Clone claude-company anywhere, then point its installer at your project:
+Install the CLI once, then install the company into your project:
 
 ```bash
-git clone https://github.com/you/claude-company
-bash claude-company/install.sh /path/to/your/project
+npm install -g claude-company
+claude-company install /path/to/your/project
 ```
+
+`npx claude-company install .` does the same without a global install. If you prefer no npm at all, clone the repo and run `./claude-company/install /path/to/your/project` directly - same installer either way. Add `--yes` for a non-interactive run (CI, scripts).
 
 The installer copies the team, the rules, and the process files into your project. It merges with what you already have: your existing Claude settings, MCP servers, and `CLAUDE.md` are extended, never replaced. Run it again after an update and it refreshes claude-company's own files while leaving your state alone.
 
