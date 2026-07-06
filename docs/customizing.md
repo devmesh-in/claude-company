@@ -2,6 +2,15 @@
 
 Everything the company runs on is a plain file in your repo. This guide covers the changes people make most: gates, protected files, process depth, and the team itself. Edit, commit, done; no rebuild step exists.
 
+| I want to... | Edit | Section |
+|---|---|---|
+| Add or change a test gate | `company/gates.config` | [Gates](#add-or-change-gates) |
+| Protect a file from agent edits | `company/frozen-surfaces.json` | [Protect a file](#protect-freeze-a-file) |
+| Give a request more or less process | say it, or `company/METHOD.md` | [Tune process](#tune-how-much-process-a-request-gets) |
+| Change a role's instructions or model | `.claude/agents/<role>.md` | [Change the team](#change-the-team) |
+| Undo a founding default | `company/frozen-surfaces.json`, `CLAUDE.md` | [Founding defaults](#adjust-the-founding-defaults) |
+| Change the enforcement itself | `.claude/hooks/` | [Enforcement](#change-the-enforcement-itself) |
+
 ## Add or change gates
 
 Gates live in `company/gates.config`:

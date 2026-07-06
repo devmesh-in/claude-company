@@ -4,11 +4,11 @@ This guide takes you from install to your first delivered feature. It works for 
 
 ## Before you start
 
-You need three things installed:
-
-- Claude Code v2.1.172 or later
-- Python 3.8+ and git (the hooks use them)
-- Node.js with `npx` if you want browser testing with screenshots
+| You need | Used for |
+|---|---|
+| Claude Code v2.1.172+ | Nested agents (tech leads run their own teams) |
+| Python 3.8+ and git | The enforcement hooks |
+| Node.js with `npx` | Browser testing with screenshots (optional but recommended) |
 
 ## Step 1: install
 
@@ -21,11 +21,13 @@ bash claude-company/install.sh /path/to/your/project
 
 The installer copies the team, the rules, and the process files into your project. It merges with what you already have: your existing Claude settings, MCP servers, and `CLAUDE.md` are extended, never replaced. Run it again after an update and it refreshes claude-company's own files while leaving your state alone.
 
-After it finishes you will see three new things in your project:
+After it finishes, your project has three new things:
 
-- `.claude/`: the agent team, the commands, and the enforcement hooks
-- `company/`: the process documents, templates, and state files
-- `ORCHESTRATOR.md`: the CEO's private runbook
+| Path | What it is |
+|---|---|
+| `.claude/` | The agent team, the commands, and the enforcement hooks |
+| `company/` | The process documents, templates, and state files |
+| `ORCHESTRATOR.md` | The CEO's private runbook |
 
 ## Step 2: start the company
 
@@ -35,7 +37,19 @@ Open your project in Claude Code and give the orchestrator your first request:
 /orchestrator build me a REST API for tracking workouts, with user accounts
 ```
 
-You do not need to initialize anything first. The company notices it is new here and onboards itself: it studies your code (or founds a new project from your request), finds your real test and lint commands, and registers them as gates. You can watch this happen; it reports what it found and what it wired.
+You do not need to initialize anything first. The company notices it is new here and onboards itself:
+
+```mermaid
+flowchart LR
+    A([first /orchestrator run]) --> B{company files<br>present?}
+    B -->|yes| E[resume from state files]
+    B -->|no| C[study the codebase<br>or found a new one<br>from your request]
+    C --> D[auto-detect test and lint<br>commands as gates<br>+ protect key files]
+    D --> E
+    E --> F([run your request])
+```
+
+You can watch this happen; it reports what it found and what it wired.
 
 ## Step 3: watch the pipeline
 
@@ -51,7 +65,12 @@ Small requests skip most of this. A typo fix gets one developer and the gates, n
 
 ## Step 4: read the delivery report
 
-The company interrupts you for two things only. The delivery report tells you what shipped, shows the evidence (green gates, screenshots), and lists anything that needs your answer. Decisions that belong to you, like anything involving money or a production deploy, wait in `company/state/DECISIONS.md` until you answer them.
+The company interrupts you for two things only:
+
+| Interruption | What you get |
+|---|---|
+| Delivery | What shipped, the evidence (green gates, screenshots), what is next |
+| Your decisions | Anything involving money, deploys, or business policy, batched in `company/state/DECISIONS.md` |
 
 To check on things at any time:
 
@@ -63,11 +82,16 @@ You get one screen: done, in flight, blocked, decisions you owe, and current gat
 
 ## When something gets blocked
 
-Sooner or later you will see a message like `BLOCKED: git commit requires green, fresh gates`. This is the system working. The block message contains the fix: run the gates, and if they are red, repair the failure rather than route around it. Agents get the same messages and follow the same recipes, so most blocks resolve without you.
+Sooner or later you will see a message like this:
 
-For a production emergency, tell the orchestrator it is a hotfix. Hooks then log instead of block, and the process catches up afterward.
+```text
+BLOCKED: git commit requires green, fresh gates.
+Fix: run `bash company/run-gates.sh` and repair any failure.
+```
+
+This is the system working. The block message contains the fix, agents get the same messages, and most blocks resolve without you. For a production emergency, tell the orchestrator it is a hotfix: hooks then log instead of block, and the process catches up afterward.
 
 ## Where to go next
 
-- [How it works](how-it-works.md) explains the method: why briefs are sealed, why producers never grade their own work, and what the gates actually check.
-- [Customizing](customizing.md) covers adding gates, protecting files, and tuning process depth.
+- [How it works](how-it-works.md) explains the method: why briefs are sealed, why producers never grade their own work, and what the gates actually check
+- [Customizing](customizing.md) covers adding gates, protecting files, and tuning process depth
