@@ -129,3 +129,4 @@ company/           METHOD, GATES, EXTENDING, templates, state, working artifacts
 ORCHESTRATOR.md    the CEO's private runbook (subagents never read it)
 install.sh         the drop-in installer
 ```
+# claude-company
