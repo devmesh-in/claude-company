@@ -100,7 +100,7 @@ Gates, protected files, team roles, and process documents are plain files you ca
 
 ## FAQ
 
-**How much does it cost to run?** More than a single Claude session: parallel agents multiply token use. The company counters this by scaling ceremony down (small fixes get one developer, no meetings) and you can watch spend per task in the status board.
+**How much does it cost to run?** More than a single Claude session: parallel agents multiply token use. The company counters this by scaling ceremony to the task, so small fixes get one developer and no meetings.
 
 **Does it work on an existing codebase?** Yes. It reads your code, adopts your conventions, and wires your existing test commands in as gates. It adapts to your project, not the other way around.
 

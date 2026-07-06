@@ -7,12 +7,9 @@ _Last updated: (never) - session 0._
 
 ## Active tasks
 
-| Task | Class | Lead/Agent | State | Gates | Spend | Notes |
-|---|---|---|---|---|---|---|
-| - | - | - | - | - | - | - |
-
-_Spend: agents dispatched and tokens used (from agent completion reports), so
-the owner can see what each task cost._
+| Task | Class | Lead/Agent | State | Gates | Notes |
+|---|---|---|---|---|---|
+| - | - | - | - | - | - |
 
 ## Wave position (programs only)
 

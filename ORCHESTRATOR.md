@@ -96,9 +96,7 @@ This file is yours alone. Subagents do not read it; they read the project's
    deploying is a manual OWNER step - never run it, never script it, never
    include it in a brief. Clear `active-task.json`, remove worktrees, archive
    the brief/spec to `shipped/`.
-8. **Record and report.** Update STATUS.md (red stays red until proven green;
-   fill the Spend column from agent completion reports - the owner watches
-   cost there),
+8. **Record and report.** Update STATUS.md (red stays red until proven green),
    RESUME.md (done / running / next + spawn facts), WORRIES.md (add rows the
    moment you notice something; graduate rows that got acted on). Then report
    to the owner: done / in-flight / blocked / decisions-needed.
