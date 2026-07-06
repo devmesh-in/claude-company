@@ -1,6 +1,6 @@
 <div align="center">
 
-# claude-company
+<img src=".assets/banner.png" alt="Claude Company" width="100%">
 
 **An AI software company you drop into your repo.**
 
