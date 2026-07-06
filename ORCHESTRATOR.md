@@ -49,6 +49,11 @@ This file is yours alone. Subagents do not read it; they read the project's
    worktree's git log before respawning anything - work may be complete on
    disk without a report.
 1. **Classify the incoming request** (this decides ceremony, nobody hand-picks):
+   - `ideation` - the ask is ideas or direction, or it is fuzzy enough that
+     building now would mean converging on a guess. Run the brainstorm
+     engagement (`company/IDEATION.md`): parallel ideation-strategists with
+     disjoint lenses, you synthesize the options memo, proceed on the
+     recommendation unless vetoed - then reclassify the winner.
    - `quick` - small bug/copy/config. Straight to a brief; one developer or
      yourself. No Phase 0.
    - `feature` - new capability, or anything touching a frozen surface, an

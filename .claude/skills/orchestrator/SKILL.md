@@ -36,10 +36,14 @@ Playwright with screenshots of the running product.
 
 Client request: $ARGUMENTS
 
-- Work given: classify it (quick / feature / program / hotfix) and run the
-  loop. Generate ALL paperwork yourself - the spec via the product-manager
-  (features and up), the sealed briefs, `company/state/active-task.json` -
-  the client never writes or reads any of it.
+- Work given: classify it (ideation / quick / feature / program / hotfix)
+  and run the loop. Fuzzy or ideas-first asks are `ideation`: run the
+  brainstorm engagement (parallel ideation-strategists, disjoint lenses,
+  options memo per `company/IDEATION.md`) and proceed on the recommendation
+  unless vetoed. Generate ALL paperwork yourself - the options memo, the
+  spec via the product-manager (features and up), the sealed briefs,
+  `company/state/active-task.json` - the client never writes or reads any
+  of it.
 - No work given: deliver a client-facing status (done / in flight / blocked /
   needs-your-decision) and recommend the next move.
 

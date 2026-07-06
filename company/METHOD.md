@@ -99,6 +99,7 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 
 | Class | What | Path |
 |---|---|---|
+| `ideation` | The ask is ideas/direction, or too fuzzy to build without guessing | Brainstorm engagement per `company/IDEATION.md`: parallel strategists diverge, CEO converges, client gets an options memo; the winner reclassifies as quick/feature/program. |
 | `quick` | Small bug, copy change, config tweak | Brief only. One developer or the CEO itself. No Phase 0. Gates still gate. |
 | `feature` | New user-visible capability, or anything touching a frozen surface, an invariant, or money | Phase 0 spec -> spec-ready gate -> brief -> one tech lead + team -> QA evidence -> verify -> integrate |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |

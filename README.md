@@ -51,8 +51,12 @@ pieces directly - but the orchestrator is the only door you need.
 You (owner)  - decide business policy, approve deploys. Nothing deploys without you.
   CEO        - your main Claude session (/orchestrator). Dispatches, verifies
                with evidence, integrates, reports. Codes only glue and small fixes.
-    product-manager  - turns ideas into specs with testable requirement IDs
-    architect        - module boundaries, ownership map, frozen surfaces, wave plans
+    ideation-strategist - deep divergent thinking; spawned in parallel with
+                       different lenses so the company never builds its first idea
+    product-manager  - diverges before converging, then specs with testable
+                       requirement IDs and an options-considered section
+    architect        - the solutioning gate: 2-3 scored architecture options
+                       before any program; boundaries, frozen surfaces, waves
     tech-lead        - runs its OWN team: spawns developers in parallel on
                        disjoint paths, fills the gaps between their pieces,
                        drives QA, reports upward with evidence
@@ -118,8 +122,8 @@ integration; deploy is you.
 ## Layout
 
 ```
-.claude/agents/    9 role definitions (all model: opus; CEO is your main session)
-.claude/skills/    /orchestrator /company-init /onboard /feature /standup /cr /gates
+.claude/agents/    10 role definitions (all model: opus; CEO is your main session)
+.claude/skills/    /orchestrator /brainstorm /company-init /onboard /feature /standup /cr /gates
 .claude/hooks/     the 6 guards + gate stamper + session digest (+ tests in tests/)
 company/           METHOD, GATES, EXTENDING, templates, state, working artifacts
 ORCHESTRATOR.md    the CEO's private runbook (subagents never read it)

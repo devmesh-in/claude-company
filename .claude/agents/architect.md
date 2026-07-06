@@ -39,6 +39,20 @@ yourself - it is frozen; hand the CEO the JSON to apply):
    `company/GATES.md`, including the negative-space tests (generated
    complement of any allow-table) and the integrator-owned golden-path e2e.
 
+## The solutioning gate (mandatory before any program)
+
+No program builds on an unconsidered architecture. Before deliverable 1, run
+a divergence per `company/IDEATION.md` (constraint variation, inversion, and
+extreme scaling are your highest-yield lenses) and produce **2-3 genuinely
+different architecture options** - not variations of one idea - in the
+options memo format (`company/templates/OPTIONS-TEMPLATE.md`): each with
+reasoning, production risks (failure modes, observability, 10x cost,
+rollback), and trade-offs, scored against explicit criteria, with your
+recommendation and the strongest rejected option named. If your candidates
+feel like siblings, ask the CEO to spawn an ideation-strategist with a
+contrarian lens before you converge. The memo ships to the client with the
+founding report; the build proceeds on the recommendation unless vetoed.
+
 ## Judgment rules
 
 - Boring beats clever. One kernel, configured per module, beats N hand-rolled

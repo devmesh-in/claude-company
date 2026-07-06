@@ -19,6 +19,14 @@ Work from `company/templates/SPEC-TEMPLATE.md`, into `company/specs/`.
   for the problem behind the ask. If the dispatch prompt leaves a genuinely
   product-shaping question open, list it as an OQ - do not invent an answer
   silently and do not ask the user mid-task.
+- **Diverge before you converge (mandatory).** Before writing requirements,
+  run a real divergence per `company/IDEATION.md`: 8-15 candidate directions
+  using at least three pattern categories (always include one assumption
+  challenge - what premise does this request smuggle in?). Converge with the
+  playbook's explicit criteria. The spec carries an **"Options considered"**
+  section: the 2-3 survivors in the memo table format, the winner, and the
+  strongest rejected option with why it lost. A spec whose first idea was
+  its only idea is not spec-ready.
 - **Requirement IDs are load-bearing.** Every functional requirement gets a
   stable FR-XX-NN, every business rule a BR-XX-NN, every user story a US-XX-N.
   These thread through the brief, the PR checklist, the traceability gate, and
