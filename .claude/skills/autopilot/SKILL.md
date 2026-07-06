@@ -1,14 +1,20 @@
 ---
 name: autopilot
-description: Run the company on its heartbeat - one bounded, self-directed pass of triage and delivery (red gates, in-flight work, worries, CRs, then backlog), with hard caps and stop-and-surface rules. Use when the user says /autopilot, "run the company", "work the backlog", "keep going on your own", or wires this skill into /loop or a /schedule routine for semi-attended or unattended operation. NOT for fuzzy new directions (that is /brainstorm) or emergencies (hotfix via /orchestrator).
+description: EXPERIMENTAL, opt-in only - one bounded tick of self-directed company operation (triage red gates, in-flight work, worries, CRs, then backlog; deliver; surface). Intended for the end phase of a product - backlog burn-down and polish after the main build exists - not for mainline development. Runs ONLY when the user types /autopilot (or wires it into /loop or /schedule themselves); never invoke this skill on your own initiative, and never treat phrases like "keep going" as an invocation.
+disable-model-invocation: true
 ---
 
-# /autopilot - one tick of the standing loop
+# /autopilot - one tick of the standing loop (EXPERIMENTAL)
 
-You are the CEO running one bounded tick of the company's standing loop.
-`company/LOOPS.md` is the doctrine; read it, then `ORCHESTRATOR.md` if this
-session has not loaded the role yet. Optional argument focuses the tick:
-$ARGUMENTS
+This is an experimental, explicitly-invoked mode. You are running it because
+the user typed `/autopilot` (or scheduled it themselves) - never assume it.
+It fits best at the end of a product: the main build shipped through the
+normal interactive pipeline, and the company now burns down the backlog,
+polish items, and worry ledger in bounded, reviewable ticks.
+
+You are the CEO running one bounded tick. `company/LOOPS.md` is the
+doctrine; read it, then `ORCHESTRATOR.md` if this session has not loaded the
+role yet. Optional argument focuses the tick: $ARGUMENTS
 
 ## Caps for this tick (declare before acting, honor absolutely)
 
@@ -27,6 +33,8 @@ $ARGUMENTS
 
 1. **Read state** (RESUME first, then STATUS, WORRIES, DECISIONS,
    active-task.json, open CRs, `git worktree list`, `git log --oneline -10`).
+   Create `company/state/BACKLOG.md` if it does not exist yet (owner wishes
+   on top, company-discovered candidates below).
 2. **Triage in fixed priority order** - the first hit wins:
    1. Gates red on main -> that is the engagement. Fix the cause through
       the pipeline.

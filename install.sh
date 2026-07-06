@@ -146,8 +146,6 @@ scaffold_stub "$TARGET/company/state/WORRIES.md" \
   "# WORRIES - maintained by the orchestrator. Open risks and unknowns, worst first."
 scaffold_stub "$TARGET/company/state/DECISIONS.md" \
   "# DECISIONS - maintained by the orchestrator. Durable choices and their rationale."
-scaffold_stub "$TARGET/company/state/BACKLOG.md" \
-  "# BACKLOG - the discovered-work queue. Owner wishes on top; the standing loop pulls from the top."
 if [ ! -e "$TARGET/company/state/adherence.log" ]; then
   touch "$TARGET/company/state/adherence.log"
   ok "company/state/adherence.log"

@@ -1,4 +1,11 @@
-# LOOPS.md - Standing operation (loop engineering)
+# LOOPS.md - Standing operation (loop engineering) [EXPERIMENTAL]
+
+**Experimental and strictly opt-in.** Nothing in this page runs unless the
+owner explicitly invokes `/autopilot` or schedules it themselves. No agent,
+including the CEO, starts a loop on its own initiative. The intended moment
+is the end phase of a product: the main build shipped interactively, and the
+loop burns down the backlog, polish items, and worry ledger in bounded,
+reviewable ticks.
 
 Prompting the company task by task is mode one. Mode two is the loop: the
 company runs on a heartbeat, discovers its own work, executes it through the

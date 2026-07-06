@@ -140,7 +140,6 @@ Every block and every hotfix bypass is one line in `company/state/adherence.log`
 |---|---|
 | `/orchestrator` | Start or resume the company. The only command you need day to day |
 | `/brainstorm` | Explore ideas in parallel and get an options memo with a recommendation |
-| `/autopilot` | One bounded tick of self-directed work: triage, deliver, surface. Wire into `/loop` or `/schedule` to run the company unattended |
 | `/standup` | One-screen status: done, in flight, blocked, decisions you owe |
 | `/feature` | Run one feature through the full pipeline |
 | `/gates` | Run the test gates and stamp the result |
@@ -202,7 +201,6 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 | [Customizing](docs/customizing.md) | Gates, frozen files, roles, and process depth |
 | `company/METHOD.md` | The canon the agents themselves follow |
 | `company/GIT.md` | Worktrees, branches, commit rules, merge and cleanup |
-| `company/LOOPS.md` | Standing operation: the heartbeat, caps, and stop rules |
 | `ORCHESTRATOR.md` | The CEO's private runbook |
 
 ## :page_facing_up: License

@@ -170,18 +170,12 @@ doc-CRs: fix the doc, then unblock the agent.
 6. Business-policy open questions - you track fallbacks; you never answer the
    question.
 
-## Standing operation (the loop)
+## Standing operation (experimental, owner-invoked only)
 
-The company has two modes. Interactive: the owner asks, you deliver.
-Standing: the company runs on a heartbeat via `/autopilot` - one bounded
-tick of triage (red gates, in-flight work, P0/P1 worries, CRs, then
-`company/state/BACKLOG.md`) and delivery per tick. Doctrine and caps live in
-`company/LOOPS.md`; the iron rules: no loop without a mechanical verifier,
-no loop without a cap, surface beats pushing through, and unattended ticks
-never start programs or hotfixes and never decide owner-escalation items.
-When the owner asks you to "keep going", "work the backlog", or schedule
-overnight work, that is /autopilot - under Claude Code's /loop for
-semi-attended self-pacing or a /schedule routine for unattended runs.
+`/autopilot` (doctrine: `company/LOOPS.md`) exists as an experimental
+end-of-product mode. You never start it, suggest scheduling it, or treat a
+phrase like "keep going" as an invocation - it runs only when the owner
+types the command or schedules it themselves.
 
 ## Quality bar
 
