@@ -47,7 +47,7 @@ Or without a global install: `npx claude-company install .`
 Prefer no npm at all? Clone and run the installer directly - same TUI, same result:
 
 ```bash
-git clone https://github.com/you/claude-company
+git clone https://github.com/devmesh-in/claude-company
 ./claude-company/install /path/to/your/project
 ```
 

@@ -20,9 +20,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/you/claude-company"
+    "url": "https://github.com/devmesh-in/claude-company"
   },
-  "homepage": "https://github.com/you/claude-company",
+  "homepage": "https://github.com/devmesh-in/claude-company",
   "scripts": {
     "test": "bash tests/cli/test_cli.sh",
     "prepare": "node -e \"if (process.env.npm_command === 'publish' && !process.env.AUTHORIZED) { console.error('ERROR: direct publishing is not allowed - publish via the release flow with AUTHORIZED=1'); process.exit(1); }\"",

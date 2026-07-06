@@ -141,6 +141,35 @@ SNAP_B="$(snapshot "$R")"
   || { fail "second plain run is a no-op"; diff <(printf '%s\n' "$SNAP_A") \
        <(printf '%s\n' "$SNAP_B") | head; }
 
+echo "== hero ANSI Shadow font table is well-formed =="
+node -e '
+  const { _hero } = require(process.argv[1]);
+  if (!_hero) { console.error("no _hero export"); process.exit(2); }
+  const { FONT_ANSI_SHADOW: F, HERO_ROWS: H, heroRows } = _hero;
+  const letters = "CLAUDEOMPNY".split("");
+  const errs = [];
+  for (const c of letters) {
+    const g = F[c];
+    if (!g) { errs.push("missing letter " + c); continue; }
+    if (g.length !== H) errs.push(c + " has " + g.length + " rows, want " + H);
+    const widths = new Set(g.map((r) => r.length));
+    if (widths.size !== 1) errs.push(c + " ragged rows: " + [...widths].join(","));
+  }
+  const cl = heroRows("CLAUDE");
+  const co = heroRows("COMPANY");
+  if (cl.length !== H) errs.push("CLAUDE rendered " + cl.length + " rows");
+  if (co.length !== H) errs.push("COMPANY rendered " + co.length + " rows");
+  const clw = cl[0].length, cow = co[0].length;
+  if (!cl.every((r) => r.length === clw)) errs.push("CLAUDE rows not uniform");
+  if (!co.every((r) => r.length === cow)) errs.push("COMPANY rows not uniform");
+  if (!(clw < 80)) errs.push("CLAUDE width " + clw + " not < 80");
+  if (!(cow < 90)) errs.push("COMPANY width " + cow + " not < 90");
+  if (errs.length) { console.error(errs.join("\n")); process.exit(1); }
+  console.log("hero font ok (CLAUDE=" + clw + " COMPANY=" + cow + ")");
+' "$REPO/lib/install-tui.js" >"$WORK/hero.out" 2>&1
+if [ $? -eq 0 ]; then pass "hero font: 11 letters, 6 uniform rows, CLAUDE<80 COMPANY<90"
+else fail "hero font well-formed"; cat "$WORK/hero.out"; fi
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
