@@ -429,5 +429,97 @@ class TestSessionStart(Base):
         self.assertEqual(r.stdout.strip(), "")
 
 
+class TestGatesDetect(Base):
+    """gates_detect.py CLI. Tool presence is environment-dependent, so
+    assertions target what is deterministic: parsed output JSON, the
+    placeholder-replacement rule, the preserve-real-config rule, and the
+    no-stack case. python3 is assumed present (the hooks require it)."""
+
+    def detect_json(self, args):
+        r = run_cli("gates_detect.py", args, self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = None
+        for ln in r.stdout.splitlines():
+            if ln.startswith("GATES_JSON: "):
+                line = ln[len("GATES_JSON: "):]
+        self.assertIsNotNone(line, "no GATES_JSON line in:\n" + r.stdout)
+        return json.loads(line), r
+
+    def config_path(self):
+        return os.path.join(self.root, "company", "gates.config")
+
+    def test_node_project_detected(self):
+        self.write("package.json", json.dumps(
+            {"scripts": {"test": "jest", "lint": "eslint ."},
+             "devDependencies": {"typescript": "^5"}}))
+        obj, _ = self.detect_json([])
+        self.assertIn("package.json", obj["stacks"])
+        self.assertEqual(obj["package_manager"], "npm")
+        # tests + lint + typecheck appear across proposed and/or skipped.
+        names = {g["name"] for g in obj["proposed"]}
+        names |= {g["name"] for g in obj["skipped"]}
+        self.assertIn("tests", names)
+        self.assertIn("lint", names)
+        self.assertIn("typecheck", names)
+        # skipped entries carry the missing-tool reason.
+        for g in obj["skipped"]:
+            self.assertEqual(g["reason"], "detected_but_missing_tool")
+
+    def test_pnpm_lockfile_picks_pnpm(self):
+        self.write("pnpm-lock.yaml", "")
+        self.write("package.json", json.dumps({"scripts": {"test": "vitest"}}))
+        obj, _ = self.detect_json([])
+        self.assertEqual(obj["package_manager"], "pnpm")
+
+    def test_python_pytest_proposed(self):
+        self.write("pyproject.toml", "[tool.ruff]\n[tool.mypy]\n")
+        obj, _ = self.detect_json([])
+        self.assertIn("python", obj["stacks"])
+        cmds = {g["command"] for g in obj["proposed"]}
+        # python3 is invocable, so the pytest gate is always proposed.
+        self.assertIn("python3 -m pytest", cmds)
+
+    def test_write_replaces_placeholder_config(self):
+        self.write("pyproject.toml", "[project]\nname = 'x'\n")
+        self.write("company/gates.config", json.dumps({"gates": [
+            {"name": "tests",
+             "command": "echo 'CONFIGURE ME' && exit 1", "blocking": True}]}))
+        obj, _ = self.detect_json(["--write"])
+        self.assertEqual(obj["status"], "wrote")
+        self.assertTrue(obj["wrote"])
+        cfg = json.load(open(self.config_path()))
+        commands = [g["command"] for g in cfg["gates"]]
+        self.assertIn("python3 -m pytest", commands)
+        for cmd in commands:
+            self.assertNotIn("CONFIGURE ME", cmd)
+
+    def test_write_preserves_real_config(self):
+        self.write("pyproject.toml", "[project]\nname = 'x'\n")
+        real = {"gates": [{"name": "tests",
+                           "command": "pytest -q", "blocking": True}]}
+        self.write("company/gates.config", json.dumps(real))
+        obj, _ = self.detect_json(["--write"])
+        self.assertEqual(obj["status"], "preserved_existing")
+        self.assertFalse(obj["wrote"])
+        cfg = json.load(open(self.config_path()))
+        self.assertEqual(cfg["gates"][0]["command"], "pytest -q")
+
+    def test_no_stack_leaves_config_untouched(self):
+        obj, r = self.detect_json(["--write"])
+        self.assertEqual(obj["status"], "no_stack")
+        self.assertFalse(obj["wrote"])
+        self.assertIn("no stack detected", r.stdout)
+        self.assertFalse(os.path.exists(self.config_path()))
+
+    def test_gates_ordered_cheap_to_expensive(self):
+        # A Makefile with lint + test targets: both use `make`, always present
+        # is not guaranteed, so assert ordering only when both are proposed.
+        self.write("Makefile", "lint:\n\techo l\ntest:\n\techo t\n")
+        obj, _ = self.detect_json([])
+        names = [g["name"] for g in obj["proposed"]]
+        if "lint" in names and "tests" in names:
+            self.assertLess(names.index("lint"), names.index("tests"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -20,8 +20,12 @@ description: Run the project's full gate ladder (company/run-gates.sh) and stamp
 
 ## Configuring gates ($ARGUMENTS mentions adding/changing gates)
 
-Edit `company/gates.config` (JSON: `{"gates": [{"name", "command",
-"blocking": true}]}`) per the ladder contract in `company/GATES.md`:
+Auto-detect first: `python3 .claude/hooks/gates_detect.py --write` sniffs the
+stack (package scripts, pytest, go, cargo, make) and writes real commands,
+replacing only CONFIGURE-ME placeholders - it never overwrites gates a human
+or the architect already wired. Then hand-tune `company/gates.config` (JSON:
+`{"gates": [{"name", "command", "blocking": true}]}`) per the ladder contract
+in `company/GATES.md`:
 cheap-to-expensive order, real commands that exit non-zero on failure, and
 never a gate you intend to waive - every gate is blocking by definition.
 Placeholder `CONFIGURE ME` gates fail deliberately so nobody ships on the

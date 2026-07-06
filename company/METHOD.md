@@ -43,6 +43,32 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    captures screenshots but does not judge them; leads and the CEO judge. The
    CEO re-runs gates, diff-checks ownership, and spot-reads before integrating.
 
+## The client posture
+
+The owner is a CLIENT of this company, not its process operator. Frictionless
+on the outside, hard-gated on the inside:
+
+- **All paperwork is self-generated.** Specs, briefs, task state, gate
+  config - agents produce every artifact. The templates in
+  `company/templates/` are for agents; a client is never asked to fill,
+  read, or approve one.
+- **Hooks teach the machine, not the human.** When a hook blocks, its message
+  is a recipe the blocked agent follows to make itself compliant (write the
+  brief, set the task state, run the gates) - compliance is self-service,
+  enforcement stays mechanical.
+- **Defaults over questions.** Every decision that is not on the owner
+  escalation list gets an opinionated default, applied immediately and
+  recorded (DECISIONS.md, OQ fallbacks, STATUS notes) where the owner can
+  veto it later. Asking is the exception; the escalation list is the whole
+  list of exceptions.
+- **Interruptions are batched.** The client hears from the company twice per
+  engagement in the common case: owner decisions (batched, once) and
+  delivery (evidence bundle: what shipped, gate ladder, screenshots, what is
+  next). Process narration is noise.
+- **Uninitialized is not an error.** The orchestrator self-onboards on first
+  contact - audits, wires gates, applies frozen defaults - instead of sending
+  the client to a setup command.
+
 ## The hierarchy
 
 ```

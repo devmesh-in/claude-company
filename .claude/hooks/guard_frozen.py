@@ -34,7 +34,10 @@ ENV_ALLOW_SUFFIXES = (".example", ".sample", ".template")
 
 CR_NOTE = (
     "Frozen surfaces change only through the change-request protocol "
-    "(company/change-requests/), never a local edit."
+    "(company/change-requests/), never a local edit. If this change is "
+    "genuinely needed, file a CR: copy company/templates/CR-TEMPLATE.md to "
+    "company/change-requests/CR-<n>-<slug>.md and surface it in your report. "
+    "The CEO applies approved CRs."
 )
 
 

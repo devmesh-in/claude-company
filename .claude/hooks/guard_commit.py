@@ -101,9 +101,14 @@ def main():
                 if not ok:
                     c.block(
                         root, HOOK, "git " + sub, reason,
-                        "BLOCKED: git {} requires green, fresh gates. {}. "
-                        "Run the gate suite (/gates) until green before "
-                        "committing.".format(sub, reason),
+                        "BLOCKED: git {} requires green, fresh gates. {}.\n"
+                        "Fix: run `bash company/run-gates.sh` until green, "
+                        "then retry.\n"
+                        "If company/gates.config still has only CONFIGURE-ME "
+                        "placeholders, run `python3 "
+                        ".claude/hooks/gates_detect.py --write` first to "
+                        "auto-configure real gates, then rerun the "
+                        "suite.".format(sub, reason),
                     )
                 continue
     except SystemExit:

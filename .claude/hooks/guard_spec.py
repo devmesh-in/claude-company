@@ -20,9 +20,15 @@ NON_SOURCE_EXT = {
 EXEMPT_DIRS = {"company", ".claude", "docs", ".github"}
 
 NO_BRIEF_MSG = (
-    "BLOCKED: no active brief. The CEO dispatches work via briefs "
-    "(company/briefs/). Set company/state/active-task.json to point at an "
-    "existing brief, or use hotfix mode (\"type\": \"hotfix\")."
+    "BLOCKED: no active brief. Self-serve fix:\n"
+    "1) Write company/briefs/brief-<slug>.md from "
+    "company/templates/BRIEF-TEMPLATE.md covering what you are about to build.\n"
+    "2) Write company/state/active-task.json exactly like this:\n"
+    "   {\"task\": \"<slug>\", \"type\": \"feature\", "
+    "\"brief\": \"company/briefs/brief-<slug>.md\", \"test_scope\": false}\n"
+    "3) Retry the edit.\n"
+    "If you are the CEO handling a production emergency, set type to hotfix "
+    "(logged, not silent)."
 )
 
 

@@ -1,53 +1,52 @@
 ---
 name: onboard
-description: Adopt claude-company into an EXISTING codebase (brownfield) - audit the repo to recover its architecture and tribal conventions, discover the real test/lint/build commands, propose frozen surfaces from what is actually load-bearing, and generate the company canon from evidence rather than imposing greenfield docs. Use when the user says /onboard, or asks to "set up claude-company / the company system" in a repo that already has code. For an empty repo use company-init instead.
+description: Adopt claude-company into an EXISTING codebase autonomously - audit the repo, recover architecture and tribal conventions, auto-wire the real test/lint/build commands as gates, apply opinionated frozen-surface defaults, and generate the canon from evidence. Zero owner interviews; the owner gets a findings memo with veto rights. Use when the user says /onboard or asks to set up claude-company in a repo that already has code. Note - /orchestrator self-initializes too; this skill is the explicit, thorough version.
 ---
 
-# /onboard - adopt an existing codebase
+# /onboard - adopt an existing codebase (autonomous)
 
-The company adapts to the codebase, not the other way around. Everything you
-generate must come from evidence in the repo; where you infer, say so and mark
-confidence. Do the steps in order.
+The company adapts to the codebase, not the other way around - and it does the
+adapting itself. Everything generated must come from evidence in the repo;
+where you infer, mark confidence. Ask the owner nothing; report findings with
+veto rights at the end.
 
-## 1. Verify the drop-in
+## 0. Verify the drop-in
 
-Confirm `company/METHOD.md` and `.claude/hooks/` exist (installer ran). If
-not, stop and point the user at `install.sh`.
+`company/METHOD.md` and `.claude/hooks/` must exist (installer ran).
 
-## 2. Audit the repo (dispatch Explore agents in parallel)
+## 1. Audit (Explore agents, parallel)
 
-1. **Architecture recovery**: languages, frameworks, entry points, module map,
-   data stores, external services, how the pieces talk. Output: a one-page
-   architecture map with file paths.
-2. **Conventions mining**: the unusual, opinionated, tribal things - naming
-   quirks, error-handling patterns, forbidden practices visible in the code,
-   comment conventions, directory meanings. The generic stuff (indentation)
-   is noise; the tribal stuff prevents agent drift.
-3. **Machinery discovery**: the REAL commands - test, lint, typecheck, build,
-   dev-run, migrate, seed - from package scripts, Makefiles, CI configs.
-   Verify each actually runs (or note why not).
-4. **Load-bearing surfaces**: single-writer choke points, state machines,
-   money/ledger code, auth seams, shipped migrations, generated code - the
-   candidates for freezing.
+1. **Architecture recovery**: languages, frameworks, entry points, module
+   map, data stores, external services, how pieces talk. One page, with paths.
+2. **Conventions mining**: the unusual, opinionated, tribal things that
+   prevent agent drift - naming quirks, error-handling patterns, forbidden
+   practices visible in code. Skip the generic.
+3. **Machinery discovery**: real test/lint/typecheck/build/dev/migrate/seed
+   commands from scripts, Makefiles, CI configs - verified runnable.
+4. **Load-bearing surfaces**: single writers, state machines, money/ledgers,
+   auth seams, shipped migrations, generated code.
 
-## 3. Generate the canon (you, as CEO, from the audit)
+## 2. Wire it (you, from evidence, no approval gates)
 
-- `CLAUDE.md`: create or extend (never clobber - add sections) with the
-  architecture map, tribal conventions, and invariants you found stated as
-  invariants only if the code actually enforces or clearly intends them.
-- `company/gates.config`: the verified real commands, cheap-to-expensive. A
-  command that does not currently pass goes in commented/annotated with its
-  status - never wire a red gate in silently.
-- `company/frozen-surfaces.json`: the load-bearing candidates, each with why.
-  Present to the owner for approval BEFORE writing - freezing is a policy
-  decision, not an inference.
-- `company/state/RESUME.md` "facts every spawn prompt needs": the machinery
-  commands, ports, seed behavior, quirks that would burn an agent.
+- **Gates**: `python3 .claude/hooks/gates_detect.py --write`, then reconcile
+  with the audit's findings (CI configs often know gates detection cannot
+  see). Run `bash company/run-gates.sh` and record the honest result - gates
+  that are red TODAY go into STATUS as the existing-debt baseline, not
+  silently into the config as passing.
+- **Frozen surfaces**: apply the opinionated defaults (shipped migrations,
+  schema files, generated code, anything with exactly one writer) to
+  `company/frozen-surfaces.json` with a why per entry. Freezing is
+  reversible by the owner in one veto; do not block on pre-approval.
+- **Canon**: create or extend `CLAUDE.md` (add sections, never clobber) with
+  the architecture map, tribal conventions, and only the invariants the code
+  actually enforces or clearly intends.
+- **Spawn facts**: machinery commands, ports, seed behavior, quirks that
+  would burn an agent - into `company/state/RESUME.md`.
+- Seed `company/state/WORRIES.md` with the top risks the audit surfaced.
 
-## 4. Report and hand off
+## 3. The findings memo (owner-facing, one screen)
 
-Present the owner: what you found, what you generated, the proposed frozen
-surfaces (approve/edit), current gate status (which are green today - run
-them), and the top 3 risks you would put in WORRIES.md. Apply their answers,
-update STATUS/RESUME, and tell them `/orchestrator` is ready for its first
-task.
+What the company found, what it wired (gates and their current colors,
+frozen surfaces and why), what it flagged (worries, debt baseline), and the
+standing offer: "veto any of this by saying so; otherwise /orchestrator is
+open for business." No questions, no tasks assigned to the owner.
