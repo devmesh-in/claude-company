@@ -69,6 +69,10 @@ on the outside, hard-gated on the inside:
 - **Uninitialized is not an error.** The orchestrator self-onboards on first
   contact - audits, wires gates, applies frozen defaults - instead of sending
   the client to a setup command.
+- **The company also runs without being asked.** In standing operation
+  (`company/LOOPS.md`, `/autopilot`) it triages its own state, works the
+  backlog in bounded ticks, and surfaces only decisions and deliveries. The
+  loop never relaxes the method - same specs, briefs, gates, and evidence.
 
 ## The hierarchy
 
@@ -128,6 +132,7 @@ All under `company/state/`, all owned by the CEO:
 | `RESUME.md` | Session handoff: done / running / next, plus the facts every spawn prompt needs. Read first on every session start. |
 | `WORRIES.md` | Terse ledger of suspected-but-unproven risks: `P (P0-P3) \| Worry \| What \| Logic`. A row graduates OUT when it becomes a CR, a STATUS risk, or a verified fix. |
 | `DECISIONS.md` | Owner escalations and their outcomes. |
+| `BACKLOG.md` | The discovered-work queue the standing loop pulls from (`company/LOOPS.md`). Owner wishes on top, company-discovered candidates below. |
 | `active-task.json` | The machine-readable pointer to the task in flight (read by hooks). |
 | `gates.status` | The stamped gate result (written only by the gate runner). |
 | `adherence.log` | Every hook block and bypass, one line each. Proof the system enforces. |

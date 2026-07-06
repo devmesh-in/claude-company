@@ -113,6 +113,7 @@ copy_overwrite "$SRC/company/GATES.md"         "$TARGET/company/GATES.md"
 copy_overwrite "$SRC/company/EXTENDING.md"     "$TARGET/company/EXTENDING.md"
 copy_overwrite "$SRC/company/IDEATION.md"      "$TARGET/company/IDEATION.md"
 copy_overwrite "$SRC/company/GIT.md"           "$TARGET/company/GIT.md"
+copy_overwrite "$SRC/company/LOOPS.md"         "$TARGET/company/LOOPS.md"
 copy_overwrite "$SRC/company/run-gates.sh"     "$TARGET/company/run-gates.sh"
 [ -f "$TARGET/company/run-gates.sh" ] && chmod +x "$TARGET/company/run-gates.sh"
 copy_tree_overwrite "$SRC/company/templates"   "$TARGET/company/templates"
@@ -145,6 +146,8 @@ scaffold_stub "$TARGET/company/state/WORRIES.md" \
   "# WORRIES - maintained by the orchestrator. Open risks and unknowns, worst first."
 scaffold_stub "$TARGET/company/state/DECISIONS.md" \
   "# DECISIONS - maintained by the orchestrator. Durable choices and their rationale."
+scaffold_stub "$TARGET/company/state/BACKLOG.md" \
+  "# BACKLOG - the discovered-work queue. Owner wishes on top; the standing loop pulls from the top."
 if [ ! -e "$TARGET/company/state/adherence.log" ]; then
   touch "$TARGET/company/state/adherence.log"
   ok "company/state/adherence.log"
