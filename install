@@ -1,0 +1,1332 @@
+#!/usr/bin/env python3
+"""install - the flagship installer TUI for claude-company.
+
+A drop-in AI software company for your repo. This is a thin, good-looking front
+end over install.sh (the engine); it never changes what gets installed, only how
+the install is presented and configured.
+
+Usage:
+  ./install                         Full TUI (when stdin and stdout are TTYs)
+  ./install --target DIR --yes      Non-interactive install with current defaults
+  ./install DIR --plain             Plain, line-per-step output, no interaction
+  ./install --help                  This help
+
+Options:
+  --target DIR         Target project directory (must already exist).
+  -y, --yes            Non-interactive; accept defaults. Implies plain output.
+  --plain              Force plain (non-TTY) output. Requires a target.
+  --detect-gates       After install, auto-detect this project's gates (default).
+  --no-detect-gates    Skip gate auto-detection.
+  --orientation        Show the 60-second orientation at the end (default).
+  --no-orientation     Skip the orientation on the done screen.
+  --no-color           Monochrome output (keeps layout). NO_COLOR is honored too.
+
+Exit codes: 0 ok, 1 usage, 2 preflight/target hard-fail, 3 install failure,
+130 cancelled.
+
+Python 3.8+ stdlib only. No curses - raw ANSI throughout.
+"""
+
+import argparse
+import json
+import os
+import re
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+try:
+    import termios
+    import tty
+    _HAVE_TERMIOS = True
+except ImportError:  # pragma: no cover - non-unix
+    _HAVE_TERMIOS = False
+
+from typing import Callable, List, Optional, Tuple
+
+# --------------------------------------------------------------------------
+# Paths and constants
+# --------------------------------------------------------------------------
+
+SELF_DIR = os.path.dirname(os.path.realpath(__file__))
+INSTALL_SH = os.path.join(SELF_DIR, "install.sh")
+
+EXIT_OK = 0
+EXIT_USAGE = 1
+EXIT_PREFLIGHT = 2
+EXIT_INSTALL = 3
+EXIT_CANCEL = 130
+
+MAX_WIDTH = 100
+SPIN_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼",
+               "⠴", "⠦", "⠧", "⠇", "⠏"]
+SPIN_INTERVAL = 0.12
+
+# ANSI building blocks (escape sequences are structural, never text tells).
+ESC = "\033"
+CSI = ESC + "["
+
+
+def _up(n: int) -> str:
+    return "{}{}A".format(CSI, n) if n else ""
+
+
+CLEAR_SCREEN = CSI + "2J" + CSI + "H"
+CLEAR_LINE = CSI + "2K"
+CLEAR_DOWN = CSI + "0J"
+HIDE_CURSOR = CSI + "?25l"
+SHOW_CURSOR = CSI + "?25h"
+
+
+# --------------------------------------------------------------------------
+# Palette / gradient
+# --------------------------------------------------------------------------
+
+RGB = Tuple[int, int, int]
+
+
+class Palette:
+    """Truecolor purple-gradient brand with a 256-color and mono fallback."""
+
+    STOPS: List[RGB] = [(0x6D, 0x5B, 0xD0), (0x8B, 0x5C, 0xF6), (0xB4, 0x78, 0xF0)]
+
+    GREEN: RGB = (0x53, 0xC0, 0x6A)
+    YELLOW: RGB = (0xE4, 0xB5, 0x5E)
+    RED: RGB = (0xE5, 0x6B, 0x6B)
+    DIMGREY: RGB = (0x8A, 0x86, 0x9C)
+
+    def __init__(self, enabled: bool, truecolor: bool) -> None:
+        self.enabled = enabled
+        self.truecolor = truecolor
+
+    # -- core colour escapes ------------------------------------------------
+    def fg(self, rgb: RGB) -> str:
+        if not self.enabled:
+            return ""
+        r, g, b = rgb
+        if self.truecolor:
+            return "{}38;2;{};{};{}m".format(CSI, r, g, b)
+        return "{}38;5;{}m".format(CSI, self._to_256(rgb))
+
+    @staticmethod
+    def _to_256(rgb: RGB) -> int:
+        r, g, b = rgb
+        # grey ramp when the channels are close, else the 6x6x6 colour cube.
+        if abs(r - g) < 12 and abs(g - b) < 12:
+            grey = round(((r + g + b) / 3 - 8) / 247 * 24)
+            grey = max(0, min(23, grey))
+            return 232 + grey
+        def q(v: int) -> int:
+            return round(v / 255 * 5)
+        return 16 + 36 * q(r) + 6 * q(g) + q(b)
+
+    def grad(self, t: float) -> RGB:
+        """Colour at position t in [0, 1] across the brand stops."""
+        t = max(0.0, min(1.0, t))
+        n = len(self.STOPS) - 1
+        pos = t * n
+        i = int(pos)
+        if i >= n:
+            return self.STOPS[-1]
+        frac = pos - i
+        a, b = self.STOPS[i], self.STOPS[i + 1]
+        return (
+            round(a[0] + (b[0] - a[0]) * frac),
+            round(a[1] + (b[1] - a[1]) * frac),
+            round(a[2] + (b[2] - a[2]) * frac),
+        )
+
+    def grad_fg(self, t: float) -> str:
+        return self.fg(self.grad(t))
+
+    # -- attributes ---------------------------------------------------------
+    @property
+    def reset(self) -> str:
+        return CSI + "0m" if self.enabled else ""
+
+    @property
+    def dim(self) -> str:
+        return CSI + "2m" if self.enabled else ""
+
+    @property
+    def bold(self) -> str:
+        return CSI + "1m" if self.enabled else ""
+
+    # -- wrappers -----------------------------------------------------------
+    def paint(self, text: str, *codes: str) -> str:
+        if not self.enabled or not codes:
+            return text
+        return "".join(codes) + text + self.reset
+
+    def brand(self, text: str) -> str:
+        return self.paint(text, self.bold, self.grad_fg(0.5))
+
+    def dimmed(self, text: str) -> str:
+        return self.paint(text, self.dim)
+
+
+def decide_palette(no_color_flag: bool) -> Palette:
+    enabled = not no_color_flag and os.environ.get("NO_COLOR") is None
+    colorterm = os.environ.get("COLORTERM", "").lower()
+    truecolor = "truecolor" in colorterm or "24bit" in colorterm
+    return Palette(enabled=enabled, truecolor=truecolor)
+
+
+# --------------------------------------------------------------------------
+# Hero block font (only the letters CLAUDE COMPANY needs)
+# --------------------------------------------------------------------------
+
+_FONT_RAW = {
+    "C": [".###", "#...", "#...", "#...", ".###"],
+    "L": ["#...", "#...", "#...", "#...", "####"],
+    "A": [".##.", "#..#", "####", "#..#", "#..#"],
+    "U": ["#..#", "#..#", "#..#", "#..#", ".##."],
+    "D": ["###.", "#..#", "#..#", "#..#", "###."],
+    "E": ["####", "#...", "###.", "#...", "####"],
+    "O": [".##.", "#..#", "#..#", "#..#", ".##."],
+    "M": ["#...#", "##.##", "#.#.#", "#...#", "#...#"],
+    "P": ["###.", "#..#", "###.", "#...", "#..."],
+    "N": ["#..#", "##.#", "#.##", "#..#", "#..#"],
+    "Y": ["#...#", ".#.#.", "..#..", "..#..", "..#.."],
+}
+_BLOCK = "█"
+
+
+def hero_rows(text: str) -> List[str]:
+    """Render text into 5 rows of block-font glyphs."""
+    rows = ["", "", "", "", ""]
+    for ch in text:
+        if ch == " ":
+            for r in range(5):
+                rows[r] += "   "
+            continue
+        glyph = _FONT_RAW.get(ch.upper())
+        if not glyph:
+            continue
+        for r in range(5):
+            rows[r] += glyph[r].replace("#", _BLOCK).replace(".", " ") + " "
+    return [row.rstrip() for row in rows]
+
+
+# --------------------------------------------------------------------------
+# Terminal / raw-mode management
+# --------------------------------------------------------------------------
+
+class Terminal:
+    """Raw-mode context manager that always restores the terminal.
+
+    Registers signal handlers so SIGINT/SIGTERM produce a clean, styled exit
+    without leaving the terminal in raw mode or with a hidden cursor.
+    """
+
+    def __init__(self, pal: Palette) -> None:
+        self.pal = pal
+        self.fd = sys.stdin.fileno()
+        self._saved = None
+        self._prev_int = None
+        self._prev_term = None
+        self._prev_winch = None
+
+    def __enter__(self) -> "Terminal":
+        if _HAVE_TERMIOS:
+            self._saved = termios.tcgetattr(self.fd)
+            tty.setcbreak(self.fd)
+        sys.stdout.write(HIDE_CURSOR)
+        sys.stdout.flush()
+        self._prev_int = signal.getsignal(signal.SIGINT)
+        self._prev_term = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGINT, self._on_signal)
+        signal.signal(signal.SIGTERM, self._on_signal)
+        try:
+            self._prev_winch = signal.getsignal(signal.SIGWINCH)
+            signal.signal(signal.SIGWINCH, self._on_winch)
+        except (AttributeError, ValueError):
+            self._prev_winch = None
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.restore()
+
+    def restore(self) -> None:
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.flush()
+        if _HAVE_TERMIOS and self._saved is not None:
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self._saved)
+            self._saved = None
+        if self._prev_int is not None:
+            signal.signal(signal.SIGINT, self._prev_int)
+        if self._prev_term is not None:
+            signal.signal(signal.SIGTERM, self._prev_term)
+        if self._prev_winch is not None:
+            try:
+                signal.signal(signal.SIGWINCH, self._prev_winch)
+            except (AttributeError, ValueError):
+                pass
+
+    def _on_signal(self, signum, frame) -> None:  # noqa: ANN001
+        self.restore()
+        sys.stdout.write("\n" + self.pal.paint(
+            "  Install cancelled.", self.pal.fg(Palette.YELLOW)) + "\n")
+        sys.stdout.flush()
+        sys.exit(EXIT_CANCEL)
+
+    def _on_winch(self, signum, frame) -> None:  # noqa: ANN001
+        # Redraw happens on the next loop tick; nothing to do here but wake up.
+        pass
+
+
+def term_width() -> int:
+    cols = shutil.get_terminal_size(fallback=(80, 24)).columns
+    if cols <= 0:
+        cols = 80
+    return max(40, min(cols, MAX_WIDTH))
+
+
+# -- key input --------------------------------------------------------------
+
+KEY_UP = "UP"
+KEY_DOWN = "DOWN"
+KEY_LEFT = "LEFT"
+KEY_RIGHT = "RIGHT"
+KEY_ENTER = "ENTER"
+KEY_ESC = "ESC"
+KEY_TAB = "TAB"
+KEY_BACKSPACE = "BACKSPACE"
+
+
+def read_key(timeout: Optional[float] = None) -> Optional[str]:
+    """Read one logical keypress. Returns None on timeout (for redraw ticks)."""
+    fd = sys.stdin.fileno()
+    try:
+        ready, _, _ = select.select([fd], [], [], timeout)
+    except (InterruptedError, OSError):
+        return None
+    if not ready:
+        return None
+    ch = os.read(fd, 1)
+    if not ch:
+        return KEY_ESC
+    if ch == b"\x1b":
+        more, _, _ = select.select([fd], [], [], 0.02)
+        if not more:
+            return KEY_ESC
+        seq = os.read(fd, 3)
+        mapping = {b"[A": KEY_UP, b"[B": KEY_DOWN,
+                   b"[C": KEY_RIGHT, b"[D": KEY_LEFT}
+        for prefix, name in mapping.items():
+            if seq.startswith(prefix):
+                return name
+        return KEY_ESC
+    if ch in (b"\r", b"\n"):
+        return KEY_ENTER
+    if ch == b"\t":
+        return KEY_TAB
+    if ch in (b"\x7f", b"\x08"):
+        return KEY_BACKSPACE
+    if ch == b"\x03":  # Ctrl-C fallback if ISIG is off
+        raise KeyboardInterrupt
+    try:
+        return ch.decode("utf-8", "ignore")
+    except Exception:
+        return None
+
+
+# --------------------------------------------------------------------------
+# UI primitives
+# --------------------------------------------------------------------------
+
+def visible_len(s: str) -> int:
+    """Length of s ignoring ANSI escape sequences."""
+    return len(re.sub(r"\033\[[0-9;?]*[A-Za-z]", "", s))
+
+
+def center(s: str, width: int) -> str:
+    pad = max(0, (width - visible_len(s)) // 2)
+    return " " * pad + s
+
+
+def elide(s: str, n: int) -> str:
+    """Truncate a plain (escape-free) string to n columns with a trailing ..."""
+    if len(s) <= n:
+        return s
+    if n <= 3:
+        return s[:n]
+    return s[:n - 3] + "..."
+
+
+def rule(pal: Palette, width: int, gradient: bool = False) -> str:
+    line = "─" * width
+    if gradient and pal.enabled:
+        out = []
+        for i, ch in enumerate(line):
+            out.append(pal.grad_fg(i / max(1, width - 1)) + ch)
+        return "".join(out) + pal.reset
+    return pal.dimmed(line)
+
+
+def section_header(pal: Palette, title: str) -> str:
+    bar = pal.paint("┃", pal.grad_fg(0.35))
+    return "{} {}".format(bar, pal.paint(title, pal.bold))
+
+
+class Frame:
+    """Rounded box-drawing frame around a block of already-styled lines."""
+
+    TL, TR, BL, BR = "╭", "╮", "╰", "╯"
+    H, V = "─", "│"
+
+    @classmethod
+    def render(cls, pal: Palette, lines: List[str], width: int,
+               accent: float = 0.5, title: Optional[str] = None) -> List[str]:
+        inner = width - 2
+        edge = pal.grad_fg(accent)
+        top = pal.paint(cls.TL + cls.H * inner + cls.TR, edge)
+        if title:
+            label = " {} ".format(title)
+            fill = inner - visible_len(label)
+            top = pal.paint(cls.TL + cls.H, edge) + pal.paint(
+                label, pal.bold) + pal.paint(cls.H * max(0, fill - 1) + cls.TR,
+                                             edge)
+        bottom = pal.paint(cls.BL + cls.H * inner + cls.BR, edge)
+        out = [top]
+        for ln in lines:
+            # Defensively elide escape-free lines that would burst the box.
+            if visible_len(ln) == len(ln) and len(ln) > inner - 1:
+                ln = elide(ln, inner - 1)
+            pad = inner - visible_len(ln) - 1
+            v = pal.paint(cls.V, edge)
+            out.append("{} {}{}{}".format(v, ln, " " * max(0, pad), v))
+        out.append(bottom)
+        return out
+
+
+class LiveBlock:
+    """A re-drawable region: successive render() calls overwrite in place."""
+
+    def __init__(self) -> None:
+        self.height = 0
+
+    def render(self, lines: List[str]) -> None:
+        buf = []
+        if self.height:
+            buf.append(_up(self.height))
+            buf.append("\r")
+            buf.append(CLEAR_DOWN)
+        buf.append("\n".join(lines))
+        buf.append("\n")
+        sys.stdout.write("".join(buf))
+        sys.stdout.flush()
+        self.height = len(lines)
+
+
+class Activity:
+    """A pinned bottom spinner line with rows scrolling above it."""
+
+    def __init__(self, pal: Palette) -> None:
+        self.pal = pal
+        self.frame = 0
+        self.label = ""
+        self._active = False
+
+    def _spinline(self) -> str:
+        glyph = self.pal.paint(SPIN_FRAMES[self.frame % len(SPIN_FRAMES)],
+                               self.pal.grad_fg(0.5))
+        return "  {} {}".format(glyph, self.pal.dimmed(self.label))
+
+    def start(self, label: str) -> None:
+        self.label = label
+        self._active = True
+        sys.stdout.write(self._spinline())
+        sys.stdout.flush()
+
+    def set_label(self, label: str) -> None:
+        self.label = label
+
+    def tick(self) -> None:
+        if not self._active:
+            return
+        self.frame += 1
+        sys.stdout.write("\r" + CLEAR_LINE + self._spinline())
+        sys.stdout.flush()
+
+    def emit(self, row: str) -> None:
+        """Print a finished row above the spinner line."""
+        sys.stdout.write("\r" + CLEAR_LINE + row + "\n")
+        if self._active:
+            sys.stdout.write(self._spinline())
+        sys.stdout.flush()
+
+    def stop(self) -> None:
+        if self._active:
+            sys.stdout.write("\r" + CLEAR_LINE)
+            sys.stdout.flush()
+        self._active = False
+
+
+# --------------------------------------------------------------------------
+# Preflight probes
+# --------------------------------------------------------------------------
+
+PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
+
+GLYPH = {PASS: "✔", WARN: "△", FAIL: "✘"}
+
+
+class Probe:
+    def __init__(self, name: str, hard: bool,
+                 fn: Callable[[], Tuple[str, str]]) -> None:
+        self.name = name
+        self.hard = hard
+        self.fn = fn
+
+
+def _tool_version(binary: str, args: List[str]) -> str:
+    try:
+        out = subprocess.run([binary] + args, capture_output=True, timeout=5)
+        text = (out.stdout or out.stderr).decode("utf-8", "replace").strip()
+        first = text.splitlines()[0] if text else ""
+        m = re.search(r"\d+\.\d+(\.\d+)?", first)
+        return m.group(0) if m else (first or "found")
+    except Exception:
+        return "found"
+
+
+def probe_python() -> Tuple[str, str]:
+    v = sys.version_info
+    ver = "{}.{}.{}".format(v.major, v.minor, v.micro)
+    return (PASS if v >= (3, 8) else FAIL, ver)
+
+
+def probe_git() -> Tuple[str, str]:
+    if not shutil.which("git"):
+        return FAIL, "not found"
+    return PASS, _tool_version("git", ["--version"])
+
+
+def probe_bash() -> Tuple[str, str]:
+    if not shutil.which("bash"):
+        return FAIL, "not found"
+    return PASS, _tool_version("bash", ["--version"])
+
+
+def probe_claude() -> Tuple[str, str]:
+    if not shutil.which("claude"):
+        return WARN, "not found - install Claude Code to use the company"
+    return PASS, _tool_version("claude", ["--version"])
+
+
+def probe_node() -> Tuple[str, str]:
+    if not shutil.which("node"):
+        return WARN, "not found - needed for browser QA screenshots"
+    return PASS, _tool_version("node", ["--version"])
+
+
+def probe_npx() -> Tuple[str, str]:
+    if not shutil.which("npx"):
+        return WARN, "not found - needed for browser QA screenshots"
+    return PASS, _tool_version("npx", ["--version"])
+
+
+PROBES = [
+    Probe("python3 >= 3.8", True, probe_python),
+    Probe("git", True, probe_git),
+    Probe("bash", True, probe_bash),
+    Probe("claude CLI", False, probe_claude),
+    Probe("node", False, probe_node),
+    Probe("npx", False, probe_npx),
+]
+
+
+# --------------------------------------------------------------------------
+# Source inventory (for the confirm summary)
+# --------------------------------------------------------------------------
+
+def source_counts() -> dict:
+    def count_files(rel: str, pattern: str) -> int:
+        d = os.path.join(SELF_DIR, rel)
+        if not os.path.isdir(d):
+            return 0
+        return len([f for f in os.listdir(d) if re.search(pattern, f)])
+
+    def count_dirs(rel: str) -> int:
+        d = os.path.join(SELF_DIR, rel)
+        if not os.path.isdir(d):
+            return 0
+        return len([f for f in os.listdir(d)
+                    if os.path.isdir(os.path.join(d, f))])
+
+    return {
+        "agents": count_files(".claude/agents", r"\.md$"),
+        "skills": count_dirs(".claude/skills"),
+        "hooks": count_files(".claude/hooks", r"\.py$"),
+    }
+
+
+# --------------------------------------------------------------------------
+# Target validation
+# --------------------------------------------------------------------------
+
+def validate_target(raw: str) -> Tuple[bool, str, str]:
+    """Validate a target path. Returns (ok, resolved_path, message)."""
+    if not raw.strip():
+        return False, "", "enter a directory"
+    path = os.path.abspath(os.path.expanduser(raw.strip()))
+    if not os.path.exists(path):
+        return False, path, "does not exist - enter an existing directory"
+    if not os.path.isdir(path):
+        return False, path, "not a directory"
+    if os.path.realpath(path) == os.path.realpath(SELF_DIR):
+        return False, path, "that is the claude-company repo itself - pick your project"
+    if not os.access(path, os.W_OK):
+        return False, path, "not writable - check permissions"
+    is_git = os.path.isdir(os.path.join(path, ".git"))
+    try:
+        n = len(os.listdir(path))
+    except OSError:
+        n = 0
+    if is_git:
+        return True, path, "git repo, {} entries".format(n)
+    return True, path, "directory exists, not a git repo - will still install"
+
+
+# --------------------------------------------------------------------------
+# TUI screens
+# --------------------------------------------------------------------------
+
+TAGLINE = "An AI software company you drop into your repo."
+
+
+def draw_hero(pal: Palette) -> None:
+    width = term_width()
+    sys.stdout.write(CLEAR_SCREEN)
+    rows = hero_rows("CLAUDE")
+    rows2 = hero_rows("COMPANY")
+    lines = ["", ""]
+    for i, row in enumerate(rows):
+        lines.append(center(pal.paint(row, pal.grad_fg(i / 4.0), pal.bold),
+                            width))
+    lines.append("")
+    for i, row in enumerate(rows2):
+        lines.append(center(pal.paint(row, pal.grad_fg(0.4 + i / 6.0),
+                                      pal.bold), width))
+    lines.append("")
+    lines.append(center(pal.dimmed(TAGLINE), width))
+    lines.append("")
+    lines.append(rule(pal, width, gradient=True))
+    lines.append("")
+    lines.append(center(pal.dimmed(
+        "press any key to begin  -  q or Esc to quit"), width))
+    sys.stdout.write("\n".join(lines) + "\n")
+    sys.stdout.flush()
+
+
+def screen_hero(pal: Palette) -> bool:
+    """Show the hero. Returns True to continue, False to quit."""
+    draw_hero(pal)
+    while True:
+        key = read_key(timeout=0.5)
+        if key is None:
+            draw_hero(pal)  # picks up resize
+            continue
+        if key in ("q", "Q", KEY_ESC):
+            return False
+        return True
+
+
+def _preflight_row(pal: Palette, name: str, status: Optional[str],
+                   detail: str, width: int, spin_frame: int) -> str:
+    if status is None:
+        glyph = pal.paint(SPIN_FRAMES[spin_frame % len(SPIN_FRAMES)],
+                          pal.grad_fg(0.5))
+        right = pal.dimmed("checking...")
+    else:
+        color = {PASS: Palette.GREEN, WARN: Palette.YELLOW,
+                 FAIL: Palette.RED}[status]
+        glyph = pal.paint(GLYPH[status], pal.fg(color))
+        right = pal.paint(detail, pal.fg(color) if status != PASS
+                          else pal.dim)
+    left = "  {} {}".format(glyph, name)
+    gap = width - visible_len(left) - visible_len(right) - 2
+    return "{}{}{}".format(left, " " * max(1, gap), right)
+
+
+def screen_preflight(pal: Palette) -> Tuple[bool, List[Tuple[Probe, str, str]]]:
+    """Animated preflight. Returns (all_hard_pass, results)."""
+    width = term_width()
+    sys.stdout.write(CLEAR_SCREEN)
+    header = [
+        "",
+        " " + section_header(pal, "Preflight"),
+        " " + pal.dimmed("checking your machine has what the company needs"),
+        "",
+    ]
+    sys.stdout.write("\n".join(header) + "\n")
+    sys.stdout.flush()
+
+    block = LiveBlock()
+    results: List[Tuple[Probe, str, str]] = []
+    statuses: List[Optional[Tuple[str, str]]] = [None] * len(PROBES)
+
+    def render(spin: int) -> None:
+        rows = []
+        for i, probe in enumerate(PROBES):
+            st = statuses[i]
+            if st is None:
+                rows.append(_preflight_row(pal, probe.name, None, "", width, spin))
+            else:
+                rows.append(_preflight_row(pal, probe.name, st[0], st[1],
+                                           width, spin))
+        block.render(rows)
+
+    render(0)
+    for i, probe in enumerate(PROBES):
+        start = time.time()
+        result = probe.fn()
+        # Animate for a minimum beat so each probe reads as a real check.
+        frame = 0
+        while time.time() - start < 0.36:
+            render(frame)
+            time.sleep(SPIN_INTERVAL)
+            frame += 1
+        statuses[i] = result
+        results.append((probe, result[0], result[1]))
+        render(frame)
+
+    hard_fail = [r for r in results if r[0].hard and r[1] == FAIL]
+    return (not hard_fail, results)
+
+
+def screen_preflight_fail(pal: Palette,
+                          results: List[Tuple[Probe, str, str]]) -> None:
+    width = term_width()
+    missing = [r[0].name for r in results if r[0].hard and r[1] == FAIL]
+    lines = [
+        pal.paint("A required tool is missing.", pal.fg(Palette.RED),
+                  pal.bold),
+        "",
+        "claude-company needs these to run its enforcement hooks:",
+    ]
+    for name in missing:
+        lines.append("  " + pal.paint("✘ " + name, pal.fg(Palette.RED)))
+    lines.append("")
+    lines.append(pal.dimmed("Install the missing tool(s), then run ./install "
+                            "again."))
+    box = Frame.render(pal, lines, width, accent=0.0, title="Cannot continue")
+    sys.stdout.write("\n" + "\n".join(box) + "\n")
+    sys.stdout.flush()
+
+
+def screen_target(pal: Palette) -> Optional[str]:
+    """Text input target picker with tab completion. None if cancelled."""
+    width = term_width()
+    sys.stdout.write(CLEAR_SCREEN)
+    header = [
+        "",
+        " " + section_header(pal, "Target project"),
+        " " + pal.dimmed("where should the company move in? (Tab completes, "
+                         "Esc quits)"),
+        "",
+    ]
+    sys.stdout.write("\n".join(header) + "\n")
+    sys.stdout.flush()
+
+    value = os.getcwd()
+    block = LiveBlock()
+
+    def render() -> None:
+        ok, _path, msg = validate_target(value)
+        caret = pal.paint("█", pal.grad_fg(0.5))
+        prompt = "  " + pal.paint("❯", pal.grad_fg(0.4)) + " " + value + caret
+        if ok:
+            color = Palette.GREEN if "git repo" in msg else Palette.YELLOW
+            status = pal.paint("  " + msg, pal.fg(color))
+        else:
+            status = pal.paint("  " + msg, pal.fg(Palette.RED))
+        block.render([prompt, "", status])
+
+    render()
+    while True:
+        key = read_key(timeout=0.5)
+        if key is None:
+            render()
+            continue
+        if key == KEY_ESC:
+            return None
+        if key == KEY_ENTER:
+            ok, path, _ = validate_target(value)
+            if ok:
+                return path
+            render()
+            continue
+        if key == KEY_BACKSPACE:
+            value = value[:-1]
+            render()
+            continue
+        if key == KEY_TAB:
+            value = complete_path(value)
+            render()
+            continue
+        if isinstance(key, str) and len(key) == 1 and key.isprintable():
+            value += key
+            render()
+
+
+def complete_path(value: str) -> str:
+    """Simple filesystem prefix completion (common-prefix on multiple hits)."""
+    expanded = os.path.expanduser(value)
+    directory = os.path.dirname(expanded) or "."
+    partial = os.path.basename(expanded)
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        return value
+    matches = [e for e in entries if e.startswith(partial)]
+    if not matches:
+        return value
+    if len(matches) == 1:
+        completed = matches[0]
+    else:
+        completed = os.path.commonprefix(matches)
+        if completed == partial:
+            return value
+    full = os.path.join(directory, completed)
+    if os.path.isdir(os.path.expanduser(full)) and len(matches) == 1:
+        full += os.sep
+    # Preserve a leading ~ for readability when the user typed one.
+    if value.startswith("~"):
+        home = os.path.expanduser("~")
+        if full.startswith(home):
+            full = "~" + full[len(home):]
+    return full
+
+
+class Options:
+    def __init__(self) -> None:
+        self.items = [
+            ["Auto-detect this project's gates (test/lint commands) after "
+             "install", True],
+            ["Show the 60-second orientation at the end", True],
+        ]
+
+
+def screen_options(pal: Palette, opts: Options) -> Optional[Options]:
+    width = term_width()
+    sys.stdout.write(CLEAR_SCREEN)
+    header = [
+        "",
+        " " + section_header(pal, "Options"),
+        " " + pal.dimmed("arrows or j/k move  -  space toggles  -  Enter "
+                         "confirms"),
+        "",
+    ]
+    sys.stdout.write("\n".join(header) + "\n")
+    sys.stdout.flush()
+
+    cursor = 0
+    block = LiveBlock()
+
+    def render() -> None:
+        rows = []
+        for i, (label, on) in enumerate(opts.items):
+            mark = pal.paint("◉", pal.grad_fg(0.5)) if on \
+                else pal.dimmed("◯")
+            pointer = pal.paint("❯", pal.grad_fg(0.4)) if i == cursor \
+                else " "
+            text = pal.paint(label, pal.bold) if i == cursor else label
+            rows.append("  {} {}  {}".format(pointer, mark, text))
+        rows.append("")
+        rows.append("  " + pal.dimmed("[ Enter to confirm ]"))
+        block.render(rows)
+
+    render()
+    while True:
+        key = read_key(timeout=0.5)
+        if key is None:
+            render()
+            continue
+        if key == KEY_ESC:
+            return None
+        if key in (KEY_UP, "k"):
+            cursor = (cursor - 1) % len(opts.items)
+            render()
+        elif key in (KEY_DOWN, "j"):
+            cursor = (cursor + 1) % len(opts.items)
+            render()
+        elif key == " ":
+            opts.items[cursor][1] = not opts.items[cursor][1]
+            render()
+        elif key == KEY_ENTER:
+            return opts
+
+
+def screen_confirm(pal: Palette, target: str, opts: Options) -> bool:
+    width = term_width()
+    sys.stdout.write(CLEAR_SCREEN)
+    counts = source_counts()
+    header = [
+        "",
+        " " + section_header(pal, "Ready to install"),
+        "",
+    ]
+    sys.stdout.write("\n".join(header) + "\n")
+
+    def kv(k: str, v: str) -> str:
+        return "{}  {}".format(pal.dimmed("{:<10}".format(k)), v)
+
+    detect, orient = opts.items[0][1], opts.items[1][1]
+
+    def flag(on: bool) -> str:
+        return pal.paint("on", pal.fg(Palette.GREEN)) if on \
+            else pal.dimmed("off")
+
+    lines = [
+        kv("target", pal.paint(elide(target, width - 16), pal.bold)),
+        "",
+        kv("installs", "agents {}, skills {}, hooks {}".format(
+            counts["agents"], counts["skills"], counts["hooks"])),
+        kv("", "canon docs, templates, and company/state scaffolds"),
+        "",
+        kv("gates", flag(detect) + pal.dimmed("  (auto-detect after install)")),
+        kv("tour", flag(orient) + pal.dimmed("  (60-second orientation)")),
+        "",
+        pal.dimmed("The installer merges with your settings and never "
+                   "overwrites your state."),
+    ]
+    box = Frame.render(pal, lines, width, accent=0.5)
+    sys.stdout.write("\n".join(box) + "\n\n")
+    prompt = "  {}   {}".format(
+        pal.paint("Enter", pal.grad_fg(0.5), pal.bold) + pal.dimmed(" install"),
+        pal.paint("Esc", pal.bold) + pal.dimmed(" cancel"))
+    sys.stdout.write(prompt + "\n")
+    sys.stdout.flush()
+
+    while True:
+        key = read_key(timeout=0.5)
+        if key is None:
+            continue
+        if key == KEY_ENTER:
+            return True
+        if key in (KEY_ESC, "q", "Q"):
+            return False
+
+
+# --------------------------------------------------------------------------
+# Install streaming
+# --------------------------------------------------------------------------
+
+_RE_INFO = re.compile(r"^==> (.*)$")
+_RE_OK = re.compile(r"^  ok (.*)$")
+_RE_KEEP = re.compile(r"^  keep (.*)$")
+_RE_WARN = re.compile(r"^warning: (.*)$")
+_RE_ERR = re.compile(r"^error: (.*)$")
+
+
+def style_install_line(pal: Palette, line: str) -> Optional[Tuple[str, str]]:
+    """Return (kind, styled) for a line, or None to drop it. kind is a label."""
+    m = _RE_INFO.match(line)
+    if m:
+        title = m.group(1)
+        if title in ("claude-company installer", "claude-company installed"):
+            return ("meta", None)  # handled by our own chrome
+        return ("section", "  " + section_header(pal, title))
+    m = _RE_OK.match(line)
+    if m:
+        glyph = pal.paint("✔", pal.fg(Palette.GREEN))
+        return ("ok", "    {} {}".format(glyph, pal.dimmed(m.group(1))))
+    m = _RE_KEEP.match(line)
+    if m:
+        glyph = pal.paint("∙", pal.dim)
+        return ("keep", "    {} {}".format(glyph, pal.dimmed(m.group(1) +
+                                                             " (kept)")))
+    m = _RE_WARN.match(line)
+    if m:
+        glyph = pal.paint("△", pal.fg(Palette.YELLOW))
+        return ("warn", "    {} {}".format(glyph, pal.paint(
+            m.group(1), pal.fg(Palette.YELLOW))))
+    m = _RE_ERR.match(line)
+    if m:
+        return ("error", "    " + pal.paint("✘ " + m.group(1),
+                                            pal.fg(Palette.RED)))
+    if not line.strip():
+        return None
+    if line.strip().startswith(("source:", "target:", "1.", "2.", "3.", "4.",
+                                "cd ", "claude", "/company-init", "/onboard",
+                                "/orchestrator", "Next steps:", "Configure",
+                                "In Claude Code", "bash company")):
+        return None  # epilogue noise - our done screen replaces it
+    return ("dim", "    " + pal.dimmed(line.rstrip()))
+
+
+def run_install_stream(pal: Palette, target: str,
+                       activity: Optional[Activity]) -> Tuple[int, List[str]]:
+    """Run install.sh, styling output live. Returns (returncode, raw_tail)."""
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.Popen(
+        ["bash", INSTALL_SH, target],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+    fd = proc.stdout.fileno()
+    buf = b""
+    tail: List[str] = []
+
+    def handle(raw: str) -> None:
+        tail.append(raw)
+        del tail[:-40]
+        styled = style_install_line(pal, raw)
+        if styled is None:
+            return
+        kind, text = styled
+        if kind == "section" and activity is not None:
+            activity.set_label(_RE_INFO.match(raw).group(1))
+        if text is None:
+            return
+        if activity is not None:
+            activity.emit(text)
+        else:
+            sys.stdout.write(text + "\n")
+
+    while True:
+        ready, _, _ = select.select([fd], [], [], SPIN_INTERVAL)
+        if ready:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            buf += chunk
+            while b"\n" in buf:
+                raw, buf = buf.split(b"\n", 1)
+                handle(raw.decode("utf-8", "replace"))
+        elif activity is not None:
+            activity.tick()
+    if buf.strip():
+        handle(buf.decode("utf-8", "replace"))
+    proc.wait()
+    return proc.returncode, tail
+
+
+def screen_install(pal: Palette, target: str) -> Tuple[int, List[str]]:
+    width = term_width()
+    sys.stdout.write(CLEAR_SCREEN)
+    header = [
+        "",
+        " " + section_header(pal, "Installing"),
+        "",
+    ]
+    sys.stdout.write("\n".join(header) + "\n")
+    sys.stdout.flush()
+    activity = Activity(pal)
+    activity.start("starting install")
+    rc, tail = run_install_stream(pal, target, activity)
+    activity.stop()
+    return rc, tail
+
+
+def screen_install_error(pal: Palette, tail: List[str]) -> None:
+    width = term_width()
+    body = [pal.paint("The install did not finish cleanly.", pal.fg(
+        Palette.RED), pal.bold), ""]
+    for line in tail[-14:]:
+        body.append(pal.dimmed(line.rstrip()[:width - 4]))
+    box = Frame.render(pal, body, width, accent=0.0, title="install.sh failed")
+    sys.stdout.write("\n" + "\n".join(box) + "\n")
+    sys.stdout.flush()
+
+
+# --------------------------------------------------------------------------
+# Gates detection
+# --------------------------------------------------------------------------
+
+def run_gates_detect(target: str, write: bool) -> Optional[dict]:
+    """Run gates_detect.py in the target. Returns the parsed GATES_JSON dict."""
+    script = os.path.join(target, ".claude", "hooks", "gates_detect.py")
+    if not os.path.exists(script):
+        return None
+    env = dict(os.environ)
+    env["CLAUDE_PROJECT_DIR"] = target
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    args = [sys.executable, script]
+    if write:
+        args.append("--write")
+    try:
+        out = subprocess.run(args, cwd=target, env=env, capture_output=True,
+                             timeout=60)
+    except Exception:
+        return None
+    text = out.stdout.decode("utf-8", "replace")
+    for line in text.splitlines():
+        if line.startswith("GATES_JSON: "):
+            try:
+                return json.loads(line[len("GATES_JSON: "):])
+            except ValueError:
+                return None
+    return None
+
+
+def screen_gates(pal: Palette, data: Optional[dict]) -> None:
+    width = term_width()
+    sys.stdout.write("\n " + section_header(pal, "Gate detection") + "\n\n")
+    if not data or data.get("status") == "no_stack":
+        sys.stdout.write("  " + pal.dimmed(
+            "no stack detected - company/gates.config keeps its placeholders "
+            "for the agents to fill.") + "\n")
+        sys.stdout.flush()
+        return
+    stacks = ", ".join(data.get("stacks") or []) or "unknown"
+    lines = [pal.dimmed("stack: " + stacks), ""]
+    proposed = data.get("proposed") or []
+    if proposed:
+        for g in proposed:
+            name = pal.paint("{:<10}".format(g.get("name", "")),
+                             pal.fg(Palette.GREEN))
+            lines.append("{} {}".format(name, pal.dimmed(g.get("command", ""))))
+    else:
+        lines.append(pal.dimmed("no invocable gate commands on this machine."))
+    status = data.get("status")
+    if status == "wrote":
+        lines.append("")
+        lines.append(pal.paint("wrote {} gate(s) to company/gates.config".format(
+            len(proposed)), pal.fg(Palette.GREEN)))
+    elif status == "preserved_existing":
+        lines.append("")
+        lines.append(pal.dimmed("existing real gates preserved - not "
+                                "overwritten."))
+    box = Frame.render(pal, lines, width, accent=0.5)
+    sys.stdout.write("\n".join(box) + "\n")
+    sys.stdout.flush()
+
+
+# --------------------------------------------------------------------------
+# Done screen
+# --------------------------------------------------------------------------
+
+def screen_done(pal: Palette, target: str, orientation: bool) -> None:
+    width = term_width()
+    sys.stdout.write("\n" + rule(pal, width, gradient=True) + "\n\n")
+    check = pal.paint("✔", pal.fg(Palette.GREEN), pal.bold)
+    sys.stdout.write(center("{}  {}".format(
+        check, pal.brand("claude-company is installed")), width) + "\n\n")
+
+    orch = pal.paint("/orchestrator build me <what you want>",
+                     pal.grad_fg(0.5), pal.bold)
+    if orientation:
+        target_line = elide("Launch Claude Code in " + target, width - 12)
+        steps = [
+            ("Open the company", target_line),
+            ("Give the order", "Type  " + orch),
+            ("Review the evidence",
+             "The company self-onboards, builds, and reports back with proof"),
+        ]
+        blocks = []
+        for i, (title, body) in enumerate(steps, 1):
+            num = pal.paint(" {} ".format(i), pal.grad_fg(i / 3.0), pal.bold)
+            inner = ["{} {}".format(num, pal.paint(title, pal.bold)),
+                     "   " + pal.dimmed(body)]
+            box = Frame.render(pal, inner, width - 4, accent=i / 3.0)
+            for ln in box:
+                blocks.append("  " + ln)
+            blocks.append("")
+        sys.stdout.write("\n".join(blocks) + "\n")
+        sys.stdout.write("  " + pal.dimmed(
+            "More: docs/getting-started.md") + "\n\n")
+    else:
+        sys.stdout.write("  Next: open Claude Code in your project and run\n")
+        sys.stdout.write("    " + orch + "\n\n")
+
+    sys.stdout.write("  " + pal.dimmed(
+        "Re-run anytime - the installer never overwrites your settings or "
+        "state.") + "\n")
+    sys.stdout.flush()
+
+
+# --------------------------------------------------------------------------
+# TUI driver
+# --------------------------------------------------------------------------
+
+def run_tui(args: argparse.Namespace, pal: Palette) -> int:
+    with Terminal(pal):
+        if not screen_hero(pal):
+            print("\n" + pal.dimmed("  Nothing installed."))
+            return EXIT_OK
+        ok, results = screen_preflight(pal)
+        if not ok:
+            screen_preflight_fail(pal, results)
+            return EXIT_PREFLIGHT
+
+        # Allow a pre-supplied target to skip the picker.
+        target = None
+        if args.target or args.positional:
+            cand = args.target or args.positional
+            good, path, _ = validate_target(cand)
+            if good:
+                target = path
+        if target is None:
+            target = screen_target(pal)
+            if target is None:
+                print("\n" + pal.dimmed("  Install cancelled."))
+                return EXIT_CANCEL
+
+        opts = Options()
+        opts.items[0][1] = args.detect_gates
+        opts.items[1][1] = args.orientation
+        chosen = screen_options(pal, opts)
+        if chosen is None:
+            print("\n" + pal.dimmed("  Install cancelled."))
+            return EXIT_CANCEL
+
+        if not screen_confirm(pal, target, chosen):
+            print("\n" + pal.dimmed("  Install cancelled."))
+            return EXIT_CANCEL
+
+        rc, tail = screen_install(pal, target)
+        if rc != 0:
+            screen_install_error(pal, tail)
+            return EXIT_INSTALL
+
+        if chosen.items[0][1]:
+            data = run_gates_detect(target, write=True)
+            screen_gates(pal, data)
+
+        screen_done(pal, target, orientation=chosen.items[1][1])
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------
+# Plain (non-interactive) driver
+# --------------------------------------------------------------------------
+
+def run_plain(args: argparse.Namespace, pal: Palette) -> int:
+    target_arg = args.target or args.positional
+    if not target_arg:
+        sys.stderr.write(
+            "install: a target is required in non-interactive mode.\n"
+            "Usage: install --target /path/to/your/project [--yes]\n")
+        return EXIT_USAGE
+
+    # -- preflight ----------------------------------------------------------
+    print("claude-company installer - preflight")
+    results = [(p, ) + p.fn() for p in PROBES]
+    for probe, status, detail in results:
+        print("  [{}] {:<18} {}".format(status, probe.name, detail))
+    hard_fail = [r for r in results if r[0].hard and r[1] == FAIL]
+    if hard_fail:
+        names = ", ".join(r[0].name for r in hard_fail)
+        sys.stderr.write("install: missing required tool(s): {}\n".format(names))
+        return EXIT_PREFLIGHT
+
+    # -- validate target ----------------------------------------------------
+    ok, path, msg = validate_target(target_arg)
+    if not ok:
+        sys.stderr.write("install: target {}: {}\n".format(target_arg, msg))
+        return EXIT_PREFLIGHT
+    print("\ntarget: {} ({})".format(path, msg))
+
+    # -- run install.sh, streaming raw --------------------------------------
+    print("\ninstalling...")
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.run(["bash", INSTALL_SH, path], env=env)
+    if proc.returncode != 0:
+        sys.stderr.write("install: install.sh failed (exit {}).\n".format(
+            proc.returncode))
+        return EXIT_INSTALL
+
+    # -- optional gate detection --------------------------------------------
+    if args.detect_gates:
+        print("\ndetecting gates...")
+        data = run_gates_detect(path, write=True)
+        if not data or data.get("status") == "no_stack":
+            print("  no stack detected - gates.config keeps its placeholders.")
+        else:
+            print("  stack: {}".format(", ".join(data.get("stacks") or [])))
+            for g in data.get("proposed") or []:
+                print("    {:<10} {}".format(g.get("name", ""),
+                                             g.get("command", "")))
+            if data.get("status") == "wrote":
+                print("  wrote {} gate(s) to company/gates.config".format(
+                    len(data.get("proposed") or [])))
+            elif data.get("status") == "preserved_existing":
+                print("  existing real gates preserved.")
+
+    # -- summary ------------------------------------------------------------
+    counts = source_counts()
+    print("\nclaude-company installed into {}".format(path))
+    print("  agents {}, skills {}, hooks {}, canon docs, state scaffolds".format(
+        counts["agents"], counts["skills"], counts["hooks"]))
+    print("  next: open Claude Code and run  /orchestrator build me "
+          "<what you want>")
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------
+# CLI
+# --------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="install",
+        description="Install claude-company - an AI software company you drop "
+                    "into your repo.",
+        epilog="Examples:\n"
+               "  ./install                       full TUI\n"
+               "  ./install --target ~/proj --yes non-interactive install\n"
+               "  ./install ~/proj --plain        plain line-per-step output\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=True,
+    )
+    parser.add_argument("positional", nargs="?", metavar="TARGET",
+                        help="target project directory (must already exist)")
+    parser.add_argument("--target", metavar="DIR",
+                        help="target project directory (must already exist)")
+    parser.add_argument("-y", "--yes", action="store_true",
+                        help="non-interactive; accept defaults (implies plain)")
+    parser.add_argument("--plain", action="store_true",
+                        help="force plain, non-interactive output")
+    parser.add_argument("--no-color", action="store_true",
+                        help="monochrome output (NO_COLOR is honored too)")
+    gates = parser.add_mutually_exclusive_group()
+    gates.add_argument("--detect-gates", dest="detect_gates",
+                       action="store_true", default=True,
+                       help="auto-detect gates after install (default)")
+    gates.add_argument("--no-detect-gates", dest="detect_gates",
+                       action="store_false",
+                       help="skip gate auto-detection")
+    orient = parser.add_mutually_exclusive_group()
+    orient.add_argument("--orientation", dest="orientation",
+                        action="store_true", default=True,
+                        help="show the 60-second orientation (default)")
+    orient.add_argument("--no-orientation", dest="orientation",
+                        action="store_false",
+                        help="skip the orientation on the done screen")
+    return parser
+
+
+def stdio_is_tty() -> bool:
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except Exception:
+        return False
+
+
+def main(argv: List[str]) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv[1:])
+    pal = decide_palette(args.no_color)
+
+    interactive = stdio_is_tty() and not args.yes and not args.plain \
+        and _HAVE_TERMIOS
+    try:
+        if interactive:
+            return run_tui(args, pal)
+        return run_plain(args, pal)
+    except KeyboardInterrupt:
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.write("\n" + pal.paint("  Install cancelled.",
+                                          pal.fg(Palette.YELLOW)) + "\n")
+        sys.stdout.flush()
+        return EXIT_CANCEL
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
