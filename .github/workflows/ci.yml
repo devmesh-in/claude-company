@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref (a new push/PR update wins).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies: the package has none, so there is nothing to install.
+      # The suites only `git init` temp repos and never commit (the hook suite
+      # sets its own local user.email/name), so no global git identity is needed.
+      - name: CLI wrapper tests
+        run: bash tests/cli/test_cli.sh
+      - name: Installer TUI tests
+        run: bash tests/install/test_tui.sh
+      - name: Installer + gates tests
+        run: bash tests/install/run_tests.sh
+      - name: Hook tests
+        run: bash tests/hooks/run_tests.sh
+      - name: Syntax check bin and lib
+        run: node --check bin/claude-company.js && node --check lib/install-tui.js
+
+  pack:
+    name: pack manifest and size budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: npm pack --dry-run and assert contents + size
+        run: |
+          set -euo pipefail
+          PACK_LOG="$(mktemp)"
+          npm pack --dry-run 2>&1 | tee "$PACK_LOG"
+
+          echo "== assert required paths present in the tarball =="
+          for f in \
+            ".claude/agents/developer.md" \
+            ".claude/settings.json" \
+            ".mcp.json" \
+            "install" \
+            "install.sh" \
+            "lib/install-tui.js"; do
+            esc="$(printf '%s' "$f" | sed 's/[.[\*^$/]/\\&/g')"
+            if grep -qE "^npm notice[[:space:]].*[[:space:]]${esc}\$" "$PACK_LOG"; then
+              echo "  ok  present: $f"
+            else
+              echo "  ERROR: $f is missing from the tarball"; exit 1
+            fi
+          done
+
+          echo "== assert dev-only paths absent from the tarball =="
+          for pat in "tests/" ".assets/" "__pycache__"; do
+            esc="$(printf '%s' "$pat" | sed 's/[.[\*^$/]/\\&/g')"
+            if grep -E "^npm notice" "$PACK_LOG" | grep -qE "[[:space:]]${esc}"; then
+              echo "  ERROR: $pat must not be in the tarball"; exit 1
+            else
+              echo "  ok  absent: $pat"
+            fi
+          done
+
+          echo "== assert unpacked size is under 2 MB =="
+          SIZE_LINE="$(grep -iE '^npm notice[[:space:]]+unpacked size:' "$PACK_LOG" | tail -1)"
+          echo "  $SIZE_LINE"
+          VAL="$(printf '%s' "$SIZE_LINE" | sed -E 's/.*unpacked size:[[:space:]]*([0-9.]+)[[:space:]]*([kKmMgG]?B).*/\1/')"
+          UNIT="$(printf '%s' "$SIZE_LINE" | sed -E 's/.*unpacked size:[[:space:]]*([0-9.]+)[[:space:]]*([kKmMgG]?B).*/\2/')"
+          BYTES="$(awk -v v="$VAL" -v u="$UNIT" 'BEGIN{
+            m=1;
+            if(u=="kB")m=1000; else if(u=="MB")m=1000*1000; else if(u=="GB")m=1000*1000*1000;
+            printf "%d", v*m }')"
+          LIMIT=$((2*1024*1024))
+          echo "  parsed ${VAL}${UNIT} = ${BYTES} bytes (limit ${LIMIT})"
+          if [ "$BYTES" -lt "$LIMIT" ]; then
+            echo "  ok  unpacked size is under 2 MB"
+          else
+            echo "  ERROR: unpacked size ${VAL}${UNIT} exceeds the 2 MB budget"; exit 1
+          fi
+
+  slop:
+    name: writing gate (no-slop punctuation scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan tracked text for banned punctuation
+        run: |
+          set -uo pipefail
+          # Reject em/en dashes, the horizontal bar, smart quotes, and the
+          # ellipsis char (mirrors the no_slop hook tells). Skips .assets/ and
+          # the two files where these glyphs are legitimate data: the hook's own
+          # tell table and the test that feeds it em-dash fixtures.
+          git ls-files '*.md' '*.py' '*.js' '*.sh' '*.json' \
+            | grep -Ev '^\.assets/|^\.claude/hooks/no_slop\.py$|^tests/hooks/test_hooks\.py$' \
+            | perl -CSD -ne '
+                chomp(my $f = $_);
+                open(my $fh, "<:encoding(UTF-8)", $f) or next;
+                while (my $line = <$fh>) {
+                  if ($line =~ /([\x{2013}\x{2014}\x{2015}\x{201C}\x{201D}\x{2018}\x{2019}\x{2026}])/) {
+                    printf "SLOP: %s:%d: %s", $f, $., $line;
+                    $hit = 1;
+                  }
+                }
+                close($fh);
+                END { exit($hit ? 1 : 0); }
+              '
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "writing gate: clean"
+          else
+            echo "writing gate: banned punctuation found (see SLOP: lines above); use ASCII punctuation"
+          fi
+          exit "$rc"
