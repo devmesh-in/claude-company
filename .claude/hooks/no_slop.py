@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse (Edit|Write|MultiEdit): block AI-slop tells in inserted text.
 
-Ported from budget-manager's no-ai-slop.py. Scans only the text being written
-(never the old text). Punctuation tells are near-zero false positive; phrase
+Scans only the text being written (never the old text). Punctuation tells are near-zero false positive; phrase
 tells are deliberately multi-word so they will not trip on identifiers. Files
 under company/state/ (logs) and binary-ish extensions are skipped. Exit 2 on a
 hit, exit 0 otherwise; fails open on malformed input.
