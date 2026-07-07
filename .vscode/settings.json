@@ -1,0 +1,11 @@
+{
+  "$comment": "The README relies on raw HTML (centered hero, banner img, badges, nav). Markdown formatters strip HTML on save - keep them off for markdown in this repo.",
+  "[markdown]": {
+    "editor.formatOnSave": false,
+    "editor.formatOnPaste": false,
+    "editor.defaultFormatter": null
+  },
+  "markdown.extension.formatting.enabled": false,
+  "prettier.disableLanguages": ["markdown"],
+  "files.trimTrailingWhitespace": false
+}
