@@ -1,6 +1,6 @@
 {
   "name": "claude-company",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An AI software company you drop into your repo - hierarchical, hard-gated SDLC for Claude Code",
   "license": "MIT",
   "author": "redomic",
