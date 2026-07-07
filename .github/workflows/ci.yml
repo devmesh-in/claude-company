@@ -95,6 +95,36 @@ jobs:
             echo "  ERROR: unpacked size ${VAL}${UNIT} exceeds the 2 MB budget"; exit 1
           fi
 
+  readme:
+    name: readme structure and links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The hero and dropdowns are raw HTML that markdown formatters have
+      # stripped before; fail loudly if it ever happens again.
+      - name: README keeps its hero and dropdowns
+        run: |
+          set -euo pipefail
+          grep -q '<img src=".assets/banner.png"' README.md
+          grep -q '<div align="center">' README.md
+          test "$(grep -c '<details>' README.md)" -ge 5
+          grep -q 'img.shields.io' README.md
+          echo "ok: hero, centering, badges, and dropdowns present"
+      - name: Relative links resolve
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in README.md docs/*.md; do
+            # extract relative markdown link targets (skip http, anchors, mailto)
+            for t in $(grep -oE '\]\(([^)#]+)' "$f" | sed 's/](//' | grep -vE '^(http|mailto:)' | sort -u); do
+              rel="$(dirname "$f")/$t"
+              if [ ! -e "$t" ] && [ ! -e "$rel" ]; then
+                echo "BROKEN: $f -> $t"; fail=1
+              fi
+            done
+          done
+          exit $fail
+
   slop:
     name: writing gate (no-slop punctuation scan)
     runs-on: ubuntu-latest
