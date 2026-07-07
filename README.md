@@ -234,3 +234,8 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 ## :page_facing_up: License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+---
+
+<div align="center">
+<sub>DevMesh uses this repo internally to build out DevMesh &lt;3</sub>
+</div>
