@@ -4,7 +4,11 @@ on:
   release:
     types: [published]
 
-# id-token: write lets npm attach a provenance statement to the publish.
+# Trusted Publishing (OIDC): no npm token exists anywhere. id-token: write lets
+# this workflow authenticate to npm as itself; npm must list this repo+workflow
+# as a trusted publisher for the package (npmjs.com -> package -> Settings ->
+# Trusted Publisher: GitHub Actions, devmesh-in/claude-company, release.yml).
+# Provenance attestation is automatic with trusted publishing.
 permissions:
   contents: read
   id-token: write
@@ -19,6 +23,10 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; Node 20 bundles an older npm.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest && npm --version
 
       # Never publish red: the same gates CI runs must pass here too.
       - name: CLI wrapper tests
@@ -43,11 +51,10 @@ jobs:
           fi
           echo "ok: tag matches package.json version"
 
-      - name: Publish
+      - name: Publish (Trusted Publishing - OIDC, no token)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           AUTHORIZED: "1"
-        run: npm publish --provenance --access public
+        run: npm publish --access public
 
       - name: Publish summary
         run: |
