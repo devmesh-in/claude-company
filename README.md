@@ -221,6 +221,14 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 
 </details>
 
+<details>
+<summary><b>How do I remove it from a project?</b></summary>
+<br>
+
+Everything lives in plain files: delete `company/`, `ORCHESTRATOR.md`, the claude-company agents/skills/hooks under `.claude/`, and the marked block in `CLAUDE.md` (between the `claude-company:begin/end` comments). Remove the claude-company hook entries from `.claude/settings.json` if you had your own settings merged. Your code, git history, and own configuration are untouched - the installer never modifies them.
+
+</details>
+
 ## :books: Documentation
 
 
@@ -239,6 +247,7 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 ## :page_facing_up: License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
 ---
 
 <div align="center">
