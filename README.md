@@ -1,14 +1,23 @@
+<div align="center">
 
-
-
+<img src=".assets/banner.png" alt="Claude Company" width="100%">
 
 **Highly opinionated AI software company you drop into any repo.**
 
-[License: MIT](LICENSE)
-[Claude Code](https://claude.com/claude-code)
-[Gates](#shield-the-rules-it-enforces)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-%3E%3D%202.1.172-orange)](https://claude.com/claude-code)
+[![Gates](https://img.shields.io/badge/gates-enforced%20by%20hooks-red)](#shield-the-rules-it-enforces)
 
-[About](#bulb-about)  •  [Get Started](#rocket-get-started)  •  [How It Works](#gear-how-it-works)  •  [The Team](#busts_in_silhouette-the-team)  •  [The Rules](#shield-the-rules-it-enforces)  •  [FAQ](#question-faq)
+<p>
+  <a href="#bulb-about">About</a> &nbsp;&bull;&nbsp;
+  <a href="#rocket-get-started">Get Started</a> &nbsp;&bull;&nbsp;
+  <a href="#gear-how-it-works">How It Works</a> &nbsp;&bull;&nbsp;
+  <a href="#busts_in_silhouette-the-team">The Team</a> &nbsp;&bull;&nbsp;
+  <a href="#shield-the-rules-it-enforces">The Rules</a> &nbsp;&bull;&nbsp;
+  <a href="#question-faq">FAQ</a>
+</p>
+
+</div>
 
 
 
