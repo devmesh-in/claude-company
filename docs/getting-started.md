@@ -6,6 +6,7 @@ This guide takes you from install to your first delivered feature. It works for 
 
 | You need | Used for |
 |---|---|
+| macOS, Linux, or Windows via WSL | The installer and hooks need a POSIX shell; native Windows is not supported yet |
 | Claude Code v2.1.172+ | Nested agents (tech leads run their own teams) |
 | Python 3.8+ and git | The enforcement hooks |
 | Node.js with `npx` | Browser testing with screenshots (optional but recommended) |

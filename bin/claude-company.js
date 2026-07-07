@@ -90,6 +90,24 @@ async function main(argv) {
     return 0;
   }
   if (first === "install") {
+    // Native Windows cannot run the company: the installer engine is bash and
+    // the enforcement hooks run as python3 commands wired through a POSIX
+    // shell. WSL works fully; say so instead of failing with a raw error.
+    if (process.platform === "win32") {
+      process.stderr.write([
+        bold("claude-company does not support native Windows yet."),
+        "",
+        "The installer and the enforcement hooks need a POSIX environment",
+        "(bash, python3). It works on macOS, Linux, and Windows via WSL:",
+        "",
+        "  1. Install WSL:  wsl --install   (then restart the terminal)",
+        "  2. Inside WSL:   npx claude-company install /path/to/your/project",
+        "",
+        "Track native Windows support: " + (PKG.bugs && PKG.bugs.url ? PKG.bugs.url : PKG.homepage),
+        "",
+      ].join("\n"));
+      return 2;
+    }
     const installer = require(path.join(ROOT, "lib", "install-tui.js"));
     return await installer.run(args.slice(1));
   }

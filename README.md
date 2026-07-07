@@ -73,6 +73,7 @@ There is no setup step. On first contact the company onboards itself: it studies
 
 | Requirement            | Why |
 | ---------------------- | ---------------------------------------------- |
+| macOS, Linux, or WSL   | Installer and hooks need a POSIX shell (native Windows not supported yet) |
 | Claude Code v2.1.172+  | Nested agents (tech leads run their own teams) |
 | Python 3.8+, bash, git | The enforcement hooks                          |
 | Node.js with `npx`     | Browser testing with screenshots (Playwright)  |

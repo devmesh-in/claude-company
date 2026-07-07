@@ -138,6 +138,27 @@ want_absent "__pycache__|\.pyc$"
 [ "$(head -1 "$INSTALL")" = "#!/bin/sh" ] && pass "packed install is a sh shim" \
   || fail "packed install is a sh shim (got '$(head -1 "$INSTALL")')"
 
+# --- native Windows: friendly unsupported message, exit 2 ------------------
+WIN_OUT="$(BIN="$BIN" node -e '
+Object.defineProperty(process, "platform", { value: "win32" });
+process.argv = [process.argv[0], "cli", "install", "."];
+require(process.env.BIN);
+' 2>&1)"; WIN_CODE=$?
+if [ "$WIN_CODE" -eq 2 ] && printf '%s' "$WIN_OUT" | grep -q "Windows via WSL" \
+  && printf '%s' "$WIN_OUT" | grep -q "wsl --install"; then
+  pass "win32 install refused with WSL guidance (exit 2)"
+else
+  fail "win32 install refused with WSL guidance (exit $WIN_CODE)"
+fi
+# --version still works on win32
+WIN_VER="$(BIN="$BIN" node -e '
+Object.defineProperty(process, "platform", { value: "win32" });
+process.argv = [process.argv[0], "cli", "--version"];
+require(process.env.BIN);
+' 2>&1)"
+[ "$WIN_VER" = "$(node -p "require(\"$REPO/package.json\").version")" ] \
+  && pass "win32 --version still works" || fail "win32 --version still works (got '$WIN_VER')"
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
