@@ -71,7 +71,7 @@ git clone https://github.com/devmesh-in/claude-company
 There is no setup step. On first contact the company onboards itself: it studies your codebase (or treats your request as the founding brief of a new one), finds your real test and lint commands, and wires them in as gates. The installer merges with your existing settings and never overwrites them; running it twice changes nothing.
 
 
-| Requirement            | Why <img width="2000" height="0" alt=""> |
+| Requirement            | Why |
 | ---------------------- | ---------------------------------------------- |
 | Claude Code v2.1.172+  | Nested agents (tech leads run their own teams) |
 | Python 3.8+, bash, git | The enforcement hooks                          |
@@ -131,7 +131,7 @@ flowchart TD
 
 
 
-| Role               | Judges its own output?     | Writes code?               | Spawns agents? <img width="2000" height="0" alt=""> |
+| Role               | Judges its own output?     | Writes code?               | Spawns agents? |
 | ------------------ | -------------------------- | -------------------------- | ----------------- |
 | CEO (your session) | Verifies everyone else     | Glue and small fixes       | Yes               |
 | tech-lead          | Verifies its developers    | Gap-filling between pieces | Yes: its own team |
@@ -147,7 +147,7 @@ flowchart TD
 Each rule is a hook that blocks the action itself. When a hook blocks an agent, the message contains the recipe to become compliant, so the process self-heals instead of stalling.
 
 
-| Rule                           | What gets blocked <img width="2000" height="0" alt=""> |
+| Rule                           | What gets blocked |
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | Protected files stay protected | Edits to `.env`, lockfiles, shipped migrations, and any file your project marks as frozen |
 | No commit while tests fail     | `git commit` when the gate suite is red, stale, or was never run                          |
@@ -162,7 +162,7 @@ Every block and every hotfix bypass is one line in `company/state/adherence.log`
 ## :keyboard: Commands
 
 
-| Command                     | What it does <img width="2000" height="0" alt=""> |
+| Command                     | What it does |
 | --------------------------- | ----------------------------------------------------------------------- |
 | `/orchestrator`             | Start or resume the company. The only command you need day to day       |
 | `/brainstorm`               | Explore ideas in parallel and get an options memo with a recommendation |
@@ -219,7 +219,7 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 ## :books: Documentation
 
 
-| Document                                   | What it covers <img width="2000" height="0" alt=""> |
+| Document                                   | What it covers |
 | ------------------------------------------ | ---------------------------------------------------------- |
 | [Getting started](docs/getting-started.md) | Install to first delivery, step by step                    |
 | [How it works](docs/how-it-works.md)       | The method: pipeline, gates, protected files, verification |
