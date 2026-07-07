@@ -181,40 +181,45 @@ Everything is a plain file you can read and edit: gates in `company/gates.config
 
 ## :question: FAQ
 
-**How much does it cost to run?**  
-
+<details>
+<summary><b>How much does it cost to run?</b></summary>
+<br>
 
 More than a single Claude session: parallel agents multiply token use. The company counters this by scaling ceremony to the task, so small fixes get one developer and no meetings.
 
+</details>
 
-
-**Does it work on an existing codebase?**  
-
+<details>
+<summary><b>Does it work on an existing codebase?</b></summary>
+<br>
 
 Yes. It reads your code, adopts your conventions, and wires your existing test commands in as gates. It adapts to your project, not the other way around.
 
+</details>
 
-
-**What if a gate is wrong or blocks me unfairly?**  
-
+<details>
+<summary><b>What if a gate is wrong or blocks me unfairly?</b></summary>
+<br>
 
 Gates are your own commands in `company/gates.config`; edit them anytime. For real emergencies there is a hotfix mode that logs instead of blocks, and the process catches up afterward.
 
+</details>
 
-
-**Can I see what it decided and why?**  
-
+<details>
+<summary><b>Can I see what it decided and why?</b></summary>
+<br>
 
 Yes. Specs record the options considered, memos record the roads not taken, decisions wait for you in `company/state/DECISIONS.md`, and the adherence log records every block.
 
+</details>
 
-
-**What does the owner keep?**  
-
+<details>
+<summary><b>What does the owner keep?</b></summary>
+<br>
 
 No agent, including the CEO, ever decides: production deploys, database migrations in production, anything involving money, weakening a protection rule, or business policy. The company merges to your main branch; shipping to users is a button only you press.
 
-
+</details>
 
 ## :books: Documentation
 
