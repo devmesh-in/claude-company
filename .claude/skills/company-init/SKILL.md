@@ -36,7 +36,13 @@ with opinionated defaults, recorded where the owner can veto:
    - surfaces into `company/frozen-surfaces.json`
    - gates into `company/gates.config` (once code exists,
      `python3 .claude/hooks/gates_detect.py --write` re-verifies commands;
-     until then, wire what Wave 0's walking skeleton will satisfy, marked)
+     until then, wire what Wave 0's walking skeleton will satisfy, marked).
+     Wire at least ONE real gate on day zero even in a code-less repo -
+     `python3 .claude/hooks/guard_models.py --check` is honest and runnable
+     at founding. Placeholder-only gates deliberately do not block commits
+     (founding work must land in git), but every such commit logs a visible
+     BYPASS until a real gate exists - do not leave the company in that
+     state longer than one session.
    - spawn facts into `company/state/RESUME.md` ("facts every spawn needs")
    - stack conventions into the project `CLAUDE.md`
    - `git init` if needed; commit "found the company"

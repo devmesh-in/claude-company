@@ -480,6 +480,35 @@ class TestGateStampAndCommit(Base):
         log = os.path.join(self.root, "company", "state", "adherence.log")
         self.assertIn("BYPASS", open(log).read())
 
+    def test_commit_bypass_placeholder_only_gates(self):
+        # A fresh project: gates.config exists but holds only CONFIGURE-ME
+        # placeholders. Founding commits must flow (logged BYPASS), not
+        # deadlock behind gates that cannot be green yet.
+        self.init_git()
+        self.write("company/gates.config", json.dumps({"gates": [
+            {"name": "tests", "command": "echo 'CONFIGURE ME' && exit 1",
+             "blocking": True},
+            {"name": "lint", "command": "echo 'CONFIGURE ME' && exit 1",
+             "blocking": True},
+        ]}))
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m founding"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        self.assertIn("CONFIGURE-ME placeholders", open(log).read())
+
+    def test_commit_enforced_once_any_real_gate_exists(self):
+        # One real gate beside a leftover placeholder: enforcement snaps on.
+        self.init_git()
+        self.write("company/gates.config", json.dumps({"gates": [
+            {"name": "tests", "command": "true", "blocking": True},
+            {"name": "lint", "command": "echo 'CONFIGURE ME' && exit 1",
+             "blocking": True},
+        ]}))
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m wip"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+
     def test_commit_bypass_hotfix(self):
         self.init_git()
         self.configure_gates()

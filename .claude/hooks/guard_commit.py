@@ -4,8 +4,13 @@
   - push to protected branch (main/master), explicit or bare push while on it:
     BLOCK (owner-only).
   - commit / merge: require a green, fresh, valid gates.status stamp. If
-    gates.config is missing or has zero gates, ALLOW + log BYPASS. If the
-    active task is a hotfix, ALLOW + log BYPASS.
+    gates.config is missing, has zero gates, or contains ONLY CONFIGURE-ME
+    placeholders (a fresh project with nothing to gate yet), ALLOW + log
+    BYPASS - unconfigured gates must not deadlock founding commits, and the
+    bypass stays visible in the adherence log. Placeholders still fail loudly
+    in run-gates.sh and still block task completion via stop_gate; only the
+    commit path treats them as not-yet-configured. If the active task is a
+    hotfix, ALLOW + log BYPASS.
   - everything else: allow.
 
 Fails open on any internal error.
@@ -92,9 +97,19 @@ def main():
                     c.log_bypass(root, HOOK, "git " + sub, "hotfix mode")
                     continue
                 cfg = c.gates_config(root)
-                if not isinstance(cfg, dict) or not cfg.get("gates"):
+                gates = cfg.get("gates") if isinstance(cfg, dict) else None
+                if not gates:
                     c.log_bypass(
                         root, HOOK, "git " + sub, "no gates configured"
+                    )
+                    continue
+                if all(
+                    "CONFIGURE ME" in (g.get("command") or "")
+                    for g in gates if isinstance(g, dict)
+                ):
+                    c.log_bypass(
+                        root, HOOK, "git " + sub,
+                        "gates.config has only CONFIGURE-ME placeholders",
                     )
                     continue
                 ok, reason = c.check_stamp(root)
