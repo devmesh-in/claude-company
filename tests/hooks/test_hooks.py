@@ -435,6 +435,11 @@ class TestGateStampAndCommit(Base):
         self.write("company/gates.config", json.dumps(
             {"gates": [{"name": "tests"}]}))
 
+    def set_branch(self, name):
+        # init_git lands on the git-default branch (master or main depending
+        # on the host git config), so pin it explicitly for branch-rule tests.
+        git(self.root, "checkout", "-B", name)
+
     def test_stamp_green_check_passes(self):
         self.init_git()
         self.stamp({"gates": [{"name": "tests", "ok": True}]})
@@ -515,6 +520,85 @@ class TestGateStampAndCommit(Base):
         self.set_task({"task": "hf", "type": "hotfix"})
         r = run_hook("guard_commit.py",
                      self.bash_payload("git commit -m x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # --- all-work-on-task-branches rule ----------------------------------
+    def test_commit_on_main_with_task_blocked(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        self.set_task({"task": "feat-x", "type": "feature"})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m wip"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        # message names the task slug and the task/ branch recipe
+        self.assertIn("feat-x", r.stderr)
+        self.assertIn("task/feat-x", r.stderr)
+        self.assertIn("git worktree add", r.stderr)
+
+    def test_commit_on_main_no_task_allowed_founding(self):
+        # No active task: founding commit path, exempt from the branch rule.
+        self.init_git()
+        self.set_branch("main")
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m founding"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_commit_on_task_branch_with_task_allowed(self):
+        # On a task branch the branch rule is silent; green stamp isolates it.
+        self.init_git()
+        self.configure_gates()
+        self.set_branch("task/feat-x")
+        self.set_task({"task": "feat-x", "type": "feature"})
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m done"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_commit_on_main_hotfix_allowed_bypass_logged(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.set_task({"task": "hf", "type": "hotfix"})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        contents = open(log).read()
+        self.assertIn("BYPASS", contents)
+        self.assertIn("hotfix commit on protected branch", contents)
+
+    def test_merge_on_main_with_task_not_blocked_by_branch_rule(self):
+        # merge is the owner's local integration; the branch rule ignores it.
+        # Green stamp isolates the branch rule from the gate-stamp check.
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.set_task({"task": "feat-x", "type": "feature"})
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/feat-x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_commit_detached_head_fails_open(self):
+        # Detached HEAD -> current_branch is unknown -> branch rule allows.
+        # Green stamp isolates it from the gate-stamp check.
+        self.init_git()
+        self.configure_gates()
+        self.set_task({"task": "feat-x", "type": "feature"})
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        head = git(self.root, "rev-parse", "HEAD").stdout.strip()
+        git(self.root, "checkout", head)
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m wip"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_commit_no_git_fails_open(self):
+        # No git repo at all -> branch unknown -> branch rule allows.
+        self.set_task({"task": "feat-x", "type": "feature"})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m wip"), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_push_to_main_blocked(self):

@@ -56,8 +56,10 @@ only by CR - for you and your whole team.
   explicit paths only - never `git add -A`.
 - QA evidence is committed at `company/evidence/<task-slug>/` - it ships
   with the task.
-- You never merge to main; the CEO integrates after verifying. Your branch
-  green and your evidence report complete IS your handoff.
+- You never merge to main and never push anything; the CEO integrates after
+  verifying (via a PR carrying your evidence report when the project has a
+  remote, via a local --no-ff merge when it does not). Your branch green and
+  your evidence report complete IS your handoff.
 
 ## Boundaries
 
