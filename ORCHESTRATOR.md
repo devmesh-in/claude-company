@@ -93,16 +93,21 @@ This file is yours alone. Subagents do not read it; they read the project's
      design language. QA captures; you judge.
    - For large or risky merges, dispatch the read-only **auditor** for an
      independent pass before you integrate.
-7. **Integrate (merge, never deploy).** Merge green, verified work to main in
-   dependency order (API before the UI that calls it), always
-   `git merge --no-ff task/<slug>` with the verification evidence in the
-   merge message (`company/GIT.md`). Rerun the gates on main and stamp.
-   Merging integrates; deploying is a manual OWNER step - never run it,
-   never script it, never include it in a brief. Then clean up:
-   `git worktree remove .claude/worktrees/<slug>`, `git branch -d
-   task/<slug>` (`-d` not `-D`: a branch that will not delete holds
-   unmerged work - investigate), clear `active-task.json`, archive the
-   brief/spec to `shipped/`.
+7. **Integrate (merge, never deploy).** Integrate green, verified work in
+   dependency order (API before the UI that calls it), per `company/GIT.md`:
+   - **PR mode** (origin exists and `gh` works): push the task branch, open
+     a PR whose body is the evidence report (gate ladder, ownership diff,
+     FR checklist, screenshots, `Task:` trailer), and merge it once checks
+     are green - remote branch protection is the outer gate. Never push main.
+   - **Local mode** (no remote): `git merge --no-ff task/<slug>` with the
+     verification evidence in the merge message.
+   Rerun the gates on the integrated main and stamp. Merging integrates;
+   deploying is a manual OWNER step - never run it, never script it, never
+   include it in a brief. Then clean up: `git worktree remove
+   .claude/worktrees/<slug>`, `git branch -d task/<slug>` (`-d` not `-D`: a
+   branch that will not delete holds unmerged work - investigate; PR-mode
+   `--delete-branch` handles the remote side), clear `active-task.json`,
+   archive the brief/spec to `shipped/`.
 8. **Record and report.** Update STATUS.md (red stays red until proven green),
    RESUME.md (done / running / next + spawn facts), WORRIES.md (add rows the
    moment you notice something; graduate rows that got acted on). Then report

@@ -3,6 +3,11 @@
 
   - push to protected branch (main/master), explicit or bare push while on it:
     BLOCK (owner-only).
+  - commit on a protected branch (main/master) while a task is active:
+    BLOCK with a task-branch recipe (all work happens on task branches).
+    Hotfix tasks are exempt (ALLOW + log BYPASS); a commit with no active
+    task is a founding commit and is exempt; merge on main is the owner's
+    local integration and is exempt.
   - commit / merge: require a green, fresh, valid gates.status stamp. If
     gates.config is missing, has zero gates, or contains ONLY CONFIGURE-ME
     placeholders (a fresh project with nothing to gate yet), ALLOW + log
@@ -93,6 +98,41 @@ def main():
 
             if sub in ("commit", "merge"):
                 task = c.active_task(root)
+
+                # All work happens on task branches. A plain commit on a
+                # protected branch while a task is active is misplaced work.
+                # (merge is the owner's local integration and is exempt; a
+                # commit with NO active task is a founding commit and is
+                # exempt.) Branch message wins over the gate-stamp checks
+                # below. Fail open when the branch is unknown.
+                if sub == "commit" and isinstance(task, dict):
+                    branch = c.current_branch(root)
+                    if branch in PROTECTED:
+                        if task.get("type") == "hotfix":
+                            c.log_bypass(
+                                root, HOOK, "git commit",
+                                "hotfix commit on protected branch",
+                            )
+                            continue
+                        slug = task.get("task") or "<task-slug>"
+                        c.block(
+                            root, HOOK, "git commit",
+                            "commit on protected branch",
+                            "BLOCKED: work belongs on a task branch, never "
+                            "directly on main.\n"
+                            "Create the isolated task branch and commit "
+                            "there:\n"
+                            "  git worktree add .claude/worktrees/{slug} "
+                            "-b task/{slug}\n"
+                            "or, if you are already in the right working "
+                            "tree:\n"
+                            "  git switch -c task/{slug}\n"
+                            "then retry your commit on that branch.\n"
+                            "If this task is finished and you are "
+                            "integrating, use git merge (allowed on main) "
+                            "- see company/GIT.md.".format(slug=slug),
+                        )
+
                 if isinstance(task, dict) and task.get("type") == "hotfix":
                     c.log_bypass(root, HOOK, "git " + sub, "hotfix mode")
                     continue

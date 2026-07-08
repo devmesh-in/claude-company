@@ -52,6 +52,9 @@ git worktree add .claude/worktrees/<task-slug> -b task/<task-slug>
   destroy the real thing on checkout. Name the files you mean.
 - **Commit per coherent step**, not per session. A session must not end with
   uncommitted work unless the report says so and why.
+- **Never commit directly on main while a task is active** - work belongs on
+  the task branch (hook-enforced: the commit guard blocks it and prints the
+  branch recipe). Integration merges on main are the CEO's and are allowed.
 
 ## Sync discipline
 
@@ -65,15 +68,36 @@ git worktree add .claude/worktrees/<task-slug> -b task/<task-slug>
 
 ## Integration (CEO only)
 
-Merge only after verification (gates rerun on the integrated result,
-ownership diff checked, evidence judged - see `ORCHESTRATOR.md`):
+Integrate only after verification (gates rerun on the integrated result,
+ownership diff checked, evidence judged - see `ORCHESTRATOR.md`). The
+mechanics depend on whether the project has a remote:
+
+**PR mode - when `origin` exists and `gh` is available (the default for any
+GitHub-backed project).** The audit record becomes a reviewable pull request
+instead of a merge-commit message:
+
+```bash
+git push -u origin task/<task-slug>
+gh pr create --title "task/<slug>: <mission in one line>" --body-file <evidence>
+# after checks are green (branch protection gates the merge):
+gh pr merge --merge --delete-branch
+```
+
+- The PR body IS the evidence report: the pasted gate ladder, the ownership
+  diff summary, FR checklist, QA screenshot references, CRs filed, and the
+  `Task: <slug>` trailer. A human (or the owner's branch protection) can now
+  review the same evidence the CEO judged.
+- Remote branch protection is the outer gate: if the project requires green
+  checks, the merge physically waits for them - the same enforcement
+  philosophy, applied at the repo boundary.
+- The CEO still never pushes main. The task branch is the only thing that
+  ever goes up; the PR merge is what lands it.
+
+**Local mode - no remote configured.** The merge commit is the audit record:
 
 ```bash
 git merge --no-ff task/<task-slug>
 ```
-
-- **Always `--no-ff`**: the merge commit is the audit record. Its message
-  carries the task slug, the gate summary, and what was verified:
 
 ```text
 merge task/waitlist: signup + admin view
@@ -83,9 +107,12 @@ QA evidence judged against acceptance criteria.
 Task: waitlist
 ```
 
+**Both modes:**
+
 - **Dependency order**: the API side merges before the UI that calls it;
   within a program wave, providers before consumers.
-- **After every merge**: rerun the gates on main and stamp, then clean up.
+- **After every merge**: rerun the gates on the integrated main and stamp,
+  then clean up.
 
 ## Cleanup
 
@@ -114,6 +141,6 @@ git worktree prune
 - A worktree's green gate stamp proves that worktree only. Stale artifacts
   in worktrees mask contract drift; the integrated-main stamp is the one
   that counts.
-- Pushing is owner territory: no agent pushes to main/master (hook-blocked).
-  Remote pushes of task branches happen only if the owner has asked for
-  remote backups or PR-based review.
+- Pushing main is owner territory: no agent pushes to main/master
+  (hook-blocked), in either mode. In PR mode the CEO pushes ONLY the task
+  branch; in local mode nothing is pushed unless the owner asks.
