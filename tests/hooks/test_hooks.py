@@ -288,6 +288,148 @@ class TestNoSlop(Base):
         self.assertEqual(r.returncode, 0)
 
 
+class TestGuardModels(Base):
+    MANIFEST = {"version": 1, "roles": {"developer": "opus",
+                                        "architect": "opus"}}
+
+    def write_manifest(self, obj=None):
+        self.write("company/models.json",
+                   json.dumps(obj if obj is not None else self.MANIFEST))
+
+    def spawn_payload(self, tool="Task", **fields):
+        return {"hook_event_name": "PreToolUse", "tool_name": tool,
+                "tool_input": dict(fields), "cwd": self.root}
+
+    def write_agent(self, role, model):
+        self.write(".claude/agents/%s.md" % role,
+                   "---\nname: %s\nmodel: %s\n---\nbody\n" % (role, model))
+
+    # --- mode a: spawn override -------------------------------------------
+    def test_spawn_override_conflict_blocked(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="developer",
+                                        model="haiku"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("developer", r.stderr)
+        self.assertIn("haiku", r.stderr)
+        self.assertIn("opus", r.stderr)
+
+    def test_spawn_override_matching_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="developer",
+                                        model="opus"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_spawn_no_override_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="developer"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_spawn_unknown_type_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="random-helper",
+                                        model="haiku"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_spawn_agent_toolname_and_agent_type_field(self):
+        # The Agent tool name plus the agent_type fallback field both work.
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(tool="Agent", agent_type="architect",
+                                        model="sonnet"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_spawn_hotfix_bypass_logs(self):
+        self.write_manifest()
+        self.set_task({"task": "hf", "type": "hotfix"})
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="developer",
+                                        model="haiku"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        self.assertIn("BYPASS", open(log).read())
+
+    # --- mode b: frontmatter edit -----------------------------------------
+    def test_frontmatter_conflict_blocked(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.edit_payload("Write", ".claude/agents/developer.md",
+                                       "---\nname: developer\nmodel: haiku\n"
+                                       "---\nbody\n"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("models.json", r.stderr)
+
+    def test_frontmatter_unchanged_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.edit_payload("Write", ".claude/agents/developer.md",
+                                       "---\nname: developer\nmodel: opus\n"
+                                       "---\nbody\n"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_frontmatter_non_model_edit_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.edit_payload("Edit", ".claude/agents/developer.md",
+                                       "some prose with no model line"),
+                     self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_frontmatter_role_not_in_manifest_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.edit_payload("Write", ".claude/agents/mascot.md",
+                                       "---\nmodel: haiku\n---\n"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_frontmatter_unblocks_after_manifest_change(self):
+        # Editing models.json first legitimately unblocks the frontmatter edit.
+        self.write_manifest({"version": 1, "roles": {"developer": "sonnet"}})
+        r = run_hook("guard_models.py",
+                     self.edit_payload("Write", ".claude/agents/developer.md",
+                                       "---\nmodel: sonnet\n---\n"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_manifest_missing_fail_open(self):
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="developer",
+                                        model="haiku"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_fail_open_garbage(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py", None, self.root, raw_stdin="}{ nope")
+        self.assertEqual(r.returncode, 0)
+
+    # --- mode c: --check CLI ----------------------------------------------
+    def test_check_agreement_exits_zero(self):
+        self.write_manifest()
+        self.write_agent("developer", "opus")
+        self.write_agent("architect", "opus")
+        r = run_cli("guard_models.py", ["--check"], self.root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_check_mismatch_exits_one(self):
+        self.write_manifest()
+        self.write_agent("developer", "haiku")
+        self.write_agent("architect", "opus")
+        r = run_cli("guard_models.py", ["--check"], self.root)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("developer", r.stdout)
+
+    def test_check_missing_declaration_exits_one(self):
+        self.write_manifest()
+        # architect present, developer file has no model line
+        self.write(".claude/agents/developer.md", "---\nname: developer\n---\n")
+        self.write_agent("architect", "opus")
+        r = run_cli("guard_models.py", ["--check"], self.root)
+        self.assertEqual(r.returncode, 1, r.stdout)
+
+
 class TestGateStampAndCommit(Base):
     def configure_gates(self):
         self.write("company/gates.config", json.dumps(

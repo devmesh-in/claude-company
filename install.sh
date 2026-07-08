@@ -122,6 +122,7 @@ copy_tree_overwrite "$SRC/company/templates"   "$TARGET/company/templates"
 info "Installing project config and state (existing files preserved)"
 copy_if_absent "$SRC/company/gates.config"           "$TARGET/company/gates.config"
 copy_if_absent "$SRC/company/frozen-surfaces.json"   "$TARGET/company/frozen-surfaces.json"
+copy_if_absent "$SRC/company/models.json"            "$TARGET/company/models.json"
 
 # work directories - preserve any existing content
 mkdir -p "$TARGET/company/specs" "$TARGET/company/briefs" "$TARGET/company/change-requests"

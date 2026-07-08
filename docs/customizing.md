@@ -69,7 +69,9 @@ Each role is one markdown file in `.claude/agents/`. The file's frontmatter sets
 
 - **Adjust a role**: edit its file. Keep instructions short and explain why a rule exists; agents follow reasons better than bare orders.
 - **Add a role**: copy the closest existing file, rename it, and describe when it should be used in the `description` field. The CEO dispatches based on that description.
-- **Change models**: every agent ships with `model: opus`. Your main session (the CEO) uses whatever model you run Claude Code with.
+- **Change models**: routing is declared in `company/models.json`, one line per role, and enforced by a hook - a spawn that overrides a role's model, or an edit that changes an agent's `model:` frontmatter away from the manifest, gets blocked until you change the manifest first. That makes every routing change a deliberate, recorded decision instead of silent drift. Your main session (the CEO) is not in the manifest; it runs whatever model you launched Claude Code with.
+
+  Two pieces of advice from how we run it: give the CEO the strongest model you have - it does the judgment work (verification, arbitration, judging evidence) - and keep workers on `opus`. On a tighter budget, downshift roles in the manifest to `sonnet`: developers tolerate it best, the auditor worst. Check agreement anytime with `python3 .claude/hooks/guard_models.py --check`.
 
 Two roles are load-bearing; change them carefully. `tech-lead` is the only agent allowed to spawn other agents, and `developer` carries the working rules every builder inherits.
 

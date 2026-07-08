@@ -1,0 +1,10 @@
+{
+  "$comment": "Intended model per agent role. This is the ONE deliberate place to change routing; guard_models blocks silent drift (spawn overrides and frontmatter edits that contradict this). The CEO is your main session and is not listed - it runs whatever model you launched Claude Code with.",
+  "version": 1,
+  "roles": {
+    "product-manager": "opus", "architect": "opus", "tech-lead": "opus",
+    "developer": "opus", "qa-engineer": "opus", "auditor": "opus",
+    "security-reviewer": "opus", "devops-engineer": "opus",
+    "docs-librarian": "opus", "ideation-strategist": "opus"
+  }
+}
