@@ -1,7 +1,7 @@
 # BRIEF: docs-sync
 
 _Type: quick. Spec: none (quick) - keyed to issue #28 and the shipped
-ruflo-adoption program (PRs #27, #33, #34, #32, #35). Lead:
+adoption program (PRs #27, #33, #34, #32, #35). Lead:
 docs-librarian (direct). Date: 2026-07-10._
 
 > Anything in `company/frozen-surfaces.json` is FROZEN - CR, never a local
