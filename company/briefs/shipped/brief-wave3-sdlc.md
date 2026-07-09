@@ -35,10 +35,6 @@ deploy, tag push, or npm publish - the skill ENDS at a proposal).
 7. `.claude/skills/standup/SKILL.md` and `.claude/skills/gates/SKILL.md`
    (skill file idiom: frontmatter, structure, tone)
 8. `.claude/agents/devops-engineer.md` (you add the release-prep duty)
-9. Reference-only, port ideas never code:
-   `/private/tmp/claude-501/-Users-redomic-Documents-Projects-claude-company/b75f8fb8-9dd5-4e93-aa73-5b9c3af22d54/scratchpad/ruflo/.claude/agents/github/release-swarm.md`
-   and `release-manager.md` (changelog-from-commits and release-plan
-   recipes - adapt the gh/git command patterns, drop the swarm framing).
 
 ## You own
 

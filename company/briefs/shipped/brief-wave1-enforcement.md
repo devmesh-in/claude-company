@@ -32,9 +32,6 @@ never commit real gate commands into it.
 7. `tests/hooks/test_hooks.py` - the test harness idiom (74 existing tests;
    yours join it)
 8. `.claude/settings.json` - hook wiring shapes
-9. Reference-only (port ideas, never code, from the ruflo research clone):
-   `/private/tmp/claude-501/-Users-redomic-Documents-Projects-claude-company/b75f8fb8-9dd5-4e93-aa73-5b9c3af22d54/scratchpad/ruflo/plugins/ruflo-security-audit/`
-   (secret pattern set) and `.../plugins/ruflo-cost-tracker/` (report shapes).
 
 ## You own
 
