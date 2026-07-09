@@ -54,7 +54,26 @@ def git_subcmd(segment):
     return toks[i], toks[i + 1:]
 
 
-def push_targets_protected(root, args):
+def git_cwd(payload, root):
+    """Resolve the directory the git command actually runs in (#26).
+
+    The branch checks must reflect the working tree git operates on, not the
+    project root. A commit issued from a worktree checkout of a task branch
+    must be judged by that worktree's branch, even when CLAUDE_PROJECT_DIR (and
+    thus root) points at the main checkout on a protected branch. Prefer the
+    payload's cwd when it is present and inside a git work tree; otherwise fall
+    back to root.
+    """
+    if isinstance(payload, dict):
+        cwd = payload.get("cwd")
+        if cwd:
+            out = c._git(cwd, ["rev-parse", "--is-inside-work-tree"])
+            if out is not None and out.strip() == "true":
+                return cwd
+    return root
+
+
+def push_targets_protected(branch_dir, args):
     non_opt = [a for a in args if not a.startswith("-")]
     # first non-option is the remote; the rest are refspecs
     refspecs = non_opt[1:]
@@ -63,7 +82,7 @@ def push_targets_protected(root, args):
         if dst in PROTECTED:
             return True
     if not refspecs:
-        cur = c.current_branch(root)
+        cur = c.current_branch(branch_dir)
         if cur in PROTECTED:
             return True
     return False
@@ -81,6 +100,9 @@ def main():
     if not command:
         sys.exit(0)
 
+    # #26: branch checks must reflect the tree the git command runs in.
+    branch_dir = git_cwd(payload, root)
+
     try:
         for seg in segments(command):
             sub, args = git_subcmd(seg)
@@ -88,7 +110,7 @@ def main():
                 continue
 
             if sub == "push":
-                if push_targets_protected(root, args):
+                if push_targets_protected(branch_dir, args):
                     c.block(
                         root, HOOK, "git push", "protected branch push",
                         "BLOCKED: push to a protected branch (main/master) is "
@@ -106,7 +128,7 @@ def main():
                 # exempt.) Branch message wins over the gate-stamp checks
                 # below. Fail open when the branch is unknown.
                 if sub == "commit" and isinstance(task, dict):
-                    branch = c.current_branch(root)
+                    branch = c.current_branch(branch_dir)
                     if branch in PROTECTED:
                         if task.get("type") == "hotfix":
                             c.log_bypass(

@@ -106,6 +106,37 @@ def main():
                     "Change via: {}. {}".format(rel, why, via, CR_NOTE),
                 )
 
+        # Accepted ADRs are immutable (mirrors the shipped-migrations clause).
+        # A decision that has been accepted may only be superseded by a NEW
+        # ADR, never rewritten in place. Proposed or not-yet-created ADRs stay
+        # editable. Fail-safe direction on a read error: block (same posture as
+        # migrations, which treat git uncertainty as tracked).
+        if rel.startswith("company/adr/") and rel.endswith(".md"):
+            abs_path = file_path
+            if not os.path.isabs(abs_path):
+                abs_path = os.path.join(root, rel)
+            if os.path.exists(abs_path):
+                accepted = False
+                try:
+                    with open(abs_path, "r", encoding="utf-8",
+                              errors="replace") as f:
+                        for line in f:
+                            if line.startswith("Status: accepted"):
+                                accepted = True
+                                break
+                except Exception:
+                    accepted = True  # fail safe: unreadable existing ADR
+                if accepted:
+                    c.block(
+                        root, HOOK, rel, "accepted ADR",
+                        "BLOCKED: '{}' is an accepted ADR. Accepted ADRs are "
+                        "immutable - write a new ADR that supersedes it "
+                        "(Status: superseded-by-ADR-NNN is applied by the CEO "
+                        "via CR), never edit the decision itself. {}".format(
+                            rel, CR_NOTE
+                        ),
+                    )
+
         # git-tracked migrations are immutable once shipped.
         segs = rel.split("/")
         in_migrations = "migrations" in segs[:-1]
