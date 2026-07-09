@@ -9,6 +9,9 @@ Everything the company runs on is a plain file in your repo. This guide covers t
 | Give a request more or less process | say it, or `company/METHOD.md` | [Tune process](#tune-how-much-process-a-request-gets) |
 | Change a role's instructions or model | `.claude/agents/<role>.md` | [Change the team](#change-the-team) |
 | Undo a founding default | `company/frozen-surfaces.json`, `CLAUDE.md` | [Founding defaults](#adjust-the-founding-defaults) |
+| See or manage pinned witnesses | `python3 .claude/hooks/witness_check.py` | [The record](#work-with-the-record-witnesses-decisions-releases) |
+| Record or supersede a decision | `company/adr/` | [The record](#work-with-the-record-witnesses-decisions-releases) |
+| Change the release readiness bar | `company/RELEASE.md` | [The record](#work-with-the-record-witnesses-decisions-releases) |
 | Change the enforcement itself | `.claude/hooks/` | [Enforcement](#change-the-enforcement-itself) |
 
 ## Add or change gates
@@ -73,11 +76,29 @@ Each role is one markdown file in `.claude/agents/`. The file's frontmatter sets
 
   Two pieces of advice from how we run it: give the CEO the strongest model you have - it does the judgment work (verification, arbitration, judging evidence) - and keep workers on `opus`. On a tighter budget, downshift roles in the manifest to `sonnet`: developers tolerate it best, the auditor worst. Check agreement anytime with `python3 .claude/hooks/guard_models.py --check`.
 
+  The same file carries a `pricing` map (USD per million tokens) that `cost_capture.py` reads to estimate spend in `company/state/costs.log` and the `/standup` Spend line. Update it when your rates differ; leave a model out of it and the standup reports raw token counts for that model instead of dollars. The numbers are estimates for visibility, never a bill.
+
 Two roles are load-bearing; change them carefully. `tech-lead` is the only agent allowed to spawn other agents, and `developer` carries the working rules every builder inherits.
 
 ## Adjust the founding defaults
 
 During self-onboarding the company freezes migration and schema files, wires detected gates, and records its choices for your veto. If it froze something you need fluid, remove the entry from `frozen-surfaces.json`. If it missed a convention your team cares about, add it to your project's `CLAUDE.md`; every agent reads that file first.
+
+## Work with the record: witnesses, decisions, releases
+
+Three surfaces the company keeps to hold its own history honest. Each is a plain file, but two of them are sealed against hand-edits on purpose.
+
+- **Witnesses** (`company/witnesses.json`) pin every shipped fix to the lines that must not silently disappear. The registry is checksum-sealed, so you never edit it by hand - you add or remove witnesses through the CLI, which recomputes the seal:
+
+  ```bash
+  python3 .claude/hooks/witness_check.py --check                          # verify all still hold
+  python3 .claude/hooks/witness_check.py --add --file F --contains S --task T --why W
+  python3 .claude/hooks/witness_check.py --remove W-003 --why "line retired"
+  ```
+
+- **Architecture decisions** live in `company/adr/`, one file per decision, written from `company/templates/ADR-TEMPLATE.md`. An ADR marked `Status: accepted` is frozen by a guard: you supersede it with a new record rather than editing it. The index in `company/adr/README.md` lists every decision and the next free number.
+
+- **Release readiness** is the checklist in `company/RELEASE.md`: the criteria that must all be green before `/release` prepares anything. Edit that list to match your project's bar - add a rung, tighten a criterion - and `/release` enforces the new version. It never tags or publishes; that stays yours.
 
 ## Change the enforcement itself
 
