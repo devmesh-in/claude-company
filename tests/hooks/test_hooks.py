@@ -775,6 +775,28 @@ class TestGatesDetect(Base):
         if "lint" in names and "tests" in names:
             self.assertLess(names.index("lint"), names.index("tests"))
 
+    def test_models_gate_proposed_for_node(self):
+        # The stack-independent models gate rides in every proposal and is
+        # ordered before the test gate.
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        obj, _ = self.detect_json([])
+        names = [g["name"] for g in obj["proposed"]]
+        self.assertIn("models", names)
+        cmds = {g["command"] for g in obj["proposed"]}
+        self.assertIn("python3 .claude/hooks/guard_models.py --check", cmds)
+        if "tests" in names:
+            self.assertLess(names.index("models"), names.index("tests"))
+
+    def test_models_gate_proposed_for_no_stack(self):
+        # No language stack: config stays untouched, but the models gate is
+        # still surfaced in the proposal.
+        obj, r = self.detect_json(["--write"])
+        self.assertEqual(obj["status"], "no_stack")
+        self.assertFalse(obj["wrote"])
+        names = [g["name"] for g in obj["proposed"]]
+        self.assertIn("models", names)
+        self.assertFalse(os.path.exists(self.config_path()))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

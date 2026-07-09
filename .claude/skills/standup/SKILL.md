@@ -19,6 +19,15 @@ Also run `bash company/run-gates.sh` if the last stamp in
 `company/state/gates.status` is missing or stale - the standup states gate
 truth, not gate memory.
 
+Also tail `company/state/costs.log` if present (one line per stop, pipe
+separated: `ts | session | kind | task | model | in=.. out=.. cache_r=..
+cache_w=.. | est=$X.XX`). Sum the `est=$` column two ways for the Spend line:
+spend for TODAY (lines whose `ts` date matches today) and spend for the ACTIVE
+task (lines whose task column matches `active-task.json`'s `task`). If a line
+has no `est=$` segment (no pricing configured), report token totals instead of
+dollars and say estimates are unavailable. Costs are estimates only, not
+billing.
+
 Then report, in this shape, tight and factual:
 
 ```
@@ -27,6 +36,7 @@ Then report, in this shape, tight and factual:
 **Done since last update:** ...
 **In flight:** <task> - <agent/worktree> - <last known state>
 **Gates:** <green/red + which> (stamped <when>, fresh/stale)
+**Spend (est):** today $<X.XX> - active task <slug> $<Y.YY> (or tokens if no pricing)
 **Blocked:** <what, on whom>
 **Decisions needed (owner):** <numbered, each with what it blocks>
 **Open CRs:** <n> (<newest slugs>)

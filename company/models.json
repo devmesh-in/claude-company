@@ -6,5 +6,9 @@
     "developer": "opus", "qa-engineer": "opus", "auditor": "opus",
     "security-reviewer": "opus", "devops-engineer": "opus",
     "docs-librarian": "opus", "ideation-strategist": "opus"
+  },
+  "pricing": {
+    "$comment": "OQ-W1-01 estimate only, NOT billing truth - used by .claude/hooks/cost_capture.py for rough spend visibility in company/state/costs.log and /standup. USD per million tokens (MTok). cache_write is 1.25x input, cache_read is 0.1x input.",
+    "opus": {"input": 15, "output": 75, "cache_write": 18.75, "cache_read": 1.5}
   }
 }
