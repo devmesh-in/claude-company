@@ -6,4 +6,8 @@ fallbacks until a row lands here._
 
 | # | Date | Question | Decision | Affects |
 |---|---|---|---|---|
-| - | - | - | - | - |
+| 1 | 2026-07-09 | Adopt model tiering (developer/QA to sonnet)? | VETOED - every role stays opus | models.json |
+| 2 | 2026-07-09 | Program scope from the framework research | Hard-gate-fitting features only; lessons loop + loop workers DEFERRED | program plan |
+| 3 | 2026-07-10 | Adoption program delivery (waves 1-3, PRs 27/33/34/32/35) | ACCEPTED - owner authorized end-to-end merge; CEO merged and verified integrated main | whole repo |
+| 4 | 2026-07-10 | delegation-enforcement delivery (5 layers + tracking gate, PR #49, issues #42-#47) | ACCEPTED - owner: "merge everything and close out"; merged f9e5dae, integrated main verified (213+31 green), witnesses W-011..W-013 | hooks, doctrine, settings |
+| 5 | 2026-07-10 | Enforcement design direction | Owner REJECTED budgets/role bans twice; approved principle-derived gates (mechanism 5 + written-record consistency) and demanded low-token injection + GitHub tracking gate | all future gate design |

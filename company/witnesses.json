@@ -91,7 +91,34 @@
       "regex": false,
       "why": "the issue-31 guarantee: the not-on-disk branch must inspect incoming content for a pre-accepted ADR",
       "added_at": "2026-07-09T21:25:22Z"
+    },
+    {
+      "id": "W-011",
+      "task": "delegation-enforcement",
+      "file": ".claude/hooks/guard_provenance.py",
+      "must_contain": "def execution_decision(task):",
+      "regex": false,
+      "why": "layer-3 execution gate - the written self/delegated decision derivation",
+      "added_at": "2026-07-09T23:20:46Z"
+    },
+    {
+      "id": "W-012",
+      "task": "delegation-enforcement",
+      "file": ".claude/hooks/guard_provenance.py",
+      "must_contain": "def fresh_audit(root, ledger):",
+      "regex": false,
+      "why": "mechanism-5 mechanized - independent audit must cover the current tree",
+      "added_at": "2026-07-09T23:20:46Z"
+    },
+    {
+      "id": "W-013",
+      "task": "delegation-enforcement",
+      "file": ".claude/hooks/guard_provenance.py",
+      "must_contain": "def tracking_untracked(root, task):",
+      "regex": false,
+      "why": "FR-DE-15 - PR-mode work cannot start untracked",
+      "added_at": "2026-07-09T23:20:46Z"
     }
   ],
-  "checksum": "3b0c962f30761989a1c546dbc24e25b2761e46445f72d5e22b1780b79c427e07"
+  "checksum": "2b624d0041fe97f6c181a2f9fd9f88522fcffaa45fff066b0b411c4b40c550cd"
 }
