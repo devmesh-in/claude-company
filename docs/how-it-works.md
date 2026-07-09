@@ -8,6 +8,9 @@ This page explains the method behind claude-company: why it is shaped like a com
   <a href="#the-paperwork">Paperwork</a> &bull;
   <a href="#the-gates">Gates</a> &bull;
   <a href="#protected-files">Protected Files</a> &bull;
+  <a href="#architecture-decisions">ADRs</a> &bull;
+  <a href="#risk-cost-and-the-auditor">Risk &amp; Cost</a> &bull;
+  <a href="#preparing-a-release">Release</a> &bull;
   <a href="#what-the-owner-keeps">Owner</a>
 </p>
 
@@ -100,6 +103,17 @@ stateDiagram-v2
 
 Change one file after the gates ran and the stamp goes stale, so "it passed earlier" stops counting. Nobody, including the CEO, can commit past a red or stale stamp.
 
+The ladder runs cheap to expensive. Beyond your own tests and linter, claude-company ships mechanical rungs every project inherits:
+
+| Rung | Checks |
+|---|---|
+| Witnesses | Every shipped fix is pinned to the exact lines that would break first if it regressed; if one vanishes, the gate goes red |
+| Requirement traceability | Every requirement in the spec has both implementing code and a test, or is explicitly deferred; an untraced requirement is red |
+| Model routing | Each agent runs on the model its manifest declares; silent model drift is red |
+| Dependency audit | No known-vulnerable dependency ships; it runs last because it reaches the network |
+
+One guard never yields. `guard_secrets` scans every commit for API keys, tokens, and private keys, and blocks it if one is staged. This is the single rule a hotfix cannot bypass, because a leaked credential does the most damage in exactly the emergency a hotfix declares.
+
 <details>
 <summary><b>Two habits that keep gates meaningful</b></summary>
 <br>
@@ -126,6 +140,25 @@ flowchart LR
 
 The paperwork is the point: every change to a shared surface becomes visible and reviewed instead of silent.
 
+## Architecture decisions
+
+Specs say what to build; architecture decision records (ADRs, in `company/adr/`) say how the structure holds together, so nobody relitigates a settled choice from memory. Two rules give them force:
+
+- **Accepted decisions are immutable.** Once the CEO marks an ADR accepted, a guard blocks every edit to it. You do not amend a decision - you write a new ADR that supersedes it and names what it replaced.
+- **Precedence is explicit.** When a decision and a spec appear to clash, an accepted ADR wins on architecture (how it is built) and the spec wins on scope (what to build). A builder who spots the conflict files a change request rather than picking a winner.
+
+## Risk, cost, and the auditor
+
+Not every merge deserves the same scrutiny, so the company measures rather than guesses. Each finished branch is scored across a handful of signals: how large the diff is, whether it strays near a protected file, how much of it is tests, whether it touches sensitive paths. A low score merges on the normal path; a high score makes an independent auditor's recheck mandatory, not a judgment call.
+
+Cost is tracked the same passive way. Every time an agent stops, its token use and an estimated spend append to `company/state/costs.log` - an estimate for visibility, never a bill. `/standup` sums it into a Spend line, today's estimate and the active task's, so the price of running agents in parallel is visible before it surprises you.
+
+## Preparing a release
+
+Shipping is split in two: the company prepares, the owner ships. When `main` is green, `/release` proves the readiness list mechanically, assembles a changelog from the commit history, proposes the next version with its reasoning, and writes the notes as an evidence report. Then it stops. The company's last act is a proposal recorded in `company/state/DECISIONS.md`; tagging, publishing, and deploying are buttons only you press, and nothing the company runs crosses that line.
+
+The same discipline closes a delivery. A delivery is not done when the code merges - it is done when your acceptance is recorded. Silence is never a yes.
+
 ## What the owner keeps
 
 The escalation list is short and absolute. No agent decides:
@@ -151,3 +184,5 @@ Every hook block and every hotfix bypass appends one line to `company/state/adhe
 ```
 
 The log is the difference between a system that claims discipline and one that demonstrates it. Repeated blocks on the same agent or file are a signal worth reading: the work order was vague, or the design is fighting the rules.
+
+A hotfix trades the blocks for a logged bypass, but it never escapes accountability. No hotfix closes without a postmortem that names a real mechanical change to prevent the same fire - a new witness, a new gate, a new protected pattern - or states plainly why none is possible.

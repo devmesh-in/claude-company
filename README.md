@@ -108,8 +108,10 @@ Five things happen on every build, regardless of size:
 1. **Plans come first.** For features and products, the product manager explores 8 to 15 directions before writing the spec, and the architect picks the design from 2 to 3 scored alternatives. Both record the options they rejected and why.
 2. **Work orders are sealed.** Builders receive a brief: mission, exact owned directories, definition of done, and a decided fallback for every ambiguity. Ten parallel agents make the same assumption instead of ten different ones.
 3. **Teams build in parallel.** Each tech lead runs its own developers on separate directories in an isolated git worktree, fills the gaps between their pieces, and sends a QA engineer through the running app.
-4. **Producers never grade their own work.** Developers report, leads verify, QA captures screenshots but does not judge them, the CEO judges, and an independent auditor rechecks the big merges.
+4. **Producers never grade their own work.** Developers report, leads verify, QA captures screenshots but does not judge them, the CEO judges. Every finished branch is risk-scored first, and a high score makes an independent auditor's recheck mandatory, not a judgment call.
 5. **The gates decide.** Your test suite, linter, and build run as a stamped ladder. The stamp goes stale the moment a file changes, and the commit hook blocks anything red, stale, or unstamped.
+
+Delivery is a handoff, not a deploy. When work is ready to ship, the company prepares the release - proves the board is green, writes the changelog and notes, proposes a version - and stops there; tagging and publishing are buttons only you press. A delivery is not closed until your acceptance is recorded, so silence never counts as a yes.
 
 Read [how it works](docs/how-it-works.md) for the full method, including diagrams of the pipeline, the gate lifecycle, and the change-request flow.
 
@@ -157,6 +159,9 @@ Each rule is a hook that blocks the action itself. When a hook blocks an agent, 
 | Tests are the referee          | Editing or deleting tests that the current work order does not cover                      |
 | No AI filler in writing        | Em dashes, smart quotes, and stock AI phrases in anything written                         |
 | No quitting early              | Ending a work session while the active task's gates are red                               |
+| Shipped work stays shipped     | A green board while a line a shipped fix was pinned to (its witness) has gone missing      |
+| Requirements trace to tests    | A green board while any spec requirement has no implementing code and test (an orphan)     |
+| Accepted decisions stay put    | Edits to an architecture decision record marked accepted - you supersede it, never amend   |
 
 
 Every block and every hotfix bypass is one line in `company/state/adherence.log`, so enforcement is visible, not claimed. All hooks fail open: an internal error lets the action through rather than jamming your session.
@@ -171,6 +176,7 @@ Every block and every hotfix bypass is one line in `company/state/adherence.log`
 | `/standup`                  | One-screen status: done, in flight, blocked, decisions you owe          |
 | `/feature`                  | Run one feature through the full pipeline                               |
 | `/gates`                    | Run the test gates and stamp the result                                 |
+| `/release`                  | Prepare a release for you to ship: prove readiness, write notes, propose a version |
 | `/company-init`, `/onboard` | Found the company explicitly (new project or existing codebase)         |
 | `/cr`                       | File or decide a change request against a protected file                |
 
