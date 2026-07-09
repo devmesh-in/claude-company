@@ -28,7 +28,61 @@
       "regex": false,
       "why": "scan-branch emits the frozen SECRETS_JSON machine line",
       "added_at": "2026-07-09T18:03:38Z"
+    },
+    {
+      "id": "W-004",
+      "task": "wave2-enforce",
+      "file": ".claude/hooks/risk_score.py",
+      "must_contain": "auditor dispatch mandatory",
+      "regex": false,
+      "why": "high-band recommendation string is the contract ORCHESTRATOR step 6 dispatches on",
+      "added_at": "2026-07-09T20:34:59Z"
+    },
+    {
+      "id": "W-005",
+      "task": "wave2-enforce",
+      "file": ".claude/hooks/trace_check.py",
+      "must_contain": "return 1 if orphans else 0",
+      "regex": false,
+      "why": "exit-1-only-on-orphans is the gate guarantee",
+      "added_at": "2026-07-09T20:34:59Z"
+    },
+    {
+      "id": "W-006",
+      "task": "wave2-enforce",
+      "file": ".claude/hooks/guard_commit.py",
+      "must_contain": "git_cwd(payload, root)",
+      "regex": false,
+      "why": "branch-from-cwd fix for issue 26; regressing it re-blocks worktree commits",
+      "added_at": "2026-07-09T20:35:00Z"
+    },
+    {
+      "id": "W-007",
+      "task": "wave3-sdlc",
+      "file": "company/RELEASE.md",
+      "must_contain": "PREPARED by the company and SHIPPED by the owner",
+      "regex": false,
+      "why": "the deploy boundary of the release doctrine",
+      "added_at": "2026-07-09T20:35:00Z"
+    },
+    {
+      "id": "W-008",
+      "task": "wave3-sdlc",
+      "file": "company/templates/RELEASE-TEMPLATE.md",
+      "must_contain": "python3 .claude/hooks/witness_check.py",
+      "regex": false,
+      "why": "readiness table rows must keep citing the real gate commands",
+      "added_at": "2026-07-09T20:35:00Z"
+    },
+    {
+      "id": "W-009",
+      "task": "wave3-sdlc",
+      "file": "company/templates/POSTMORTEM-TEMPLATE.md",
+      "must_contain": "PREVENTION LINE",
+      "regex": false,
+      "why": "postmortems must name a mechanical prevention or say why none is possible",
+      "added_at": "2026-07-09T20:35:00Z"
     }
   ],
-  "checksum": "453b11c01eb81a6c3c626369381309cc68647f206728f644c25f74c77ac52c1f"
+  "checksum": "3470e49fd3e85193d36b84d940d8c68148c7189b200899dbe0be5f7a159e1d77"
 }
