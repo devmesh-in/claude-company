@@ -68,20 +68,35 @@ This file is yours alone. Subagents do not read it; they read the project's
    spec from `company/templates/SPEC-TEMPLATE.md`. Hold it to the spec-ready
    checklist; if a line cannot be filled, it is not ready. For programs,
    dispatch the architect to produce the ownership map, frozen-surface
-   registry entries, kernel/contract design, and wave plan.
+   registry entries, kernel/contract design, and wave plan, plus a proposed
+   ADR (`company/templates/ADR-TEMPLATE.md`, `Status: proposed`) for every
+   boundary-shaping decision. You accept an ADR by setting `Status: accepted`;
+   it is immutable from that moment and is changed only by a superseding ADR
+   (see `company/adr/README.md`).
 3. **Unblock first.** Decide pending CRs (criteria below), answer agent
    questions from reports, integrate green work in dependency order.
 4. **Brief.** Derive sealed briefs from the spec with
    `company/templates/BRIEF-TEMPLATE.md`. Pin: owned directories, invariants
    in play, frozen surfaces nearby, ordered scope, DoD, fallbacks for every
    ambiguity, out-of-scope. The builder reads the brief, never the spec. A
-   vague brief is the main cause of a bad agent run.
+   vague brief is the main cause of a bad agent run. A brief must never
+   contradict an accepted ADR: the ADR wins on architecture (how), the spec
+   wins on scope (what). A brief that fights an accepted ADR is a briefing
+   error to fix here, not downstream - and a builder that spots the conflict
+   files a CR, it never picks a winner.
 5. **Dispatch.** Write the brief to `company/briefs/`, set
    `company/state/active-task.json`, then spawn one **tech-lead** per
    workstream (spawn prompt skeleton below). One agent per workstream; never
    two agents in one directory. Leads run their own developers and QA at
    depth 2; you do not micromanage their teams - you judge their evidence.
 6. **Verify on completion. Never accept a self-report as done.**
+   - Score the risk first. Run
+     `python3 .claude/hooks/risk_score.py --base <integration-base>` on every
+     completed task branch. It returns a band (`low` / `medium` / `high`) that
+     sets how hard you verify - and only ever raises the bar, never lowers it:
+     `high` makes the read-only **auditor** dispatch MANDATORY, not a judgment
+     call; `medium` means extra spot-reads beyond the two or three below. The
+     score escalates verification; it never waives a gate or a check.
    - Re-run `bash company/run-gates.sh` yourself on the integrated result.
      Treat the lead's numbers as claims; trust integrated-main gates over
      worktree self-reports.
@@ -91,8 +106,9 @@ This file is yours alone. Subagents do not read it; they read the project's
      (a 403, a rejected transition, a locked write).
    - UI: read the QA screenshots yourself against the acceptance criteria and
      design language. QA captures; you judge.
-   - For large or risky merges, dispatch the read-only **auditor** for an
-     independent pass before you integrate.
+   - For large or risky merges - and always when the risk band is `high` -
+     dispatch the read-only **auditor** for an independent pass before you
+     integrate.
 7. **Integrate (merge, never deploy).** Integrate green, verified work in
    dependency order (API before the UI that calls it), per `company/GIT.md`:
    - **PR mode** (origin exists and `gh` works): push the task branch, open
@@ -101,9 +117,13 @@ This file is yours alone. Subagents do not read it; they read the project's
      are green - remote branch protection is the outer gate. Never push main.
    - **Local mode** (no remote): `git merge --no-ff task/<slug>` with the
      verification evidence in the merge message.
-   Rerun the gates on the integrated main and stamp. Merging integrates;
-   deploying is a manual OWNER step - never run it, never script it, never
-   include it in a brief. Then clean up: `git worktree remove
+   Rerun the gates on the integrated main and stamp. Then record witnesses for
+   what shipped: the producer proposes 1-3 load-bearing markers in its report,
+   you curate them and record the survivors with
+   `python3 .claude/hooks/witness_check.py --add ...` (registry
+   `company/witnesses.json`, IDs `W-NNN`). Merging integrates; deploying is a
+   manual OWNER step - never run it, never script it, never include it in a
+   brief. Then clean up: `git worktree remove
    .claude/worktrees/<slug>`, `git branch -d task/<slug>` (`-d` not `-D`: a
    branch that will not delete holds unmerged work - investigate; PR-mode
    `--delete-branch` handles the remote side), clear `active-task.json`,

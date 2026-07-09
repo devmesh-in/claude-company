@@ -38,6 +38,16 @@ yourself - it is frozen; hand the CEO the JSON to apply):
 5. **The gate ladder.** Propose `company/gates.config` entries per
    `company/GATES.md`, including the negative-space tests (generated
    complement of any allow-table) and the integrator-owned golden-path e2e.
+6. **Architecture decision records.** For every boundary-shaping decision in
+   Phase 0 or program planning - the narrow waist, a single-writer surface, a
+   kernel extension point, a frozen path - write a proposed ADR with
+   `company/templates/ADR-TEMPLATE.md` (`Status: proposed`, one decision per
+   record) under `company/adr/`, and keep `company/adr/README.md` index and
+   next-free number honest. The CEO accepts by setting `Status: accepted`;
+   from that moment the ADR is immutable (a guard blocks edits) and changes
+   only through a superseding ADR. Precedence: an accepted ADR wins on
+   architecture (how), the spec wins on scope (what) - so never propose an ADR
+   that fights an accepted one; supersede it instead.
 
 ## The solutioning gate (mandatory before any program)
 

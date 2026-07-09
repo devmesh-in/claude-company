@@ -30,7 +30,14 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    `company/frozen-surfaces.json` (enforced by a PreToolUse hook). An agent that
    needs a frozen surface changed STOPS and files a CR in
    `company/change-requests/`; it never patches locally. The CR queue is the
-   integration risk made visible. The bureaucracy is the point.
+   integration risk made visible. The bureaucracy is the point. Accepted
+   architecture decision records (`company/adr/`) are frozen the same way: a
+   guard blocks edits to any ADR whose status line is `Status: accepted`, and a
+   settled decision is changed only by a superseding ADR (see
+   `company/adr/README.md`). Precedence when a document and a decision clash:
+   **an accepted ADR wins on architecture (how), the spec wins on scope (what).
+   A brief that contradicts an accepted ADR is a briefing error; a builder that
+   notices the conflict files a CR - it never picks a winner.**
 
 4. **Gates are the definition of done.** "It works locally" is not a state this
    company recognizes. The gate suite (`company/run-gates.sh`, defined per

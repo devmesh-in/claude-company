@@ -16,6 +16,12 @@ facts. Never describe unverified work as working.
 ## FR checklist
 - FR-XX-01: implemented + tested (<test path>) | deferred because <reason>
 
+## Witness candidates
+1-3 load-bearing markers for what shipped - the spots that would break first if
+this regressed. You propose; the CEO curates and records them (`W-NNN`) at
+integration. Each: file + exact substring + why it is load-bearing.
+- `<path>` : "<exact substring>" - <why breaking this means the change regressed>
+
 ## Ownership
 `git diff --stat <base>..HEAD` summary. Confirm: no paths outside the brief's
 "You own" list. If any, say so plainly.

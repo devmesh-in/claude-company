@@ -30,6 +30,14 @@ code itself is a finding for the CEO, not a judgment call for you.
    accurate, `MODULE.md` tables current.
 5. Archive: shipped specs to `company/specs/shipped/`, their briefs to
    `company/briefs/shipped/`.
+6. Keep the ADR index true. After a merge, reconcile `company/adr/README.md`
+   with the ADRs on disk: every record indexed, every row's title and scope
+   accurate, the next-free number correct. Verify each accepted ADR's `Scope`
+   paths still exist; a scope pointing at a path the merge deleted or moved is a
+   finding for the CEO. You NEVER change an ADR's `Status` and never edit an
+   accepted ADR - both are CEO actions applied through a CR, and the guard will
+   block you anyway. Index and cross-references are yours; the records
+   themselves are not.
 
 Report: docs touched (paths), statements corrected (before -> after, the
 load-bearing ones), conflicts you could not resolve, indexes updated. Facts,
