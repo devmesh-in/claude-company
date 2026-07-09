@@ -49,6 +49,34 @@ MODELS_GATE_DISPLAY = {
     "binary": "python3",
 }
 
+# Verification gates (wave 2). Both need only python3, which the hooks already
+# require. witnesses rides FIRST (ahead of models) whenever a seeded registry
+# exists; trace rides after the stack gates (which include tests) and before
+# the audit gate, whenever a spec with FR IDs exists.
+WITNESSES_GATE_JSON = {
+    "name": "witnesses",
+    "command": "python3 .claude/hooks/witness_check.py",
+    "blocking": True,
+}
+WITNESSES_GATE_DISPLAY = {
+    "name": "witnesses",
+    "command": WITNESSES_GATE_JSON["command"],
+    "binary": "python3",
+}
+TRACE_GATE_JSON = {
+    "name": "trace",
+    "command": "python3 .claude/hooks/trace_check.py",
+    "blocking": True,
+}
+TRACE_GATE_DISPLAY = {
+    "name": "trace",
+    "command": TRACE_GATE_JSON["command"],
+    "binary": "python3",
+}
+
+# A requirement id looks like FR-AUTH-01 / BR-PAY-3, or the short FR-03 form.
+FR_ID_RE = re.compile(r"\b(?:FR|BR)-[A-Z0-9]+-\d+\b|\bFR-\d+\b")
+
 
 def project_dir():
     root = os.environ.get("CLAUDE_PROJECT_DIR")
@@ -319,6 +347,66 @@ def emit_json(obj):
     print("GATES_JSON: " + json.dumps(obj, sort_keys=True))
 
 
+def has_witnesses(root):
+    """True when company/witnesses.json exists with >= 1 registered witness."""
+    data = c.read_json_file(os.path.join(root, "company", "witnesses.json"))
+    if not isinstance(data, dict):
+        return False
+    w = data.get("witnesses")
+    return isinstance(w, list) and len(w) >= 1
+
+
+def has_fr_spec(root):
+    """True when a company/specs/*.md file carries at least one FR/BR id."""
+    specs_dir = os.path.join(root, "company", "specs")
+    if not os.path.isdir(specs_dir):
+        return False
+    try:
+        names = os.listdir(specs_dir)
+    except Exception:
+        return False
+    for name in names:
+        if not name.endswith(".md"):
+            continue
+        if FR_ID_RE.search(read_text(os.path.join(specs_dir, name))):
+            return True
+    return False
+
+
+def audit_candidates(pm, stacks):
+    """CVE-audit gate candidates, one per detected stack. Always ordered last.
+
+    Node command varies by package manager; python audit uses pip-audit and is
+    only proposed when the tool is on PATH (the split_invocable idiom).
+    """
+    out = []
+    if pm:
+        if pm == "pnpm":
+            cmd = "pnpm audit --prod --audit-level=high"
+        elif pm == "yarn":
+            cmd = "yarn npm audit --severity high"
+        else:
+            cmd = "npm audit --omit=dev --audit-level=high"
+        out.append({"name": "audit", "command": cmd, "binary": pm})
+    if "python" in stacks:
+        out.append(
+            {"name": "audit", "command": "pip-audit", "binary": "pip-audit"}
+        )
+    # Unique-ify names if a repo carries more than one stack (audit, audit-2).
+    seen = {}
+    result = []
+    for g in out:
+        n = g["name"]
+        if n in seen:
+            seen[n] += 1
+            g = dict(g)
+            g["name"] = "{}-{}".format(n, seen[n])
+        else:
+            seen[n] = 1
+        result.append(g)
+    return result
+
+
 def main(argv):
     write = "--write" in argv[1:]
     root = project_dir()
@@ -332,9 +420,41 @@ def main(argv):
     detect_make(root, gates, stacks)
 
     gates = dedupe_and_order(gates)
-    proposed, skipped = split_invocable(gates)
+    stack_proposed, stack_skipped = split_invocable(gates)
 
-    proposed_json = to_config_gates(proposed)
+    # Front verification gates (stack-independent, python3 only): witnesses
+    # first (when a seeded registry exists), then models. Both ride ahead of
+    # the stack gates.
+    front_display = []
+    front_json = []
+    if has_witnesses(root):
+        front_display.append(dict(WITNESSES_GATE_DISPLAY))
+        front_json.append(dict(WITNESSES_GATE_JSON))
+    front_display.append(dict(MODELS_GATE_DISPLAY))
+    front_json.append(dict(MODELS_GATE_JSON))
+
+    # Trace rides after the stack gates (which include tests) and before audit,
+    # only when a spec with FR ids is present.
+    tail_display = []
+    tail_json = []
+    if has_fr_spec(root):
+        tail_display.append(dict(TRACE_GATE_DISPLAY))
+        tail_json.append(dict(TRACE_GATE_JSON))
+
+    # The CVE audit gate is ALWAYS last; the pip-audit variant is skipped when
+    # the tool is not on PATH (split_invocable idiom).
+    audit_proposed, audit_skipped = split_invocable(
+        audit_candidates(pm, stacks)
+    )
+
+    proposed = front_display + stack_proposed + tail_display + audit_proposed
+    proposed_json = (
+        front_json
+        + to_config_gates(stack_proposed)
+        + tail_json
+        + to_config_gates(audit_proposed)
+    )
+    skipped = stack_skipped + audit_skipped
     skipped_json = [
         {
             "name": g["name"],
@@ -345,20 +465,16 @@ def main(argv):
         for g in skipped
     ]
 
-    # The models gate is stack-independent: it rides in front of every
-    # proposal (cheapest first), even when no language stack is detected.
-    proposed = [dict(MODELS_GATE_DISPLAY)] + proposed
-    proposed_json = [dict(MODELS_GATE_JSON)] + proposed_json
-
-    # No stack at all: leave config untouched, report, exit 0. The models gate
-    # is still surfaced in the proposal so the CEO can see it.
+    # No stack at all: leave config untouched, report, exit 0. The
+    # stack-independent gates (witnesses when seeded, models, and trace when a
+    # spec exists) are still surfaced in the proposal so the CEO can see them.
     if not stacks:
         print("no stack detected - leaving company/gates.config untouched")
         emit_json(
             {
                 "stacks": [],
                 "package_manager": pm,
-                "proposed": [dict(MODELS_GATE_JSON)],
+                "proposed": front_json + tail_json,
                 "skipped": [],
                 "wrote": False,
                 "status": "no_stack",
