@@ -186,6 +186,54 @@ class TestGuardFrozen(Base):
                      self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_new_adr_born_accepted_blocked(self):
+        # #31: minting a pre-accepted ADR via Write bypasses the lifecycle.
+        # The file is not on disk, so the incoming content is inspected.
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Write", "company/adr/ADR-004-new.md",
+                                       "# ADR-004\nStatus: accepted\n\nX.\n"),
+                     self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("born proposed", r.stderr.lower())
+        self.assertIn("status: proposed", r.stderr.lower())
+
+    def test_new_adr_born_accepted_via_multiedit_blocked(self):
+        # OQ-AH-01: MultiEdit over a non-existent ADR is inspected on the
+        # combined new_strings (defensive - Edit/MultiEdit normally fail on a
+        # missing file, but the guard must not depend on that).
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "MultiEdit",
+                   "tool_input": {"file_path": "company/adr/ADR-005-new.md",
+                                  "edits": [{"old_string": "",
+                                             "new_string": "# ADR-005\n"},
+                                            {"old_string": "",
+                                             "new_string": "Status: accepted\n"}]},
+                   "cwd": self.root}
+        r = run_hook("guard_frozen.py", payload, self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("born proposed", r.stderr.lower())
+
+    def test_ceo_acceptance_flip_allowed(self):
+        # The CEO flips an existing PROPOSED ADR to accepted. The on-disk status
+        # is proposed (editable), so writing accepted content is allowed - this
+        # is the one legitimate moment the status becomes `Status: accepted`.
+        self.write("company/adr/ADR-006-thing.md",
+                   "# ADR-006: a thing\nStatus: proposed\n\nDraft.\n")
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Write", "company/adr/ADR-006-thing.md",
+                                       "# ADR-006: a thing\nStatus: accepted\n"),
+                     self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_adr_template_never_matches(self):
+        # The ADR template lives under company/templates/, not company/adr/, so
+        # it is outside the clause even when it carries a Status: accepted line.
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Write",
+                                       "company/templates/ADR-TEMPLATE.md",
+                                       "# ADR-NNN\nStatus: accepted\n"),
+                     self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_non_adr_markdown_unaffected(self):
         # A markdown file outside company/adr/ is not governed by the clause.
         self.write("docs/notes.md", "Status: accepted\n")
