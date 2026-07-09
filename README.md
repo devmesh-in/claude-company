@@ -152,6 +152,7 @@ Each rule is a hook that blocks the action itself. When a hook blocks an agent, 
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | Protected files stay protected | Edits to `.env`, lockfiles, shipped migrations, and any file your project marks as frozen |
 | No commit while tests fail     | `git commit` when the gate suite is red, stale, or was never run                          |
+| No secrets in commits          | `git commit` when the staged diff adds an API key, token, private key, or JWT (hotfix does not bypass this one) |
 | No code without a plan         | Source-code changes when no approved work order exists                                    |
 | Tests are the referee          | Editing or deleting tests that the current work order does not cover                      |
 | No AI filler in writing        | Em dashes, smart quotes, and stock AI phrases in anything written                         |

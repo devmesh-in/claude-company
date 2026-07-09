@@ -12,6 +12,8 @@
     "poetry.lock",
     "Cargo.lock",
     "company/state/gates.status",
-    "company/state/adherence.log"
+    "company/state/adherence.log",
+    "company/state/costs.log",
+    "company/state/.cost-cursor.json"
   ]
 }

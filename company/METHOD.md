@@ -131,6 +131,7 @@ All under `company/state/`, all owned by the CEO:
 | `active-task.json` | The machine-readable pointer to the task in flight (read by hooks). |
 | `gates.status` | The stamped gate result (written only by the gate runner). |
 | `adherence.log` | Every hook block and bypass, one line each. Proof the system enforces. |
+| `costs.log` | One line per agent stop: token usage and an estimated spend, appended by the cost_capture hook. Estimates only, not billing. |
 
 ## What is never decided below the owner
 

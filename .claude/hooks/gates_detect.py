@@ -35,6 +35,20 @@ ORDER = {"lint": 0, "typecheck": 1, "tests": 2, "build": 3, "other": 4}
 
 PLACEHOLDER_MARK = "configure me"
 
+# Stack-independent gate: guard_models --check needs only python3, which the
+# hooks already require, so it is proposed for every project (including a
+# no-stack repo) and ordered before the test gates (it is cheap).
+MODELS_GATE_JSON = {
+    "name": "models",
+    "command": "python3 .claude/hooks/guard_models.py --check",
+    "blocking": True,
+}
+MODELS_GATE_DISPLAY = {
+    "name": "models",
+    "command": MODELS_GATE_JSON["command"],
+    "binary": "python3",
+}
+
 
 def project_dir():
     root = os.environ.get("CLAUDE_PROJECT_DIR")
@@ -331,14 +345,20 @@ def main(argv):
         for g in skipped
     ]
 
-    # No stack at all: leave config untouched, report, exit 0.
+    # The models gate is stack-independent: it rides in front of every
+    # proposal (cheapest first), even when no language stack is detected.
+    proposed = [dict(MODELS_GATE_DISPLAY)] + proposed
+    proposed_json = [dict(MODELS_GATE_JSON)] + proposed_json
+
+    # No stack at all: leave config untouched, report, exit 0. The models gate
+    # is still surfaced in the proposal so the CEO can see it.
     if not stacks:
         print("no stack detected - leaving company/gates.config untouched")
         emit_json(
             {
                 "stacks": [],
                 "package_manager": pm,
-                "proposed": [],
+                "proposed": [dict(MODELS_GATE_JSON)],
                 "skipped": [],
                 "wrote": False,
                 "status": "no_stack",
