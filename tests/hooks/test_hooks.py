@@ -158,6 +158,42 @@ class TestGuardFrozen(Base):
                      self.edit_payload("Edit", path, "more"), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_accepted_adr_blocked(self):
+        self.write("company/adr/ADR-001-thing.md",
+                   "# ADR-001: a thing\nStatus: accepted\n\nThe decision.\n")
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Edit", "company/adr/ADR-001-thing.md",
+                                       "tampered"),
+                     self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("accepted", r.stderr.lower())
+        self.assertIn("supersede", r.stderr.lower())
+
+    def test_proposed_adr_allowed(self):
+        self.write("company/adr/ADR-002-thing.md",
+                   "# ADR-002: a thing\nStatus: proposed\n\nDraft.\n")
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Edit", "company/adr/ADR-002-thing.md",
+                                       "still drafting"),
+                     self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_new_adr_allowed(self):
+        # A brand-new ADR (not yet on disk) must stay writable.
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Write", "company/adr/ADR-003-new.md",
+                                       "# ADR-003\nStatus: proposed\n"),
+                     self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_non_adr_markdown_unaffected(self):
+        # A markdown file outside company/adr/ is not governed by the clause.
+        self.write("docs/notes.md", "Status: accepted\n")
+        r = run_hook("guard_frozen.py",
+                     self.edit_payload("Edit", "docs/notes.md", "x"),
+                     self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_fail_open_garbage(self):
         r = run_hook("guard_frozen.py", None, self.root, raw_stdin="not json{")
         self.assertEqual(r.returncode, 0)
@@ -601,6 +637,36 @@ class TestGateStampAndCommit(Base):
                      self.bash_payload("git commit -m wip"), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_commit_worktree_branch_from_cwd(self):
+        # #26: the branch check must reflect the tree the git command runs in.
+        # Main checkout sits on `main`; a worktree checks out task/feat-x. A
+        # commit whose payload cwd is the worktree is ALLOWED; the same commit
+        # whose cwd is the main checkout is BLOCKED by the branch rule - even
+        # though CLAUDE_PROJECT_DIR (root) is the main checkout in both cases.
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.set_task({"task": "feat-x", "type": "feature"})
+        wt = self.root + "-wt"
+        self.addCleanup(shutil.rmtree, wt, ignore_errors=True)
+        self.addCleanup(lambda: git(self.root, "worktree", "prune"))
+        r = git(self.root, "worktree", "add", wt, "-b", "task/feat-x")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # Stamp last so root's work hash matches at hook time.
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+
+        allowed = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": "git commit -m done"}, "cwd": wt}
+        r = run_hook("guard_commit.py", allowed, self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        blocked = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": "git commit -m done"},
+                   "cwd": self.root}
+        r = run_hook("guard_commit.py", blocked, self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("task/feat-x", r.stderr)
+
     def test_push_to_main_blocked(self):
         self.init_git()
         r = run_hook("guard_commit.py",
@@ -796,6 +862,88 @@ class TestGatesDetect(Base):
         names = [g["name"] for g in obj["proposed"]]
         self.assertIn("models", names)
         self.assertFalse(os.path.exists(self.config_path()))
+
+    # --- wave 2 proposals: witnesses first, trace conditional, audit last ---
+    def write_witnesses(self, n):
+        ws = [{"id": "W-%03d" % (i + 1), "task": "t", "file": "x",
+               "must_contain": "y", "regex": False, "why": "z",
+               "added_at": "2026-01-01T00:00Z"} for i in range(n)]
+        self.write("company/witnesses.json",
+                   json.dumps({"version": 1, "witnesses": ws,
+                               "checksum": "unchecked-here"}))
+
+    def test_witnesses_gate_first_when_registry_seeded(self):
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        self.write_witnesses(2)
+        obj, _ = self.detect_json([])
+        names = [g["name"] for g in obj["proposed"]]
+        self.assertEqual(names[0], "witnesses")
+        self.assertIn("models", names)
+        self.assertLess(names.index("witnesses"), names.index("models"))
+        cmds = {g["command"] for g in obj["proposed"]}
+        self.assertIn("python3 .claude/hooks/witness_check.py", cmds)
+
+    def test_witnesses_gate_absent_without_registry(self):
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        obj, _ = self.detect_json([])
+        self.assertNotIn("witnesses", [g["name"] for g in obj["proposed"]])
+
+    def test_witnesses_gate_absent_when_registry_empty(self):
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        self.write("company/witnesses.json",
+                   json.dumps({"version": 1, "witnesses": [],
+                               "checksum": "x"}))
+        obj, _ = self.detect_json([])
+        self.assertNotIn("witnesses", [g["name"] for g in obj["proposed"]])
+
+    def test_trace_gate_conditional_on_fr_spec(self):
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        obj, _ = self.detect_json([])
+        self.assertNotIn("trace", [g["name"] for g in obj["proposed"]])
+        # A spec carrying an FR id switches the trace gate on.
+        self.write("company/specs/feature-x.md",
+                   "# spec\n\nFR-AUTH-01 the user can do a thing.\n")
+        obj2, _ = self.detect_json([])
+        names = [g["name"] for g in obj2["proposed"]]
+        self.assertIn("trace", names)
+        cmds = {g["command"] for g in obj2["proposed"]}
+        self.assertIn("python3 .claude/hooks/trace_check.py", cmds)
+        if "tests" in names:
+            self.assertLess(names.index("tests"), names.index("trace"))
+        audit_idx = [i for i, n in enumerate(names) if n.startswith("audit")]
+        if audit_idx:
+            self.assertLess(names.index("trace"), audit_idx[0])
+
+    def test_trace_gate_short_fr_form(self):
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        self.write("company/specs/s.md", "FR-3 a short-form requirement.\n")
+        obj, _ = self.detect_json([])
+        self.assertIn("trace", [g["name"] for g in obj["proposed"]])
+
+    def test_audit_gate_last_in_proposal(self):
+        self.write("package.json", json.dumps({"scripts": {"test": "jest"}}))
+        self.write_witnesses(1)
+        self.write("company/specs/s.md", "FR-1 thing\n")
+        obj, _ = self.detect_json([])
+        names = [g["name"] for g in obj["proposed"]]
+        union = names + [g["name"] for g in obj["skipped"]]
+        self.assertTrue(
+            any(n.startswith("audit") for n in union),
+            "a node stack must carry an audit gate (proposed or skipped)")
+        if any(n.startswith("audit") for n in names):
+            self.assertTrue(
+                names[-1].startswith("audit"),
+                "audit must be last in proposal order: %r" % names)
+
+    def test_audit_node_pnpm_command(self):
+        self.write("pnpm-lock.yaml", "")
+        self.write("package.json", json.dumps({"scripts": {"test": "vitest"}}))
+        obj, _ = self.detect_json([])
+        union = obj["proposed"] + obj["skipped"]
+        audit = [g for g in union if g["name"].startswith("audit")]
+        self.assertTrue(audit, "expected an audit gate")
+        self.assertEqual(audit[0]["command"],
+                         "pnpm audit --prod --audit-level=high")
 
 
 if __name__ == "__main__":
