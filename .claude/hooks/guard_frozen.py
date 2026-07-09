@@ -38,6 +38,7 @@ ALWAYS_DEFAULTS = [
     "company/state/adherence.log",
     "company/state/costs.log",
     "company/state/.cost-cursor.json",
+    "company/state/provenance-ledger.json",
 ]
 
 ENV_ALLOW_SUFFIXES = (".example", ".sample", ".template")

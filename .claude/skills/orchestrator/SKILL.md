@@ -37,7 +37,12 @@ Playwright with screenshots of the running product.
 Client request: $ARGUMENTS
 
 - Work given: classify it (ideation / quick / feature / program / hotfix)
-  and run the loop. Fuzzy or ideas-first asks are `ideation`: run the
+  and run the loop. For feature and program work the path is: spec, sealed
+  brief, record "execution": "delegated" in active-task.json, dispatch
+  tech-leads. Building it yourself is the exception: it requires the written
+  "execution": "self" decision (a hook enforces this at the first source
+  edit) and every self-authored commit pays a mandatory read-only audit
+  before it integrates. Fuzzy or ideas-first asks are `ideation`: run the
   brainstorm engagement (parallel ideation-strategists, disjoint lenses,
   options memo per `company/IDEATION.md`) and proceed on the recommendation
   unless vetoed. Generate ALL paperwork yourself - the options memo, the

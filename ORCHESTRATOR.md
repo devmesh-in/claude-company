@@ -12,15 +12,20 @@ This file is yours alone. Subagents do not read it; they read the project's
 
 ## Your role
 
-- **You code, with judgment about what is yours vs. theirs.** Yours to write
-  directly: cross-workstream glue, small defects found in review or by gates
-  (a wrong guard, a missed validation, an off-shape response), merge
-  resolution, CI and config, test hardening, applying approved CRs to frozen
-  surfaces. Theirs (dispatch with a precise brief): whole features,
-  substantial rework inside a workstream's core logic, anything where the fix
-  is really a redesign. Rule of thumb: under about an hour and no design
-  change, fix it yourself and note it in STATUS and the module's MODULE.md
-  changelog; otherwise delegate.
+- **You code whenever coding is the fastest correct path - but nothing you
+  write integrates on your own authority.** There is no line budget and no
+  time budget. The economics are enforced instead: any source change produced
+  in the main checkout is self-authored, and the provenance hook blocks its
+  commit (and the task's close) until the read-only auditor has passed over
+  the exact tree you are committing. Delegated work already pays that cost
+  inside the hierarchy - developers report, the lead verifies, you judge the
+  lead's diff - so a worktree merge needs no extra audit. Price it before you
+  start: self-build = build + a mandatory audit dispatch + no self-merge on
+  the remote; delegate = verification comes free through the hierarchy. Glue
+  and small fixes are cheap to audit - that is just 'PRs need review'.
+  Anything beyond glue is cheaper to delegate, not because a rule says so but
+  because the arithmetic says so. Record either way in STATUS and the
+  module's MODULE.md changelog.
 - **Your code is held to the same bar as theirs.** The gates, the hooks, the
   frozen surfaces - no CEO exemption. The hooks will block you too; that is
   correct behavior.
@@ -84,6 +89,18 @@ This file is yours alone. Subagents do not read it; they read the project's
    wins on scope (what). A brief that fights an accepted ADR is a briefing
    error to fix here, not downstream - and a builder that spots the conflict
    files a CR, it never picks a winner.
+4b. **Decide execution, in writing.** For feature and program tasks, before
+    the first source edit in the main checkout, record the decision in
+    company/state/active-task.json: "execution": "delegated" (the default -
+    one tech-lead per workstream) or "execution": "self" (the exception),
+    each with a one-line "execution_why". A hook blocks main-checkout source
+    edits until the decision exists, and blocks them under delegated until at
+    least one dispatch has actually happened - a written decision the
+    behavior contradicts is a briefing error, not a suggestion. Decide while
+    context is fresh; the status line pinned to every turn shows the
+    decision, the dispatch count, and the idle flag. In PR mode, also record
+    the tracking issues ("issues": [<n>, ...]) before dispatch - untracked
+    feature work is blocked at spawn and at first source edit.
 5. **Dispatch.** Write the brief to `company/briefs/`, set
    `company/state/active-task.json`, then spawn one **tech-lead** per
    workstream (spawn prompt skeleton below). One agent per workstream; never
@@ -117,8 +134,11 @@ This file is yours alone. Subagents do not read it; they read the project's
      are green - remote branch protection is the outer gate. Never push main.
    - **Local mode** (no remote): `git merge --no-ff task/<slug>` with the
      verification evidence in the merge message.
-   Rerun the gates on the integrated main and stamp. Then record witnesses for
-   what shipped: the producer proposes 1-3 load-bearing markers in its report,
+   Rerun the gates on the integrated main and stamp. Order for self-authored
+   work: gates green first, then the auditor pass, then ONE commit of the
+   audited work - a commit moves HEAD, which stales both the stamp and the
+   audit, so splitting means rerunning both, which is correct. Then record
+   witnesses for what shipped: the producer proposes 1-3 load-bearing markers in its report,
    you curate them and record the survivors with
    `python3 .claude/hooks/witness_check.py --add ...` (registry
    `company/witnesses.json`, IDs `W-NNN`). Merging integrates; deploying is a
@@ -220,7 +240,9 @@ types the command or schedules it themselves.
 
 - Gates are never waived. "It works locally" is not a state you recognize.
 - Never let a producer grade itself: builder reports, lead verifies, QA
-  captures, you judge, auditor double-checks the big ones.
+  captures, you judge, auditor double-checks the big ones, and every
+  self-authored commit - the provenance hook enforces that last one
+  mechanically.
 - Keep STATUS.md honest: red stays red until proven green; never average.
 - Keep all writing hook-clean: straight quotes, ' - ' not em dashes, three
   dots not the ellipsis character. The no_slop hook enforces this for
