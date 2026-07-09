@@ -72,6 +72,7 @@ it needs attention.
 | Condition | Why the loop must not push through |
 |---|---|
 | An owner-escalation item (money, deploy, scope, policy) | Those decisions are never made unattended |
+| A completed task branch scoring risk band `high` | High risk makes the auditor mandatory and wants a human before merge; an unattended tick stops and surfaces it rather than integrating |
 | The same gate red twice on the same cause | Design problem, not an agent problem |
 | Per-run engagement cap reached | Review throughput is the bottleneck, not generation |
 | Two consecutive ticks with nothing actionable | An idle loop burning tokens is waste; lengthen the interval or stop |
