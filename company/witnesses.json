@@ -87,11 +87,11 @@
       "id": "W-010",
       "task": "adr-hardening",
       "file": ".claude/hooks/guard_frozen.py",
-      "must_contain": "a new ADR is born proposed, never accepted",
+      "must_contain": "declares_accepted(incoming_content(",
       "regex": false,
-      "why": "the issue-31 guarantee: dropping the not-on-disk branch reopens pre-accepted ADR minting",
-      "added_at": "2026-07-09T21:22:48Z"
+      "why": "the issue-31 guarantee: the not-on-disk branch must inspect incoming content for a pre-accepted ADR",
+      "added_at": "2026-07-09T21:25:22Z"
     }
   ],
-  "checksum": "0d391670ba06ea58c551d0bfeeab4a7bdacec8657b102905e90395bd3f5f9285"
+  "checksum": "3b0c962f30761989a1c546dbc24e25b2761e46445f72d5e22b1780b79c427e07"
 }
