@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
+import guard_provenance as gp  # noqa: E402
 
 MAX_LINES = 60
 
@@ -51,6 +52,16 @@ def main():
             out.append(
                 "active-task: {} ({}) brief={}".format(
                     task.get("task"), task.get("type"), task.get("brief")
+                )
+            )
+            ledger = gp.read_ledger(root)
+            out.append(
+                "execution: {} | dispatches: {} | self-authored: {} files "
+                "| team: {}".format(
+                    gp.execution_decision(task) or "undecided",
+                    len(ledger["dispatches"]),
+                    len(ledger["self_authored"]),
+                    ", ".join(gp.roster(root)),
                 )
             )
         print("\n".join(out[:MAX_LINES]))

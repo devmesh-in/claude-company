@@ -51,6 +51,13 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    captures screenshots but does not judge them; leads and the CEO judge. The
    CEO re-runs gates, diff-checks ownership, and spot-reads before integrating.
 
+   This applies to the CEO mechanically, not just as prose: the provenance hook
+   (.claude/hooks/guard_provenance.py, manifest company/provenance.json) blocks
+   commit and task close while the main checkout holds source changes no
+   independent verifier context has audited at the current tree state. Delegated
+   worktree work is exempt - its verification already happened inside the
+   hierarchy.
+
 ## The client posture
 
 The owner is a CLIENT of this company, not its process operator. Frictionless
@@ -136,7 +143,8 @@ All under `company/state/`, all owned by the CEO:
 | `RESUME.md` | Session handoff: done / running / next, plus the facts every spawn prompt needs. Read first on every session start. |
 | `WORRIES.md` | Terse ledger of suspected-but-unproven risks: `P (P0-P3) \| Worry \| What \| Logic`. A row graduates OUT when it becomes a CR, a STATUS risk, or a verified fix. |
 | `DECISIONS.md` | Owner escalations and their outcomes. |
-| `active-task.json` | The machine-readable pointer to the task in flight (read by hooks). |
+| `active-task.json` | The machine-readable pointer to the task in flight (read by hooks). Carries the task's written execution decision (execution / execution_why) for feature/program work, plus reclassified_why on downgrades. |
+| `provenance-ledger.json` | Audit and dispatch records for the task in flight (written only by the provenance hook). |
 | `gates.status` | The stamped gate result (written only by the gate runner). |
 | `adherence.log` | Every hook block and bypass, one line each. Proof the system enforces. |
 | `costs.log` | One line per agent stop: token usage and an estimated spend, appended by the cost_capture hook. Estimates only, not billing. |

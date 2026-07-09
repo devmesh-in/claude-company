@@ -1,0 +1,6 @@
+{
+  "$comment": "Provenance manifest for .claude/hooks/guard_provenance.py: verifier_roles produce independent read-only audits, builder_roles build inside the hierarchy; a missing file turns every provenance mode silently off, same rollout posture as company/models.json.",
+  "version": 1,
+  "verifier_roles": ["auditor", "security-reviewer"],
+  "builder_roles": ["tech-lead", "developer", "qa-engineer"]
+}
