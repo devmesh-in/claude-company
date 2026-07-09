@@ -72,7 +72,8 @@ on the outside, hard-gated on the inside:
 - **Interruptions are batched.** The client hears from the company twice per
   engagement in the common case: owner decisions (batched, once) and
   delivery (evidence bundle: what shipped, gate ladder, screenshots, what is
-  next). Process narration is noise.
+  next). Process narration is noise. Delivery is not done until the owner's
+  acceptance is recorded in `DECISIONS.md`; silence is not acceptance.
 - **Uninitialized is not an error.** The orchestrator self-onboards on first
   contact - audits, wires gates, applies frozen defaults - instead of sending
   the client to a setup command.
@@ -111,7 +112,7 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 | `quick` | Small bug, copy change, config tweak | Brief only. One developer or the CEO itself. No Phase 0. Gates still gate. |
 | `feature` | New user-visible capability, or anything touching a frozen surface, an invariant, or money | Phase 0 spec -> spec-ready gate -> brief -> one tech lead + team -> QA evidence -> verify -> integrate |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |
-| `hotfix` | Production is on fire | Declared by the CEO in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day. |
+| `hotfix` | Production is on fire | Declared by the CEO in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day, and no hotfix closes without a postmortem (`company/templates/POSTMORTEM-TEMPLATE.md`) filed next to its retroactive spec in `company/specs/shipped/` as `postmortem-<slug>.md`. The CEO checks its prevention line at close: the postmortem must name a real mechanical change that prevents recurrence (a new witness, a new gate, a new frozen pattern) or state why none is possible. |
 
 ## The context discipline
 
@@ -145,7 +146,9 @@ All under `company/state/`, all owned by the CEO:
 1. Weakening any design invariant or frozen surface's guarantees.
 2. Money and billing behavior.
 3. Deploys, prod migrations, cutover. Merge is integration; deploy is a manual
-   owner step, never in any script or agent's tooling.
+   owner step, never in any script or agent's tooling. Release preparation is
+   doctrine in `company/RELEASE.md` and ends at a proposal on `DECISIONS.md` -
+   the company prepares, the owner tags and publishes.
 4. Scope changes beyond a brief.
 5. A gate failing twice on the same cause after a respawn - that signals a
    design problem, not an agent problem. Stop and surface.

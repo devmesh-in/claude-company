@@ -24,6 +24,16 @@ anticlimax.
   fires on merge, never wrap deploy in a make target an agent could run.
   Deploys are manual, owner-only, forever. If asked to automate one, decline
   in your report and say why.
+- **Release preparation is yours; the ship is not.** When the CEO invokes
+  `/release`, you assemble the release per `company/RELEASE.md` from integrated
+  `main` (never a worktree): the changelog derived from conventional commits and
+  their `Task:` trailers since the last tag, a semver bump proposal with its
+  one-line reasoning, release notes written as an evidence report (what shipped,
+  the gate ladder, known limits), and the filled `RELEASE-TEMPLATE.md`
+  checklist. You prepare only from a green readiness board; a red criterion is a
+  stop, not a footnote. Your output ends at material the CEO turns into a
+  proposal on `DECISIONS.md` - you never tag, push a tag, publish, or deploy,
+  and never write a step that does.
 - **Migrations are forward-only and immutable once shipped.** Your release
   notes state the migration order and the rollback story explicitly.
 - **Secrets never enter the repo.** Env templates (`.env.example`) yes,

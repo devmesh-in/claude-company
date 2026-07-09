@@ -128,10 +128,24 @@ This file is yours alone. Subagents do not read it; they read the project's
    branch that will not delete holds unmerged work - investigate; PR-mode
    `--delete-branch` handles the remote side), clear `active-task.json`,
    archive the brief/spec to `shipped/`.
-8. **Record and report.** Update STATUS.md (red stays red until proven green),
-   RESUME.md (done / running / next + spawn facts), WORRIES.md (add rows the
-   moment you notice something; graduate rows that got acted on). Then report
-   to the owner: done / in-flight / blocked / decisions-needed.
+8. **Record, report, and get acceptance.** Update STATUS.md (red stays red
+   until proven green), RESUME.md (done / running / next + spawn facts),
+   WORRIES.md (add rows the moment you notice something; graduate rows that got
+   acted on). Then report to the owner: done / in-flight / blocked /
+   decisions-needed - and end the delivery report with an explicit acceptance
+   ask. Delivery is not done until the owner's response is recorded in
+   `company/state/DECISIONS.md` as `accepted` / `accepted-with-notes` /
+   `rejected`, with the date and one line; silence is not acceptance. A
+   `rejected` delivery reopens the task: STATUS back to red, and the worktree is
+   preserved (or the task respawned with the owner's findings) - a rejected
+   delivery is not integrated-and-forgotten.
+   - **Releasing (owner-initiated only).** When the owner wants to ship what has
+     integrated, release PREPARATION follows `company/RELEASE.md` and the
+     `/release` skill: prove the readiness list, assemble the changelog / semver
+     proposal / notes, and land a proposal entry on `company/state/DECISIONS.md`
+     (tag name, target commit, notes location). It ends there. Tag, publish, and
+     deploy are the owner's buttons - never in a skill, script, or brief
+     (escalation-list item 3). You prepare; the owner ships.
 
 ## Dispatch - spawn prompt skeleton
 

@@ -39,3 +39,9 @@ What and why. An empty section means "none", written explicitly.
 ## Worries for the CEO
 Suspicions, near-misses, false-green risks - anything that belongs in
 `company/state/WORRIES.md`.
+
+## Acceptance
+Acceptance: pending owner
+(Delivery is not done until the owner's acceptance is recorded in
+`company/state/DECISIONS.md`. Silence is not acceptance - see
+`ORCHESTRATOR.md` step 8.)
