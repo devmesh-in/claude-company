@@ -9,4 +9,9 @@ wave/merge; P3 is polish._
 
 | P | Worry | What (one line) | CEO logic (one line) |
 |---|---|---|---|
-| - | - | - | - |
+| P2 | gates.config template-vs-local tension | On the product repo itself, tracked gates.config must stay placeholder (ships to installs) so stop_gate/guard_commit need uncommitted local wiring - a papercut every session | Consider gates.local.config override in run-gates.sh; candidate issue after wave 2 |
+| P3 | costs.log accuracy limits | Multi-model stop intervals book tokens to the last model; sub-half-cent stops log est=$0.00 | Known limits from wave-1 report; revisit if spend reporting starts driving decisions |
+| P2 | staging stales a provenance audit | work_hash includes diff --cached, so git add AFTER the auditor pass stales the audit even with identical content | Auditor worry #2: doc the order (stage, then audit, then commit) in ORCHESTRATOR step 7 wording next doctrine touch; operational for now |
+| P3 | git -C evades guard_commit subcmd parse | guard_commit.git_subcmd treats -C <dir> as the subcommand token, so `git -C x commit` bypasses commit gates (pre-existing, Mode C inherits) | Anti-adversary, out of doctrine scope; candidate issue against guard_commit |
+| P3 | Mode D lacks worktree-cwd exemption | Stop close-gate block message reads wrong if a worktree session ever gets an active-task.json (moot today - file is untracked) | Auditor worry #3; per-spec (mirrors stop_gate); revisit only if worktree sessions gain task state |
+| P2 | session_start 60-line cap can hide digest | Saturated RESUME+STATUS could truncate the active-task + execution digest lines | Lead worry P2, inherited behavior; candidate tail-reservation tweak in session_start |
