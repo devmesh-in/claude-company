@@ -82,7 +82,16 @@
       "regex": false,
       "why": "postmortems must name a mechanical prevention or say why none is possible",
       "added_at": "2026-07-09T20:35:00Z"
+    },
+    {
+      "id": "W-010",
+      "task": "adr-hardening",
+      "file": ".claude/hooks/guard_frozen.py",
+      "must_contain": "a new ADR is born proposed, never accepted",
+      "regex": false,
+      "why": "the issue-31 guarantee: dropping the not-on-disk branch reopens pre-accepted ADR minting",
+      "added_at": "2026-07-09T21:22:48Z"
     }
   ],
-  "checksum": "3470e49fd3e85193d36b84d940d8c68148c7189b200899dbe0be5f7a159e1d77"
+  "checksum": "0d391670ba06ea58c551d0bfeeab4a7bdacec8657b102905e90395bd3f5f9285"
 }
