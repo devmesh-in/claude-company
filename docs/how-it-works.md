@@ -14,11 +14,13 @@ This page explains the method behind claude-company: why it is shaped like a com
   <a href="#what-the-owner-keeps">Owner</a>
 </p>
 
+> New to a term below? The [Glossary](glossary.md) defines the company's vocabulary.
+
 ## The core idea
 
 AI agents are capable builders and unreliable narrators. Left alone, an agent under pressure will report failing work as done, widen its own scope, and edit tests until they pass. Process documents help, but an instruction is something the model can skip.
 
-claude-company treats that as an engineering problem, not a prompting problem. The rules that matter are enforced by hooks: scripts that run before every file edit and shell command, and block the ones that break the rules. The prose explains the why; the hook supplies the no.
+claude-company treats that as an engineering problem, not a prompting problem. The rules that matter are enforced by [hooks](glossary.md#hook): scripts that run before every file edit and shell command, and block the ones that break the rules. The prose explains the why; the hook supplies the no.
 
 | Layer | What lives there | Binding? |
 |---|---|---|
@@ -76,12 +78,12 @@ The company runs on a few typed documents rather than long conversations:
 
 Two design choices matter most:
 
-- **Builders read the brief, never the spec.** The spec is rich and human-facing; the brief is the lean slice derived from it. The builder's context stays small and its instructions stay exact.
+- **Builders read the [brief](glossary.md#brief), never the [spec](glossary.md#spec).** The spec is rich and human-facing; the brief is the lean slice derived from it. The builder's context stays small and its instructions stay exact.
 - **Ambiguity is handled once, in writing.** Every open question gets one decided fallback, so ten parallel agents make the same assumption instead of ten different ones. Questions only a human should answer wait in `company/state/DECISIONS.md` while the build proceeds on the fallback.
 
 ## The gates
 
-A gate is a command that must exit successfully: your test suite, your linter, your build. Gates live in `company/gates.config`, and `company/run-gates.sh` runs the ladder and stamps the result with a fingerprint of your working tree.
+A [gate](glossary.md#gate) is a command that must exit successfully: your test suite, your linter, your build. Gates live in `company/gates.config`, and `company/run-gates.sh` runs the ladder and stamps the result with a fingerprint of your working tree.
 
 The stamp is what gives gates teeth:
 
@@ -107,7 +109,7 @@ The ladder runs cheap to expensive. Beyond your own tests and linter, claude-com
 
 | Rung | Checks |
 |---|---|
-| Witnesses | Every shipped fix is pinned to the exact lines that would break first if it regressed; if one vanishes, the gate goes red |
+| [Witnesses](glossary.md#witness) | Every shipped fix is pinned to the exact lines that would break first if it regressed; if one vanishes, the gate goes red |
 | Requirement traceability | Every requirement in the spec has both implementing code and a test, or is explicitly deferred; an untraced requirement is red |
 | Model routing | Each agent runs on the model its manifest declares; silent model drift is red |
 | Dependency audit | No known-vulnerable dependency ships; it runs last because it reaches the network |
@@ -119,7 +121,7 @@ One guard never yields. `guard_secrets` scans every commit for API keys, tokens,
 <br>
 
 - **Test the negative space.** Where a table lists allowed actions, generate the complement and assert every non-listed action is rejected. Positive-only tests pass while a system silently allows everything.
-- **Never trust a worktree's numbers.** Agents build in isolated git worktrees, where stale artifacts can mask integration failures. Verification reruns gates on the integrated result.
+- **Never trust a worktree's numbers.** Agents build in isolated git [worktrees](glossary.md#worktree), where stale artifacts can mask integration failures. Verification reruns gates on the integrated result.
 
 </details>
 
@@ -127,7 +129,7 @@ One guard never yields. `guard_secrets` scans every commit for API keys, tokens,
 
 Some files hold the whole system up: database migrations that already shipped, the schema, lockfiles, anything with exactly one legitimate writer. These are listed in `company/frozen-surfaces.json`, and the hook blocks every edit to them.
 
-When an agent genuinely needs a protected file changed, it files a change request (CR) instead:
+When an agent genuinely needs a protected file changed, it files a [change request (CR)](glossary.md#change-request-cr) instead:
 
 ```mermaid
 flowchart LR
