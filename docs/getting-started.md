@@ -2,6 +2,8 @@
 
 This guide takes you from install to your first delivered feature. It works for a brand-new project or a codebase you already have. Allow ten minutes, most of it watching the company work.
 
+> Meeting a word for the first time - brief, gate, witness, frozen surface? The [Glossary](glossary.md) defines the company's vocabulary.
+
 ## Before you start
 
 | You need | Used for |

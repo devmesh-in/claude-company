@@ -2,6 +2,8 @@
 
 Everything the company runs on is a plain file in your repo. This guide covers the changes people make most: gates, protected files, process depth, and the team itself. Edit, commit, done; no rebuild step exists.
 
+> Unsure what a term means? The [Glossary](glossary.md) defines the company's vocabulary.
+
 | I want to... | Edit | Section |
 |---|---|---|
 | Add or change a test gate | `company/gates.config` | [Gates](#add-or-change-gates) |
