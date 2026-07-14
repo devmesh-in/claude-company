@@ -118,7 +118,34 @@
       "regex": false,
       "why": "FR-DE-15 - PR-mode work cannot start untracked",
       "added_at": "2026-07-09T23:20:46Z"
+    },
+    {
+      "id": "W-014",
+      "task": "cli-update",
+      "file": "update.sh",
+      "must_contain": "safe_cp \"$SRC/$rel\" \"$TARGET/$rel.new\"",
+      "regex": false,
+      "why": "The never-clobber core invariant: user-modified payload goes to a .new sibling, never over the user file",
+      "added_at": "2026-07-14T22:13:07Z"
+    },
+    {
+      "id": "W-015",
+      "task": "cli-update",
+      "file": "update.sh",
+      "must_contain": "refusing to downgrade $MANIFEST_VERSION -> $PKG_VERSION; re-run with --force to override",
+      "regex": false,
+      "why": "Downgrade guard: an older package refuses to overwrite a newer install without --force",
+      "added_at": "2026-07-14T22:13:07Z"
+    },
+    {
+      "id": "W-016",
+      "task": "cli-update",
+      "file": "lib/manifest.py",
+      "must_contain": "json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False)",
+      "regex": false,
+      "why": "Manifest byte-determinism contract: sorted keys, no clock field - the bin-vs-bare parity test depends on it",
+      "added_at": "2026-07-14T22:13:07Z"
     }
   ],
-  "checksum": "2b624d0041fe97f6c181a2f9fd9f88522fcffaa45fff066b0b411c4b40c550cd"
+  "checksum": "1179d1ca054e151ab34c6a0535acc2969de82f42991939c48a66f6b1acc18b02"
 }

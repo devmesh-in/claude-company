@@ -14,6 +14,19 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
+0. cli-update SHIPPED 2026-07-15: PR #57 merged (7726c99, closes #54-#56),
+   owner acceptance DECISIONS #6, witnesses W-014..W-016 recorded (16/16),
+   spec+brief archived to shipped/, worktree+branch removed, integrated main
+   verified (hooks 213 OK, npm 40, engine 56, gates stamped green).
+   Close-out PR from chore/cli-update-closeout in flight if session died -
+   check that branch before redoing. WORRIES has 3 rows from this task
+   (merge heredoc duplication P2, python3 spawn-per-file P3, fail-open
+   emission P3).
+0b. ACTIVE (read-only): owner asked whether the compulsory delegation gate
+   wrongly blocks non-code agents (product-manager, docs-librarian, auditor)
+   from writing md and state json files. Explore guard_provenance /
+   guard_spec / guard_tests source paths + NON_SOURCE_EXT/EXEMPT_DIRS,
+   REPORT findings only - owner said no code.
 1. delegation-enforcement SHIPPED 2026-07-10 (PR #49, f9e5dae, closes
    #42-#47; acceptance DECISIONS #4). Close-out PR in flight if session
    died mid-close: witnesses W-011..W-013 recorded, brief archived to
