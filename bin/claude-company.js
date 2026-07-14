@@ -50,6 +50,7 @@ function helpText() {
     "",
     bold("Usage"),
     "  claude-company install [target] [flags...]   install into a project",
+    "  claude-company update [target] [flags...]    refresh an installed project",
     "  claude-company --version                      print the version",
     "  claude-company --help                         show this help",
     "",
@@ -64,6 +65,9 @@ function helpText() {
     "The install subcommand forwards all flags to the bundled installer:",
     "  --target DIR, -y/--yes, --plain, --no-color,",
     "  --detect-gates/--no-detect-gates, --orientation/--no-orientation",
+    "",
+    "The update subcommand forwards: --check, --force, --target DIR,",
+    "  -y/--yes, --plain, --no-color",
     "",
     "Docs: docs/getting-started.md",
   ].join("\n");
@@ -110,6 +114,27 @@ async function main(argv) {
     }
     const installer = require(path.join(ROOT, "lib", "install-tui.js"));
     return await installer.run(args.slice(1));
+  }
+  if (first === "update") {
+    // Same native-Windows story as install: the update engine is bash and the
+    // enforcement hooks run as python3 through a POSIX shell. WSL works fully.
+    if (process.platform === "win32") {
+      process.stderr.write([
+        bold("claude-company does not support native Windows yet."),
+        "",
+        "The updater and the enforcement hooks need a POSIX environment",
+        "(bash, python3). It works on macOS, Linux, and Windows via WSL:",
+        "",
+        "  1. Install WSL:  wsl --install   (then restart the terminal)",
+        "  2. Inside WSL:   npx claude-company update /path/to/your/project",
+        "",
+        "Track native Windows support: " + (PKG.bugs && PKG.bugs.url ? PKG.bugs.url : PKG.homepage),
+        "",
+      ].join("\n"));
+      return 2;
+    }
+    const updater = require(path.join(ROOT, "lib", "update.js"));
+    return await updater.run(args.slice(1));
   }
 
   // Unknown subcommand.

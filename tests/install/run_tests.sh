@@ -10,7 +10,7 @@ set -uo pipefail
 
 # --- locate the real repo (two levels up from this test file) -------------
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$TEST_DIR/../.." && pwd)"
+REPO="${REPO_OVERRIDE:-$(cd "$TEST_DIR/../.." && pwd)}"
 
 PASS=0
 FAIL=0
@@ -49,6 +49,13 @@ build_source() {
   cp "$REPO/company/run-gates.sh" "$SRC/company/run-gates.sh"
   cp "$REPO/company/gates.config" "$SRC/company/gates.config"
   cp "$REPO/.mcp.json" "$SRC/.mcp.json"
+
+  # real manifest helpers + a minimal package.json so install.sh's provenance
+  # step actually runs (without lib/ + package.json it fails open and skips)
+  mkdir -p "$SRC/lib"
+  cp "$REPO/lib/manifest.py" "$SRC/lib/manifest.py"
+  cp "$REPO/lib/payload_paths.sh" "$SRC/lib/payload_paths.sh"
+  printf '{"version":"9.9.9"}\n' > "$SRC/package.json"
 
   # our settings.json fixture (stands in for the other agent's final file)
   cat > "$SRC/.claude/settings.json" <<'JSON'
@@ -116,6 +123,26 @@ check "CLAUDE.md has begin"      grep -q "claude-company:begin" "$T1/CLAUDE.md"
 check "CLAUDE.md has end"        grep -q "claude-company:end" "$T1/CLAUDE.md"
 check "settings.json valid"      json_valid "$T1/.claude/settings.json"
 check ".mcp.json valid"          json_valid "$T1/.mcp.json"
+
+echo "== install-manifest emission =="
+TM1="$WORK/tm1"; mkdir -p "$TM1"
+run_install "$TM1" || { fail "install for manifest emission"; cat "$WORK/install.out"; }
+MAN1="$TM1/company/state/install-manifest.json"
+check "manifest.json exists"        test -f "$MAN1"
+check "manifest.json valid JSON"    json_valid "$MAN1"
+check "manifest carries pkg version" grep -q '"version": "9.9.9"' "$MAN1"
+check "manifest has agent relpath"  grep -q '".claude/agents/dev.md"' "$MAN1"
+# copy_if_absent files must NOT be tracked in the overwrite manifest
+check "gates.config not in manifest" bash -c '! grep -q "company/gates.config" "'"$MAN1"'"'
+check "frozen-surfaces not in manifest" bash -c '! grep -q "frozen-surfaces.json" "'"$MAN1"'"'
+# determinism: no clock / environment-varying fields
+check "manifest has no generated_at" bash -c '! grep -q "generated_at" "'"$MAN1"'"'
+check "manifest has no timestamp"    bash -c '! grep -qi "timestamp" "'"$MAN1"'"'
+# byte-identical across two fresh installs from the SAME source
+TM2="$WORK/tm2"; mkdir -p "$TM2"
+run_install "$TM2" || { fail "second manifest install"; cat "$WORK/install.out"; }
+MAN2="$TM2/company/state/install-manifest.json"
+check "manifest deterministic (byte-identical)" cmp -s "$MAN1" "$MAN2"
 
 echo "== existing CLAUDE.md + settings.json with user's own hook =="
 T2="$WORK/t2"; mkdir -p "$T2/.claude"

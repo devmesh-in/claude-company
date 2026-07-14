@@ -96,6 +96,25 @@ Fix: run `bash company/run-gates.sh` and repair any failure.
 
 This is the system working. The block message contains the fix, agents get the same messages, and most blocks resolve without you. For a production emergency, tell the orchestrator it is a hotfix: hooks then log instead of block, and the process catches up afterward.
 
+## Updating an installed project
+
+When a newer claude-company ships, refresh a project that already ran install:
+
+```bash
+claude-company update /path/to/your/project
+```
+
+`npx claude-company update .` does the same. It re-lays claude-company's own shipped files - the agents, hooks, skills, and canon docs - so a project picks up upstream fixes without a reinstall.
+
+It never overwrites a file you customized. If you edited a shipped file, your version stays exactly as-is and the new upstream version lands beside it as `<file>.new` for you to reconcile at your leisure. Your own things - `company/gates.config`, your specs, briefs, and everything under `company/state` - are never touched. Anything the update does replace is backed up first to `company/state/.update-backups/<timestamp>/`, so a refresh is always reversible.
+
+Two flags shape the run:
+
+- `--check` prints the plan and writes nothing, so you can see what a refresh would do before it does it.
+- `--force` is only needed to override a downgrade - when the installed version is newer than the package you are running.
+
+Update needs the same POSIX tools as install: python3, git, and bash.
+
 ## Where to go next
 
 - [How it works](how-it-works.md) explains the method: why briefs are sealed, why producers never grade their own work, and what the gates actually check

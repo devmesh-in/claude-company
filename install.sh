@@ -313,6 +313,30 @@ with open(path, "w") as f:
 PY
 ok "CLAUDE.md (claude-company block up to date)"
 
+# --- 8. provenance manifest (fail open) -----------------------------------
+# Record a sha256 of every overwrite-set file so the future `update` command
+# can prove a target file pristine before touching it. This step must NEVER
+# fail the install: a missing manifest just puts `update` into safe mode.
+info "Writing provenance manifest"
+MANIFEST_HELPER="$SRC/lib/manifest.py"
+MANIFEST_ENUM="$SRC/lib/payload_paths.sh"
+if [ ! -f "$MANIFEST_HELPER" ] || [ ! -f "$MANIFEST_ENUM" ]; then
+  warn "manifest helpers missing - skipping provenance manifest"
+else
+  PKG_VERSION="$(python3 "$MANIFEST_HELPER" pkgversion "$SRC/package.json" 2>/dev/null || true)"
+  [ -n "$PKG_VERSION" ] || PKG_VERSION="unknown"
+  # shellcheck source=/dev/null
+  . "$MANIFEST_ENUM"
+  MANIFEST_DST="$TARGET/company/state/install-manifest.json"
+  if cc_overwrite_relpaths "$SRC" \
+      | python3 "$MANIFEST_HELPER" build --version "$PKG_VERSION" --root "$SRC" \
+      > "$MANIFEST_DST" 2>/dev/null; then
+    ok "company/state/install-manifest.json"
+  else
+    warn "failed to write provenance manifest - continuing"
+  fi
+fi
+
 # --- epilogue -------------------------------------------------------------
 echo
 info "claude-company installed"

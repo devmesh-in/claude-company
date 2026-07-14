@@ -26,13 +26,14 @@
   "scripts": {
     "test": "bash tests/cli/test_cli.sh",
     "prepare": "node -e \"if (process.env.npm_command === 'publish' && !process.env.AUTHORIZED) { console.error('ERROR: direct publishing is not allowed - publish via the release flow with AUTHORIZED=1'); process.exit(1); }\"",
-    "prepublishOnly": "bash tests/cli/test_cli.sh && bash tests/install/test_tui.sh && bash tests/install/run_tests.sh"
+    "prepublishOnly": "bash tests/cli/test_cli.sh && bash tests/install/test_tui.sh && bash tests/install/run_tests.sh && bash tests/install/test_update.sh"
   },
   "files": [
     "bin/",
     "lib/",
     "install",
     "install.sh",
+    "update.sh",
     "ORCHESTRATOR.md",
     ".claude/agents/",
     ".claude/hooks/*.py",
