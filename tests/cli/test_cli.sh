@@ -159,6 +159,44 @@ require(process.env.BIN);
 [ "$WIN_VER" = "$(node -p "require(\"$REPO/package.json\").version")" ] \
   && pass "win32 --version still works" || fail "win32 --version still works (got '$WIN_VER')"
 
+# --- update: top-level help lists it, subcommand help, usage/exit codes ----
+echo "== update subcommand: help + usage + exit codes =="
+node "$BIN" --help >"$WORK/h.out" 2>/dev/null
+grep -qi '^  claude-company update' "$WORK/h.out" && pass "top-level help lists update" \
+  || fail "top-level help lists update"
+
+node "$BIN" update --help >"$WORK/uh.out" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] && pass "update --help exits 0" || fail "update --help exits 0 (rc=$RC)"
+grep -qi 'never overwrites' "$WORK/uh.out" && pass "update --help states the preserve guarantee" \
+  || fail "update --help states the preserve guarantee"
+grep -q -- '--check' "$WORK/uh.out" && pass "update --help documents --check" || fail "update --help documents --check"
+
+node "$BIN" update >"$WORK/nt.out" 2>&1; RC=$?
+[ "$RC" -eq 1 ] && pass "update with no target exits 1 (usage)" || fail "update no target exits 1 (rc=$RC)"
+
+node "$BIN" update "$WORK/does-not-exist" >"$WORK/ne.out" 2>&1; RC=$?
+[ "$RC" -ne 0 ] && pass "update on missing target surfaces nonzero (rc=$RC)" \
+  || fail "update on missing target surfaces nonzero"
+
+# real install then update via the bin: pristine -> exit 0, no .new
+UT="$WORK/proj"; mkdir -p "$UT"; git -C "$UT" init -q
+"$INSTALL" --yes --target "$UT" --plain --no-detect-gates >/dev/null 2>&1
+node "$BIN" update "$UT" --check >"$WORK/uc.out" 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "update --check via bin exits 0" || fail "update --check via bin exits 0 (rc=$RC)"
+if find "$UT" -name '*.new' | grep -q .; then fail "update --check wrote no .new"; else pass "update --check wrote no .new"; fi
+
+# native Windows: friendly unsupported message, exit 2
+WIN_OUT="$(BIN="$BIN" node -e '
+Object.defineProperty(process, "platform", { value: "win32" });
+process.argv = [process.argv[0], "cli", "update", "."];
+require(process.env.BIN);
+' 2>&1)"; WIN_CODE=$?
+if [ "$WIN_CODE" -eq 2 ] && printf '%s' "$WIN_OUT" | grep -q "Windows via WSL"; then
+  pass "win32 update refused with WSL guidance (exit 2)"
+else
+  fail "win32 update refused with WSL guidance (exit $WIN_CODE)"
+fi
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
