@@ -197,6 +197,63 @@ else
   fail "win32 update refused with WSL guidance (exit $WIN_CODE)"
 fi
 
+# --- update self-update: currency check, handoff, fail-open, flags ---------
+# All seams are env-injected (CC_LATEST_VERSION bypasses the network entirely);
+# no assertion here ever touches the live registry. The re-exec vehicle is a
+# stub `npx` on PATH so the handoff is observed without a real npm fetch.
+echo "== update self-update (FR-SU-01..12) =="
+STUB="$WORK/stub"; mkdir -p "$STUB"
+cat > "$STUB/npx" <<'STUBEOF'
+#!/usr/bin/env bash
+printf 'STUB_NPX_ARGS=[%s]\n' "$*"
+printf 'STUB_NPX_DONE=%s\n' "${CC_SELFUPDATE_DONE:-unset}"
+exit 0
+STUBEOF
+chmod +x "$STUB/npx"
+
+SU="$WORK/suproj"; mkdir -p "$SU"; git -C "$SU" init -q
+"$INSTALL" --yes --target "$SU" --plain --no-detect-gates >/dev/null 2>&1
+
+# forced-newer -> exactly one handoff line, npx invoked with the child marker
+CC_LATEST_VERSION=99.0.0 PATH="$STUB:$PATH" node "$BIN" update "$SU" >"$WORK/su_h.out" 2>&1; RC=$?
+grep -q 'self-update: handing off to claude-company@99.0.0 \.\.\.' "$WORK/su_h.out" \
+  && pass "forced-newer prints the handoff line" || { fail "forced-newer prints the handoff line"; cat "$WORK/su_h.out"; }
+grep -q 'STUB_NPX_ARGS=\[-y claude-company@99.0.0 update' "$WORK/su_h.out" \
+  && pass "handoff execs npx -y claude-company@<latest> update <args>" || fail "handoff execs the right npx line"
+grep -q 'STUB_NPX_DONE=1' "$WORK/su_h.out" \
+  && pass "handoff sets CC_SELFUPDATE_DONE=1 on the child" || fail "handoff sets CC_SELFUPDATE_DONE=1"
+[ "$RC" -eq 0 ] && pass "handoff returns the child's exit code (0)" || fail "handoff returns child code (rc=$RC)"
+grep -q 'update - preflight' "$WORK/su_h.out" && fail "handoff must not run the local update" || pass "handoff skips the local update"
+
+# guarded child (CC_SELFUPDATE_DONE=1) -> no handoff, normal update proceeds
+CC_LATEST_VERSION=99.0.0 CC_SELFUPDATE_DONE=1 PATH="$STUB:$PATH" node "$BIN" update "$SU" --check >"$WORK/su_g.out" 2>&1; RC=$?
+grep -q 'handing off' "$WORK/su_g.out" && fail "guarded child does not re-hand-off" || pass "guarded child does not re-hand-off"
+[ "$RC" -eq 0 ] && grep -q 'update - preflight' "$WORK/su_g.out" \
+  && pass "guarded child runs the normal update" || fail "guarded child runs the normal update (rc=$RC)"
+
+# equal version -> silent, normal update
+CC_LATEST_VERSION="$VERSION" node "$BIN" update "$SU" --check >"$WORK/su_e.out" 2>&1; RC=$?
+grep -q 'self-update:' "$WORK/su_e.out" && fail "equal version is silent" || pass "equal version is silent"
+[ "$RC" -eq 0 ] && pass "equal-version update exits 0" || fail "equal-version update exits 0 (rc=$RC)"
+
+# unreachable registry -> one WARN line, update still completes (fail open)
+CC_REGISTRY_URL="https://127.0.0.1:9" CC_REGISTRY_TIMEOUT_MS=300 node "$BIN" update "$SU" --check >"$WORK/su_u.out" 2>&1; RC=$?
+grep -q 'self-update: WARN' "$WORK/su_u.out" && pass "unreachable registry prints one WARN" || { fail "unreachable registry prints WARN"; cat "$WORK/su_u.out"; }
+[ "$RC" -eq 0 ] && pass "unreachable-registry update still completes (0)" || fail "unreachable-registry update completes (rc=$RC)"
+
+# --no-self-update with a newer version -> no handoff, no staleness, no network
+CC_LATEST_VERSION=99.0.0 node "$BIN" update "$SU" --check --no-self-update >"$WORK/su_n.out" 2>&1; RC=$?
+grep -q 'self-update:' "$WORK/su_n.out" && fail "--no-self-update skips the whole step" || pass "--no-self-update skips the whole step"
+[ "$RC" -eq 0 ] && pass "--no-self-update update exits 0" || fail "--no-self-update update exits 0 (rc=$RC)"
+
+# --check with a newer version -> staleness line, no re-exec, tree unchanged
+CC_LATEST_VERSION=99.0.0 node "$BIN" update "$SU" --check >"$WORK/su_c.out" 2>&1; RC=$?
+grep -q 'a newer claude-company is available' "$WORK/su_c.out" \
+  && pass "--check reports staleness in the plan" || fail "--check reports staleness"
+grep -q 'handing off' "$WORK/su_c.out" && fail "--check never re-execs" || pass "--check never re-execs"
+if find "$SU" -name '*.new' | grep -q .; then fail "--check with newer wrote no .new"; else pass "--check with newer wrote no .new"; fi
+[ "$RC" -eq 0 ] && pass "--check-with-newer exits 0" || fail "--check-with-newer exits 0 (rc=$RC)"
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"

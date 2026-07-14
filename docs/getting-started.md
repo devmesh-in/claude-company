@@ -108,10 +108,13 @@ claude-company update /path/to/your/project
 
 It never overwrites a file you customized. If you edited a shipped file, your version stays exactly as-is and the new upstream version lands beside it as `<file>.new` for you to reconcile at your leisure. Your own things - `company/gates.config`, your specs, briefs, and everything under `company/state` - are never touched. Anything the update does replace is backed up first to `company/state/.update-backups/<timestamp>/`, so a refresh is always reversible.
 
-Two flags shape the run:
+Update keeps the CLI itself current first. Before it touches the project it makes one optional HTTPS request to the npm registry, and if a newer claude-company has shipped it hands off to that version once - so a stale `npx` cache or an old global install still applies the latest refresh. This check fails open: offline, a timeout, or a bad answer prints one WARN line and proceeds with the version you are running, so an update never bricks or hangs because the registry is away. It is the only network call update makes; the refresh itself is still fully local. (Earlier versions were fully offline.)
+
+Three flags shape the run:
 
 - `--check` prints the plan and writes nothing, so you can see what a refresh would do before it does it.
 - `--force` is only needed to override a downgrade - when the installed version is newer than the package you are running.
+- `--no-self-update` skips the newer-version check entirely, making no network call - update runs with the version you invoked.
 
 Update needs the same POSIX tools as install: python3, git, and bash.
 

@@ -66,8 +66,8 @@ function helpText() {
     "  --target DIR, -y/--yes, --plain, --no-color,",
     "  --detect-gates/--no-detect-gates, --orientation/--no-orientation",
     "",
-    "The update subcommand forwards: --check, --force, --target DIR,",
-    "  -y/--yes, --plain, --no-color",
+    "The update subcommand forwards: --check, --force, --no-self-update,",
+    "  --target DIR, -y/--yes, --plain, --no-color",
     "",
     "Docs: docs/getting-started.md",
   ].join("\n");
