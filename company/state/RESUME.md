@@ -22,11 +22,21 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
    check that branch before redoing. WORRIES has 3 rows from this task
    (merge heredoc duplication P2, python3 spawn-per-file P3, fail-open
    emission P3).
-0b. ACTIVE (read-only): owner asked whether the compulsory delegation gate
-   wrongly blocks non-code agents (product-manager, docs-librarian, auditor)
-   from writing md and state json files. Explore guard_provenance /
-   guard_spec / guard_tests source paths + NON_SOURCE_EXT/EXEMPT_DIRS,
-   REPORT findings only - owner said no code.
+0b. delegation-gate exploration DONE 2026-07-15: NOT an issue - md/json and
+   company//.claude//docs//.github/ paths are exempt via guard_spec.is_source
+   (proven by sandbox probes + field behavior). Two P3 edges in WORRIES
+   (extensionless files count as source; guard_tests gates md under tests/).
+0c. cli-self-update SHIPPED 2026-07-15: PR #60 merged (a09b463, closes
+   #59), acceptance DECISIONS #7, witnesses W-017..W-018 (18/18),
+   integrated main 213+57 green. Worktree+branch removed.
+0d. ACTIVE: npm-release-0.2.0 (owner ORDERED publish - DECISIONS #8, do
+   not re-ask). On release/0.2.0 branch: version 0.1.1 -> 0.2.0,
+   spec/brief archived, board rows. Remaining: commit branch -> PR -> CI
+   -> merge -> `git tag v0.2.0 <merge commit> && git push origin v0.2.0`
+   -> `AUTHORIZED=1 npm publish` (prepublishOnly runs CLI+TUI+install
+   suites). ONLY blocker: npm whoami 401 - owner must run `npm login`
+   interactively. active-task.json cleared at release close (test_scope
+   was reset with the clear).
 1. delegation-enforcement SHIPPED 2026-07-10 (PR #49, f9e5dae, closes
    #42-#47; acceptance DECISIONS #4). Close-out PR in flight if session
    died mid-close: witnesses W-011..W-013 recorded, brief archived to
@@ -56,7 +66,7 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 | Agent | Task | Worktree | Last known state |
 |---|---|---|---|
-| - | - | - | - |
+| developer | cli-self-update | .claude/worktrees/cli-self-update | Dispatched 2026-07-15; brief brief-cli-self-update.md; no-commit rule - check worktree git status for finished-on-disk work before respawning |
 
 ## 4. Facts every spawn prompt needs
 
