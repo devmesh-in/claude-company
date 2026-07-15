@@ -199,7 +199,25 @@
       "regex": false,
       "why": "update.sh merge block stays byte-identical to install.sh - the heal path for broken field installs depends on it",
       "added_at": "2026-07-15T10:34:04Z"
+    },
+    {
+      "id": "W-023",
+      "task": "pack-leak-fix",
+      "file": "install.sh",
+      "must_contain": "\"$TARGET/company/change-requests\"   # issue-68",
+      "regex": false,
+      "why": "Record trees are scaffolded empty, never copied - reverting to copy_tree_if_absent re-leaks repo records into git-clone installs",
+      "added_at": "2026-07-15T11:14:01Z"
+    },
+    {
+      "id": "W-024",
+      "task": "pack-leak-fix",
+      "file": "package.json",
+      "must_contain": "\"!company/briefs/**\",",
+      "regex": false,
+      "why": "Tarball belt - dropping the files-negations re-ships repo records via npm",
+      "added_at": "2026-07-15T11:14:01Z"
     }
   ],
-  "checksum": "8425951726dc3d2ad6ef4f9eefd925bcfc5b17278b5bf8f03d9b52446a4fd285"
+  "checksum": "8a66b62bddb00facfbd110bd5cc28756f9e8eabb0395ba5f02ab74a1f7764bea"
 }

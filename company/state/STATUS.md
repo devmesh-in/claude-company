@@ -9,7 +9,7 @@ _Last updated: 2026-07-15 - cli-update SHIPPED (PR #57 merged 7726c99, acceptanc
 
 | Task | Class | Lead/Agent | State | Gates | Notes |
 |---|---|---|---|---|---|
-| - | - | - | - | - | - |
+| npm-release-0.2.1 | release | CEO | PREPPED, AWAITING OWNER PUBLISH | integrated main green (213 hooks + 61 CLI) | Bundles #64 (enforcer arms on install), #67 (merger fix + field-heal), #68 (record leak closed). Bump PR + tag, then owner publishes from clean tag clone (link-based 2FA, owner-manual per memory). |
 
 ## Wave position (programs only)
 
@@ -21,7 +21,9 @@ _Last updated: 2026-07-15 - cli-update SHIPPED (PR #57 merged 7726c99, acceptanc
 | cli-self-update | single workstream | SHIPPED 2026-07-15 | PR #60 merged (a09b463, closes #59); integrated main 213+57 green; witnesses W-017..W-018 (landed via PR #62); acceptance DECISIONS #7 |
 | v0.2.0 npm release | release | PUBLISHED 2026-07-15 | PR #61 merged, tag v0.2.0 (5913374), owner published manually (link-based 2FA); registry latest=0.2.0; DECISIONS #8 |
 | provenance-shipping | quick fix | SHIPPED 2026-07-15 | PR #65 merged (d624cc3, closes #64); fresh installs arm the delegation enforcer, update never auto-arms; witnesses W-019/W-020; NOTE: 0.2.0 on npm still has the gap - 0.2.1 patch release recommended (owner button) |
-| settings-merger-fix | quick fix | SHIPPED 2026-07-15 | PR #69 merged (f17c3c4, closes #67); dedup per (matcher, command) in both engines; update HEALS broken field installs (hand-proven); witnesses W-021/W-022. DevMesh hand-patched meanwhile (its c1ecbf7). Queued: #68 (pack leak) -> then 0.2.1 with #64+#67+#68 |
+| settings-merger-fix | quick fix | SHIPPED 2026-07-15 | PR #69 merged (f17c3c4, closes #67); dedup per (matcher, command) in both engines; update HEALS broken field installs (hand-proven); witnesses W-021/W-022. DevMesh hand-patched meanwhile (its c1ecbf7) |
+| pack-leak-fix | quick fix | SHIPPED 2026-07-15 | PR #71 merged (d714892, closes #68); record trees scaffold empty + tarball negations; seeded negative test; witnesses W-023/W-024 |
+| devmesh-migration | consulting | DELIVERED 2026-07-15 | DevMesh polyrepo migrated to claude-company (its commits b3f0a47/7e08247/c1ecbf7): docs/team ported to company/, frozen registry live (6 surfaces probe-verified), make-gates mirrored, custom agents/skills/memory preserved, 2 upstream bugs found (#67/#68 - both now fixed) |
 
 ## Open CRs
 
