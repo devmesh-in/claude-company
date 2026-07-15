@@ -318,14 +318,22 @@ except (FileNotFoundError, ValueError):
     theirs = {}
 
 # --- merge hooks: append our command entries unless already present -------
-def commands_in_event(groups):
-    cmds = set()
+# issue-67: dedup key is (matcher, command), not command-per-event. A command
+# may legitimately appear under several matcher groups of one event
+# (guard_provenance under Edit|Write|MultiEdit AND Task|Agent AND Bash); a
+# per-event set dropped every repeat after the first, emptying and then losing
+# whole groups. Keying by matcher keeps each group complete.
+_NO_MATCHER = object()  # sentinel key for groups that carry no matcher
+
+def commands_by_matcher(groups):
+    seen = {}
     for g in groups or []:
+        bucket = seen.setdefault(g.get("matcher", _NO_MATCHER), set())
         for h in (g.get("hooks") or []):
             c = h.get("command")
             if c is not None:
-                cmds.add(c)
-    return cmds
+                bucket.add(c)
+    return seen
 
 our_hooks = ours.get("hooks") or {}
 their_hooks = theirs.setdefault("hooks", {}) if isinstance(theirs.get("hooks", {}), dict) else {}
@@ -338,16 +346,17 @@ for event, our_groups in our_hooks.items():
     if not isinstance(existing_groups, list):
         existing_groups = []
         their_hooks[event] = existing_groups
-    have = commands_in_event(existing_groups)
+    have = commands_by_matcher(existing_groups)  # issue-67: dedup per matcher
     for g in (our_groups or []):
+        bucket = have.setdefault(g.get("matcher", _NO_MATCHER), set())
         new_hooks = []
         for h in (g.get("hooks") or []):
             c = h.get("command")
-            if c is not None and c in have:
-                continue  # identical command already present
+            if c is not None and c in bucket:
+                continue  # identical command already present under this matcher
             new_hooks.append(h)
             if c is not None:
-                have.add(c)
+                bucket.add(c)
         if new_hooks:
             ng = dict(g)
             ng["hooks"] = new_hooks
