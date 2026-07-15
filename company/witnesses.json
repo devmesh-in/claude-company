@@ -181,7 +181,25 @@
       "regex": false,
       "why": "update never auto-arms - a payload refresh must not switch a project's enforcement regime",
       "added_at": "2026-07-15T01:01:51Z"
+    },
+    {
+      "id": "W-021",
+      "task": "settings-merger-fix",
+      "file": "install.sh",
+      "must_contain": "have = commands_by_matcher(existing_groups)  # issue-67: dedup per matcher",
+      "regex": false,
+      "why": "Settings merge dedups per (matcher, command) - reverting to command-per-event re-drops multi-matcher hook groups",
+      "added_at": "2026-07-15T10:34:04Z"
+    },
+    {
+      "id": "W-022",
+      "task": "settings-merger-fix",
+      "file": "update.sh",
+      "must_contain": "have = commands_by_matcher(existing_groups)  # issue-67: dedup per matcher",
+      "regex": false,
+      "why": "update.sh merge block stays byte-identical to install.sh - the heal path for broken field installs depends on it",
+      "added_at": "2026-07-15T10:34:04Z"
     }
   ],
-  "checksum": "6bad6080b9a03fc9c118f629888ab6ab9b0453702e81e9d5b51360ee06abde85"
+  "checksum": "8425951726dc3d2ad6ef4f9eefd925bcfc5b17278b5bf8f03d9b52446a4fd285"
 }
