@@ -163,7 +163,25 @@
       "regex": false,
       "why": "Strictly-newer is the only re-exec trigger; equal or older proceeds silently with the current CLI",
       "added_at": "2026-07-14T23:25:27Z"
+    },
+    {
+      "id": "W-019",
+      "task": "provenance-shipping",
+      "file": "install.sh",
+      "must_contain": "copy_if_absent \"$SRC/company/provenance.json\"        \"$TARGET/company/provenance.json\"",
+      "regex": false,
+      "why": "Fresh installs ship the arming manifest - the delegation enforcer is armed by default in the field",
+      "added_at": "2026-07-15T01:01:51Z"
+    },
+    {
+      "id": "W-020",
+      "task": "provenance-shipping",
+      "file": "update.sh",
+      "must_contain": "note: delegation enforcer installed but disarmed - create company/provenance.json to arm",
+      "regex": false,
+      "why": "update never auto-arms - a payload refresh must not switch a project's enforcement regime",
+      "added_at": "2026-07-15T01:01:51Z"
     }
   ],
-  "checksum": "ad0004b40afa08925339a2a5c029e7b58aa6bd182b4303459287034cbf5a2f21"
+  "checksum": "6bad6080b9a03fc9c118f629888ab6ab9b0453702e81e9d5b51360ee06abde85"
 }

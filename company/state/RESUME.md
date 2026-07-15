@@ -14,6 +14,16 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
+00. provenance-shipping SHIPPED 2026-07-15 (PR #65, d624cc3, closes #64;
+   witnesses W-019/W-020, 20/20): fresh installs now ship
+   company/provenance.json (enforcer armed by default); update NEVER
+   auto-arms, prints one notice line. Owner field audit found the gap.
+   PENDING OWNER BUTTON: 0.2.1 patch release to npm (0.2.0 on the
+   registry still has the gap - fresh 0.2.0 installs stay dormant).
+   Same flow as 0.2.0: bump PR, tag, owner publishes from clean tag
+   clone (memory: npm-publish-owner-only). Field guidance given: owner's
+   research repo stays disarmed until they create provenance.json after
+   Jul 28; gitignore data/ to stop stop_gate churn from training jobs.
 0. cli-update SHIPPED 2026-07-15: PR #57 merged (7726c99, closes #54-#56),
    owner acceptance DECISIONS #6, witnesses W-014..W-016 recorded (16/16),
    spec+brief archived to shipped/, worktree+branch removed, integrated main

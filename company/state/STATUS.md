@@ -20,6 +20,7 @@ _Last updated: 2026-07-15 - cli-update SHIPPED (PR #57 merged 7726c99, acceptanc
 | cli-update | single workstream | SHIPPED 2026-07-15 | PR #57 merged (7726c99, closes #54-#56); integrated main 213+40+56 green; witnesses W-014..W-016; acceptance DECISIONS #6 |
 | cli-self-update | single workstream | SHIPPED 2026-07-15 | PR #60 merged (a09b463, closes #59); integrated main 213+57 green; witnesses W-017..W-018 (landed via PR #62); acceptance DECISIONS #7 |
 | v0.2.0 npm release | release | PUBLISHED 2026-07-15 | PR #61 merged, tag v0.2.0 (5913374), owner published manually (link-based 2FA); registry latest=0.2.0; DECISIONS #8 |
+| provenance-shipping | quick fix | SHIPPED 2026-07-15 | PR #65 merged (d624cc3, closes #64); fresh installs arm the delegation enforcer, update never auto-arms; witnesses W-019/W-020; NOTE: 0.2.0 on npm still has the gap - 0.2.1 patch release recommended (owner button) |
 
 ## Open CRs
 
