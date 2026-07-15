@@ -29,14 +29,17 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 0c. cli-self-update SHIPPED 2026-07-15: PR #60 merged (a09b463, closes
    #59), acceptance DECISIONS #7, witnesses W-017..W-018 (18/18),
    integrated main 213+57 green. Worktree+branch removed.
-0d. ACTIVE: npm-release-0.2.0 (owner ORDERED publish - DECISIONS #8, do
-   not re-ask). On release/0.2.0 branch: version 0.1.1 -> 0.2.0,
-   spec/brief archived, board rows. Remaining: commit branch -> PR -> CI
-   -> merge -> `git tag v0.2.0 <merge commit> && git push origin v0.2.0`
-   -> `AUTHORIZED=1 npm publish` (prepublishOnly runs CLI+TUI+install
-   suites). ONLY blocker: npm whoami 401 - owner must run `npm login`
-   interactively. active-task.json cleared at release close (test_scope
-   was reset with the clear).
+0d. v0.2.0 PUBLISHED to npm 2026-07-15 (DECISIONS #8): tag v0.2.0 at
+   5913374, owner published manually from the clean tag clone. FIELD
+   LESSON (memory npm-publish-owner-only.md): owner npm 2FA is
+   LINK-BASED - no OTP codes exist; publishes are ALWAYS owner-manual or
+   git-CI, agent only prepares (bump PR, tag, clean tag clone, verified
+   placeholder gates.config). NEVER publish from the working checkout -
+   local gates.config wiring fails the placeholder test. Witnesses
+   W-017/18 landed via PR #62 (fab01e1). Candidate next: publish via CI
+   workflow (owner hinted "or through git ci"), #36, #37, tarball ships
+   repo board state (P3 hygiene, install never copies it), roadmap
+   #1-#11.
 1. delegation-enforcement SHIPPED 2026-07-10 (PR #49, f9e5dae, closes
    #42-#47; acceptance DECISIONS #4). Close-out PR in flight if session
    died mid-close: witnesses W-011..W-013 recorded, brief archived to
