@@ -9,7 +9,7 @@ _Last updated: 2026-07-15 - cli-update SHIPPED (PR #57 merged 7726c99, acceptanc
 
 | Task | Class | Lead/Agent | State | Gates | Notes |
 |---|---|---|---|---|---|
-| npm-release-0.2.0 | release | CEO | IN FLIGHT | integrated main green (213+57) | v0.2.0 bump + close-out on release/0.2.0 branch -> PR -> merge -> tag v0.2.0 -> AUTHORIZED=1 npm publish. ONLY blocker: npm whoami 401 - owner must `npm login`. Release record DECISIONS #8. |
+| - | - | - | - | - | - |
 
 ## Wave position (programs only)
 
@@ -18,7 +18,8 @@ _Last updated: 2026-07-15 - cli-update SHIPPED (PR #57 merged 7726c99, acceptanc
 | adoption program 1-3 | all | SHIPPED 2026-07-10 | PRs 27/33/34/32/35 merged; acceptance DECISIONS #3 |
 | follow-up pair | docs-sync + adr-hardening | SHIPPED 2026-07-10 | PRs 38/39/40/41 merged; #28 + #31 closed; witnesses 10/10 on main |
 | cli-update | single workstream | SHIPPED 2026-07-15 | PR #57 merged (7726c99, closes #54-#56); integrated main 213+40+56 green; witnesses W-014..W-016; acceptance DECISIONS #6 |
-| cli-self-update | single workstream | SHIPPED 2026-07-15 | PR #60 merged (a09b463, closes #59); integrated main 213+57 green; witnesses W-017..W-018; acceptance DECISIONS #7 |
+| cli-self-update | single workstream | SHIPPED 2026-07-15 | PR #60 merged (a09b463, closes #59); integrated main 213+57 green; witnesses W-017..W-018 (landed via PR #62); acceptance DECISIONS #7 |
+| v0.2.0 npm release | release | PUBLISHED 2026-07-15 | PR #61 merged, tag v0.2.0 (5913374), owner published manually (link-based 2FA); registry latest=0.2.0; DECISIONS #8 |
 
 ## Open CRs
 
