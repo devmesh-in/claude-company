@@ -48,6 +48,17 @@ build_source() {
   printf '{"version": 1, "verifier_roles": ["auditor"], "builder_roles": ["developer"]}\n' > "$SRC/company/provenance.json"
   printf '# spec template\n' > "$SRC/company/templates/spec.md"
 
+  # issue-68 negative fixture: seed the SOURCE tree with fake work records under
+  # all three record trees (including shipped/). A correct install scaffolds the
+  # dirs EMPTY and copies NONE of these into the target - this proves the leak
+  # (our specs/briefs/CRs reaching installed projects) stays closed.
+  mkdir -p "$SRC/company/specs/shipped" "$SRC/company/briefs/shipped"
+  printf '# leak spec\n'         > "$SRC/company/specs/spec-LEAK.md"
+  printf '# leak spec shipped\n' > "$SRC/company/specs/shipped/spec-OLD.md"
+  printf '# leak brief\n'        > "$SRC/company/briefs/brief-LEAK.md"
+  printf '# leak brief shipped\n'> "$SRC/company/briefs/shipped/brief-OLD.md"
+  printf '# leak CR\n'           > "$SRC/company/change-requests/CR-LEAK.md"
+
   # our real files
   cp "$REPO/company/run-gates.sh" "$SRC/company/run-gates.sh"
   cp "$REPO/company/gates.config" "$SRC/company/gates.config"
@@ -170,6 +181,14 @@ check "adherence.log touched"    test -f "$T1/company/state/adherence.log"
 check "specs dir"                test -d "$T1/company/specs"
 check "briefs dir"               test -d "$T1/company/briefs"
 check "change-requests dir"      test -d "$T1/company/change-requests"
+# issue-68: shipped/ subdirs scaffolded so archives can be written immediately
+check "specs/shipped dir"        test -d "$T1/company/specs/shipped"
+check "briefs/shipped dir"       test -d "$T1/company/briefs/shipped"
+# issue-68 negative: NONE of the source's records may land in the target, even
+# though build_source seeded the SOURCE with fake spec/brief/CR records above.
+check "no spec records leaked"   bash -c '! find "'"$T1"'/company/specs" -name "spec-*.md" | grep -q .'
+check "no brief records leaked"  bash -c '! find "'"$T1"'/company/briefs" -name "brief-*.md" | grep -q .'
+check "no CR records leaked"     bash -c '! find "'"$T1"'/company/change-requests" -name "CR-*.md" | grep -q .'
 check "CLAUDE.md created"        test -f "$T1/CLAUDE.md"
 check "CLAUDE.md has begin"      grep -q "claude-company:begin" "$T1/CLAUDE.md"
 check "CLAUDE.md has end"        grep -q "claude-company:end" "$T1/CLAUDE.md"
