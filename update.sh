@@ -267,6 +267,22 @@ config_present_or_notice() {
 }
 config_present_or_notice "company/provenance.json"
 
+# --- scaffold record dirs (issue-68) --------------------------------------
+# specs/briefs/change-requests are the trees a target project WRITES into.
+# install ships them EMPTY; update only ensures they still exist and NEVER
+# copies this package's own records (spec-*.md, brief-*.md, CR-*.md, shipped/**)
+# into a target - that copy was the pack-leak bug. Structural mkdir only, like
+# the company/state scaffold below; --check writes nothing.
+if [ "$CHECK" != "1" ]; then
+  for record_dir in \
+    company/specs company/specs/shipped \
+    company/briefs company/briefs/shipped \
+    company/change-requests
+  do
+    [ -d "$TARGET/$record_dir" ] || safe_mkdir "$TARGET/$record_dir"
+  done
+fi
+
 # --- merge paths (FR-UPD-08) ----------------------------------------------
 # Re-run the SAME idempotent merges install.sh performs. Each merge computes
 # the result into a temp file, then: target absent -> write into place (no

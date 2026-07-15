@@ -133,6 +133,13 @@ want_present "lib/install-tui.js"
 want_absent "^tests/"
 want_absent "^\.assets/"
 want_absent "__pycache__|\.pyc$"
+# issue-68: our own work records must never ship in the tarball. The scaffold
+# dirs (specs/briefs/change-requests) are created empty by install.sh at target,
+# so nothing under them belongs in the package.
+want_present "company/templates/SPEC-TEMPLATE.md"
+want_absent "^company/specs/"
+want_absent "^company/briefs/"
+want_absent "^company/change-requests/"
 
 # The root `install` is now a POSIX sh shim, not a Python file.
 [ "$(head -1 "$INSTALL")" = "#!/bin/sh" ] && pass "packed install is a sh shim" \

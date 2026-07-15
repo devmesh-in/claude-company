@@ -290,6 +290,42 @@ SAFTER="$(hashf "$T12/.claude/settings.json")"
 bash "$REPO/update.sh" "$T12" >/dev/null 2>&1
 [ "$SAFTER" = "$(hashf "$T12/.claude/settings.json")" ] && pass "healed settings.json stable on next update" || fail "healed settings.json stable on next update"
 
+# --- 11. record trees: user records untouched, empty dirs restored (issue-68) -
+echo "== record trees never import our records (issue-68) =="
+# 11a. a project with its OWN specs/briefs/CRs: update leaves each byte-identical
+# and never adds this package's records alongside them.
+T13="$WORK/t13"; fresh_install "$T13"
+mkdir -p "$T13/company/specs" "$T13/company/briefs" "$T13/company/change-requests"
+printf '# their spec\n'  > "$T13/company/specs/spec-theirs.md"
+printf '# their brief\n' > "$T13/company/briefs/brief-theirs.md"
+printf '# their CR\n'    > "$T13/company/change-requests/CR-theirs.md"
+SPH="$(hashf "$T13/company/specs/spec-theirs.md")"
+BRH="$(hashf "$T13/company/briefs/brief-theirs.md")"
+CRH="$(hashf "$T13/company/change-requests/CR-theirs.md")"
+OUT="$(bash "$REPO/update.sh" "$T13" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "update over user records exits 0" || fail "update over user records exits 0 (rc=$RC)"
+[ "$SPH" = "$(hashf "$T13/company/specs/spec-theirs.md")" ] && pass "user spec untouched" || fail "user spec untouched"
+[ "$BRH" = "$(hashf "$T13/company/briefs/brief-theirs.md")" ] && pass "user brief untouched" || fail "user brief untouched"
+[ "$CRH" = "$(hashf "$T13/company/change-requests/CR-theirs.md")" ] && pass "user CR untouched" || fail "user CR untouched"
+# the package's own records (present in $REPO/company/{specs,briefs}) must NOT appear
+nott "no package brief imported" bash -c "ls '$T13/company/briefs/shipped'/brief-*.md >/dev/null 2>&1"
+nott "no package spec imported"  bash -c "ls '$T13/company/specs/shipped'/spec-*.md >/dev/null 2>&1"
+# only the user's single record exists in each tree
+[ "$(find "$T13/company/briefs" -name 'brief-*.md' | wc -l | tr -d ' ')" = "1" ] \
+  && pass "briefs tree holds only the user record" || fail "briefs tree holds only the user record"
+
+# 11b. a missing record dir is restored EMPTY by update - never repopulated with
+# our records.
+T14="$WORK/t14"; fresh_install "$T14"
+rm -rf "$T14/company/briefs" "$T14/company/specs/shipped"
+OUT="$(bash "$REPO/update.sh" "$T14" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "update restoring dirs exits 0" || fail "update restoring dirs exits 0 (rc=$RC)"
+check "missing briefs dir recreated"        test -d "$T14/company/briefs"
+check "missing briefs/shipped recreated"    test -d "$T14/company/briefs/shipped"
+check "missing specs/shipped recreated"     test -d "$T14/company/specs/shipped"
+nott  "recreated briefs dir is empty of records" bash -c "find '$T14/company/briefs' -name 'brief-*.md' | grep -q ."
+nott  "recreated specs/shipped empty of records" bash -c "find '$T14/company/specs/shipped' -name 'spec-*.md' | grep -q ."
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"

@@ -127,11 +127,14 @@ copy_if_absent "$SRC/company/models.json"            "$TARGET/company/models.jso
 # delegation enforcer by default (present is never touched, not in the manifest).
 copy_if_absent "$SRC/company/provenance.json"        "$TARGET/company/provenance.json"
 
-# work directories - preserve any existing content
-mkdir -p "$TARGET/company/specs" "$TARGET/company/briefs" "$TARGET/company/change-requests"
-copy_tree_if_absent "$SRC/company/specs"           "$TARGET/company/specs"
-copy_tree_if_absent "$SRC/company/briefs"          "$TARGET/company/briefs"
-copy_tree_if_absent "$SRC/company/change-requests" "$TARGET/company/change-requests"
+# work directories - scaffold as EMPTY dirs only. issue-68: these trees are
+# where a target project writes its OWN specs, briefs, and change requests; we
+# never copy this package's records (spec-*.md, brief-*.md, CR-*.md, shipped/**)
+# into a target. Copying them leaked our work records into every install.
+mkdir -p \
+  "$TARGET/company/specs" "$TARGET/company/specs/shipped" \
+  "$TARGET/company/briefs" "$TARGET/company/briefs/shipped" \
+  "$TARGET/company/change-requests"   # issue-68
 
 # --- 4. scaffold state stubs (only if absent) -----------------------------
 info "Scaffolding company/state"

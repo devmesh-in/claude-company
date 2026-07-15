@@ -41,6 +41,9 @@
     ".claude/settings.json",
     ".mcp.json",
     "company/",
+    "!company/specs/**",
+    "!company/briefs/**",
+    "!company/change-requests/**",
     "docs/",
     "LICENSE",
     "README.md"
