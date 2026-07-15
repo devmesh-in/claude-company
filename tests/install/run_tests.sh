@@ -60,12 +60,25 @@ build_source() {
   cp "$REPO/lib/payload_paths.sh" "$SRC/lib/payload_paths.sh"
   printf '{"version":"9.9.9"}\n' > "$SRC/package.json"
 
-  # our settings.json fixture (stands in for the other agent's final file)
+  # our settings.json fixture (stands in for the other agent's final file).
+  # issue-67: multi-matcher shape - guard_provenance.py appears under THREE
+  # PreToolUse matchers, exactly the field case the command-per-event dedup used
+  # to collapse. Keeps no_slop.py + the adherence.log deny for the merge tests.
   cat > "$SRC/.claude/settings.json" <<'JSON'
 {
   "hooks": {
     "PreToolUse": [
-      {"matcher": "Bash", "hooks": [{"type": "command", "command": ".claude/hooks/no_slop.py"}]}
+      {"matcher": "Edit|Write|MultiEdit", "hooks": [
+        {"type": "command", "command": ".claude/hooks/no_slop.py"},
+        {"type": "command", "command": ".claude/hooks/guard_provenance.py"}
+      ]},
+      {"matcher": "Task|Agent", "hooks": [
+        {"type": "command", "command": ".claude/hooks/guard_provenance.py"}
+      ]},
+      {"matcher": "Bash", "hooks": [
+        {"type": "command", "command": ".claude/hooks/guard_tests.py"},
+        {"type": "command", "command": ".claude/hooks/guard_provenance.py"}
+      ]}
     ]
   },
   "permissions": {
@@ -87,6 +100,40 @@ snapshot() {
 
 json_valid() { python3 -m json.tool "$1" >/dev/null 2>&1; }
 grep_count() { grep -c "$1" "$2" 2>/dev/null || echo 0; }
+
+# issue-67 helpers - all driven from the parsed JSON, never hardcoded names.
+# settings_hooks_equal <payload> <installed>: the two files' "hooks" trees match
+# group-for-group and entry-for-entry (a fresh install must be payload-faithful).
+settings_hooks_equal() {
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+a = json.load(open(sys.argv[1])).get("hooks")
+b = json.load(open(sys.argv[2])).get("hooks")
+sys.exit(0 if a == b else 1)
+PY
+}
+# matcher_present <file> <event> <matcher>: some group under event carries matcher.
+matcher_present() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+groups = json.load(open(sys.argv[1])).get("hooks", {}).get(sys.argv[2], [])
+sys.exit(0 if any(g.get("matcher") == sys.argv[3] for g in groups) else 1)
+PY
+}
+# command_matcher_count <file> <event> <substr>: distinct matchers whose group
+# holds a command containing substr. Prints the count.
+command_matcher_count() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+groups = json.load(open(sys.argv[1])).get("hooks", {}).get(sys.argv[2], [])
+ms = set()
+for g in groups:
+    for h in (g.get("hooks") or []):
+        if sys.argv[3] in (h.get("command") or ""):
+            ms.add(g.get("matcher"))
+print(len(ms))
+PY
+}
 
 build_source
 
@@ -190,6 +237,48 @@ run_install "$T3" || { fail "install on existing .mcp.json"; cat "$WORK/install.
 check ".mcp.json valid"           json_valid "$T3/.mcp.json"
 check "user mcp server preserved" grep -q "myserver" "$T3/.mcp.json"
 check "playwright added"          grep -q "playwright" "$T3/.mcp.json"
+
+echo "== settings.json multi-matcher parity (issue-67) =="
+# 3a: a fresh install into an empty dir reproduces the payload's hook groups
+# group-for-group and entry-for-entry (parity driven from the payload file).
+TP="$WORK/tp"; mkdir -p "$TP"
+run_install "$TP" || { fail "install for parity"; cat "$WORK/install.out"; }
+check "parity settings.json valid"               json_valid "$TP/.claude/settings.json"
+check "fresh install hooks == payload"           settings_hooks_equal "$SRC/.claude/settings.json" "$TP/.claude/settings.json"
+# regression evidence: a command repeated across matchers survives in EVERY group
+check "Task|Agent group survived"                matcher_present "$TP/.claude/settings.json" PreToolUse "Task|Agent"
+[ "$(command_matcher_count "$TP/.claude/settings.json" PreToolUse guard_provenance.py)" -eq 3 ] \
+  && pass "guard_provenance under all 3 PreToolUse matchers" || fail "guard_provenance under all 3 PreToolUse matchers"
+
+echo "== settings.json merge keeps user group + completes payload (issue-67) =="
+# 3b: pre-seed a user hook group (custom matcher + custom command). After
+# install the user group is intact AND every payload group is complete.
+TU="$WORK/tu"; mkdir -p "$TU/.claude"
+cat > "$TU/.claude/settings.json" <<'JSON'
+{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "Notebook", "hooks": [{"type": "command", "command": "user-notebook-guard.sh"}]}
+    ]
+  }
+}
+JSON
+run_install "$TU" || { fail "install merge over user group"; cat "$WORK/install.out"; }
+check "merge settings.json valid"                json_valid "$TU/.claude/settings.json"
+check "user custom command preserved"            grep -q "user-notebook-guard.sh" "$TU/.claude/settings.json"
+check "user custom matcher preserved"            matcher_present "$TU/.claude/settings.json" PreToolUse "Notebook"
+check "payload Task|Agent group present"         matcher_present "$TU/.claude/settings.json" PreToolUse "Task|Agent"
+[ "$(command_matcher_count "$TU/.claude/settings.json" PreToolUse guard_provenance.py)" -eq 3 ] \
+  && pass "merge keeps guard_provenance under all 3 payload matchers" || fail "merge keeps guard_provenance under all 3 payload matchers"
+
+echo "== settings.json idempotency (issue-67) =="
+# 3c: install twice -> byte-identical settings.json (re-run is a true no-op).
+TI="$WORK/ti"; mkdir -p "$TI"
+run_install "$TI" || fail "first settings install"
+cp "$TI/.claude/settings.json" "$WORK/settings-a.json"
+run_install "$TI" || fail "second settings install"
+cp "$TI/.claude/settings.json" "$WORK/settings-b.json"
+check "settings.json byte-identical across re-run" cmp -s "$WORK/settings-a.json" "$WORK/settings-b.json"
 
 echo "== state preservation =="
 T4="$WORK/t4"; mkdir -p "$T4/company/state"

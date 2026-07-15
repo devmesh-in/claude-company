@@ -52,6 +52,26 @@ fresh_install() { # <target>
   local t="$1"; mkdir -p "$t"; git -C "$t" init -q
   bash "$REPO/install.sh" "$t" >/dev/null 2>&1
 }
+# issue-67 helpers - parsed from the JSON, never hardcoded names.
+matcher_present() { # <file> <event> <matcher>
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+groups = json.load(open(sys.argv[1])).get("hooks", {}).get(sys.argv[2], [])
+sys.exit(0 if any(g.get("matcher") == sys.argv[3] for g in groups) else 1)
+PY
+}
+command_matcher_count() { # <file> <event> <substr> -> prints distinct-matcher count
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+groups = json.load(open(sys.argv[1])).get("hooks", {}).get(sys.argv[2], [])
+ms = set()
+for g in groups:
+    for h in (g.get("hooks") or []):
+        if sys.argv[3] in (h.get("command") or ""):
+            ms.add(g.get("matcher"))
+print(len(ms))
+PY
+}
 
 # --- 0. manifest.py determinism (the parity tripwire) ---------------------
 echo "== manifest.py determinism =="
@@ -223,6 +243,52 @@ OUT="$(bash "$REPO/update.sh" "$T10" 2>&1)"; RC=$?
 nott "no provenance.json.new when present" test -e "$T10/company/provenance.json.new"
 nott "no backup dir for present provenance" test -d "$T10/company/state/.update-backups"
 nott "no notice when provenance present" bash -c "printf '%s' \"$OUT\" | grep -q 'delegation enforcer installed but disarmed'"
+
+# --- 10. settings.json merge: no churn on pristine, heals dropped groups ---
+echo "== settings.json merge heal (issue-67) =="
+# 10a. a pristine settings.json passes through update byte-identical (the merge
+# is a true no-op, no MERGED churn) - proves the (matcher, command) dedup is
+# idempotent against an already-correct file.
+T11="$WORK/t11"; fresh_install "$T11"
+SBEFORE="$(hashf "$T11/.claude/settings.json")"
+OUT="$(bash "$REPO/update.sh" "$T11" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "update over pristine settings exits 0" || fail "update over pristine settings exits 0 (rc=$RC)"
+[ "$SBEFORE" = "$(hashf "$T11/.claude/settings.json")" ] && pass "pristine settings.json unchanged by update" || fail "pristine settings.json unchanged by update"
+
+# 10b. a 0.2.0-style dropped-group settings.json is HEALED by update. Simulate
+# the exact field damage the old command-per-event dedup caused: the whole
+# Task|Agent PreToolUse group vanished and Bash lost guard_tests + guard_provenance.
+T12="$WORK/t12"; fresh_install "$T12"
+python3 - "$T12/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p))
+newpre = []
+for g in d["hooks"]["PreToolUse"]:
+    m = g.get("matcher")
+    if m == "Task|Agent":
+        continue  # whole group vanished in the field
+    if m == "Bash":
+        g = dict(g)
+        g["hooks"] = [h for h in g["hooks"]
+                      if "guard_tests" not in (h.get("command") or "")
+                      and "guard_provenance" not in (h.get("command") or "")]
+    newpre.append(g)
+d["hooks"]["PreToolUse"] = newpre
+json.dump(d, open(p, "w"), indent=2); open(p, "a").write("\n")
+PY
+nott "corrupted file really lost Task|Agent group" matcher_present "$T12/.claude/settings.json" PreToolUse "Task|Agent"
+OUT="$(bash "$REPO/update.sh" "$T12" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "heal update exits 0" || fail "heal update exits 0 (rc=$RC)"
+check "healed: Task|Agent PreToolUse group restored" matcher_present "$T12/.claude/settings.json" PreToolUse "Task|Agent"
+[ "$(command_matcher_count "$T12/.claude/settings.json" PreToolUse guard_provenance)" -eq 3 ] \
+  && pass "healed: guard_provenance back under all 3 PreToolUse matchers" || fail "healed: guard_provenance fanout == 3"
+[ "$(command_matcher_count "$T12/.claude/settings.json" PreToolUse guard_tests)" -eq 2 ] \
+  && pass "healed: guard_tests back under both its matchers" || fail "healed: guard_tests fanout == 2"
+check "healed settings.json still valid JSON" python3 -m json.tool "$T12/.claude/settings.json"
+# a re-run after heal must settle: no further settings churn
+SAFTER="$(hashf "$T12/.claude/settings.json")"
+bash "$REPO/update.sh" "$T12" >/dev/null 2>&1
+[ "$SAFTER" = "$(hashf "$T12/.claude/settings.json")" ] && pass "healed settings.json stable on next update" || fail "healed settings.json stable on next update"
 
 echo
 echo "================ SUMMARY ================"
