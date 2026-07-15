@@ -80,6 +80,8 @@ Each role is one markdown file in `.claude/agents/`. The file's frontmatter sets
 
   The same file carries a `pricing` map (USD per million tokens) that `cost_capture.py` reads to estimate spend in `company/state/costs.log` and the `/standup` Spend line. Update it when your rates differ; leave a model out of it and the standup reports raw token counts for that model instead of dollars. The numbers are estimates for visibility, never a bill.
 
+- **Arm or disarm the delegation enforcer**: `company/provenance.json` is the switch. A fresh install ships it, so the enforcer is armed by default; delete it to disarm every provenance mode (same rollout posture as `company/models.json`). An `update` never creates it - if a project lacks the file, update prints a one-line notice and leaves the enforcement regime unchanged, so refreshing the payload never silently arms a project.
+
 Two roles are load-bearing; change them carefully. `tech-lead` is the only agent allowed to spawn other agents, and `developer` carries the working rules every builder inherits.
 
 ## Adjust the founding defaults
