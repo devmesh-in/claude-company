@@ -43,6 +43,9 @@ build_source() {
   printf '# GATES\n' > "$SRC/company/GATES.md"
   printf '# EXTENDING\n' > "$SRC/company/EXTENDING.md"
   printf '{"frozen": []}\n' > "$SRC/company/frozen-surfaces.json"
+  # issue-64: provenance.json arms the delegation enforcer; install ships it
+  # copy_if_absent, so the synthetic source must carry it too.
+  printf '{"version": 1, "verifier_roles": ["auditor"], "builder_roles": ["developer"]}\n' > "$SRC/company/provenance.json"
   printf '# spec template\n' > "$SRC/company/templates/spec.md"
 
   # our real files
@@ -108,6 +111,8 @@ check "run-gates.sh copied"      test -f "$T1/company/run-gates.sh"
 check "run-gates.sh executable"  test -x "$T1/company/run-gates.sh"
 check "gates.config copied"      test -f "$T1/company/gates.config"
 check "frozen-surfaces copied"   test -f "$T1/company/frozen-surfaces.json"
+check "provenance.json copied"   test -f "$T1/company/provenance.json"
+check "provenance.json packaged bytes" cmp -s "$SRC/company/provenance.json" "$T1/company/provenance.json"
 check ".mcp.json copied"         test -f "$T1/.mcp.json"
 check "settings.json copied"     test -f "$T1/.claude/settings.json"
 check "STATUS.md stub"           test -f "$T1/company/state/STATUS.md"
@@ -135,6 +140,8 @@ check "manifest has agent relpath"  grep -q '".claude/agents/dev.md"' "$MAN1"
 # copy_if_absent files must NOT be tracked in the overwrite manifest
 check "gates.config not in manifest" bash -c '! grep -q "company/gates.config" "'"$MAN1"'"'
 check "frozen-surfaces not in manifest" bash -c '! grep -q "frozen-surfaces.json" "'"$MAN1"'"'
+# issue-64: provenance.json is config (copy_if_absent), never overwrite-set
+check "provenance not in manifest" bash -c '! grep -q "company/provenance.json" "'"$MAN1"'"'
 # determinism: no clock / environment-varying fields
 check "manifest has no generated_at" bash -c '! grep -q "generated_at" "'"$MAN1"'"'
 check "manifest has no timestamp"    bash -c '! grep -qi "timestamp" "'"$MAN1"'"'

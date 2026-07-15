@@ -193,6 +193,37 @@ check "company hook still present"          grep -q "guard_" "$T8/.claude/settin
 [ "$TH" = "$(hashf "$T8/company/state/STATUS.md")" ] && pass "user STATUS.md untouched" || fail "user STATUS.md untouched"
 nott "no .new for gates.config"            test -e "$T8/company/gates.config.new"
 
+# --- 9. provenance.json: update never arms, only informs (issue-64) -------
+echo "== provenance.json never-arm rule =="
+# 9a. target WITHOUT provenance.json -> update does NOT create it, prints the
+# single notice line once, and counts nothing for it.
+T9="$WORK/t9"; fresh_install "$T9"
+rm -f "$T9/company/provenance.json"
+OUT="$(bash "$REPO/update.sh" "$T9" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "update without provenance exits 0" || fail "update without provenance exits 0 (rc=$RC)"
+nott "provenance.json NOT created" test -f "$T9/company/provenance.json"
+nott "no provenance.json.new" test -f "$T9/company/provenance.json.new"
+[ "$(printf '%s\n' "$OUT" | grep -c "delegation enforcer installed but disarmed")" -eq 1 ] \
+  && pass "notice line printed exactly once" || fail "notice line printed exactly once"
+# same in --check mode
+OUT="$(bash "$REPO/update.sh" "$T9" --check 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "--check without provenance exits 0" || fail "--check without provenance exits 0 (rc=$RC)"
+printf '%s' "$OUT" | grep -q "delegation enforcer installed but disarmed" \
+  && pass "--check prints the notice too" || fail "--check prints the notice too"
+nott "--check still did not create provenance.json" test -f "$T9/company/provenance.json"
+
+# 9b. target WITH a modified provenance.json -> left byte-identical, no .new,
+# no backup, no notice.
+T10="$WORK/t10"; fresh_install "$T10"
+printf '{"version": 1, "verifier_roles": ["auditor"], "builder_roles": ["developer"], "USER": "EDIT"}\n' > "$T10/company/provenance.json"
+PH="$(hashf "$T10/company/provenance.json")"
+OUT="$(bash "$REPO/update.sh" "$T10" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "update with present provenance exits 0" || fail "update with present provenance exits 0 (rc=$RC)"
+[ "$PH" = "$(hashf "$T10/company/provenance.json")" ] && pass "modified provenance.json untouched" || fail "modified provenance.json untouched"
+nott "no provenance.json.new when present" test -e "$T10/company/provenance.json.new"
+nott "no backup dir for present provenance" test -d "$T10/company/state/.update-backups"
+nott "no notice when provenance present" bash -c "printf '%s' \"$OUT\" | grep -q 'delegation enforcer installed but disarmed'"
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"

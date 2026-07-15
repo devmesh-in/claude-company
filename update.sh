@@ -117,6 +117,7 @@ n_restored=0
 n_unchanged=0
 merged_changed=0
 preserved_list=""
+provenance_notice=0  # issue-64: set when provenance.json is absent at target
 
 plan() {
   # Per-file plan line - printed only in --check mode.
@@ -245,6 +246,26 @@ config_if_absent() {
 config_if_absent "company/gates.config"
 config_if_absent "company/frozen-surfaces.json"
 config_if_absent "company/models.json"
+
+# issue-64: provenance.json is copy_if_absent for INSTALL only. update must
+# NEVER create it - an update must not switch a project's enforcement regime
+# (owner rule 2026-07-15). Present -> untouched, counted unchanged; absent ->
+# NOT restored, one notice line printed (stdout, once, both --check and apply),
+# counted as nothing.
+config_present_or_notice() {
+  local rel="$1"
+  if [ ! -f "$SRC/$rel" ]; then
+    warn "source missing, skipped: $rel"
+    return 0
+  fi
+  if [ -f "$TARGET/$rel" ]; then
+    plan UNCHANGED "$rel"
+    n_unchanged=$((n_unchanged + 1))
+    return 0
+  fi
+  provenance_notice=1
+}
+config_present_or_notice "company/provenance.json"
 
 # --- merge paths (FR-UPD-08) ----------------------------------------------
 # Re-run the SAME idempotent merges install.sh performs. Each merge computes
@@ -457,6 +478,11 @@ fi
 # --- report (FR-UPD-14) ---------------------------------------------------
 total_drift=$((n_restored + n_updated + n_preserved + merged_changed))
 echo
+# issue-64: one notice line when the delegation enforcer is installed but the
+# target has no provenance.json - update never arms it, it only informs.
+if [ "$provenance_notice" = "1" ]; then
+  echo "note: delegation enforcer installed but disarmed - create company/provenance.json to arm (see company/METHOD.md)"
+fi
 if [ "$total_drift" -eq 0 ]; then
   echo "  already up to date at $PKG_VERSION"
 else
