@@ -145,7 +145,25 @@
       "regex": false,
       "why": "Manifest byte-determinism contract: sorted keys, no clock field - the bin-vs-bare parity test depends on it",
       "added_at": "2026-07-14T22:13:07Z"
+    },
+    {
+      "id": "W-017",
+      "task": "cli-self-update",
+      "file": "lib/update.js",
+      "must_contain": "if (process.env.CC_SELFUPDATE_DONE) return null;",
+      "regex": false,
+      "why": "Handoff-exactly-once loop guard: the re-exec child never re-checks the registry",
+      "added_at": "2026-07-14T23:25:27Z"
+    },
+    {
+      "id": "W-018",
+      "task": "cli-self-update",
+      "file": "lib/update.js",
+      "must_contain": "if (versionCompare(latest, PKG.version) <= 0) {",
+      "regex": false,
+      "why": "Strictly-newer is the only re-exec trigger; equal or older proceeds silently with the current CLI",
+      "added_at": "2026-07-14T23:25:27Z"
     }
   ],
-  "checksum": "1179d1ca054e151ab34c6a0535acc2969de82f42991939c48a66f6b1acc18b02"
+  "checksum": "ad0004b40afa08925339a2a5c029e7b58aa6bd182b4303459287034cbf5a2f21"
 }
