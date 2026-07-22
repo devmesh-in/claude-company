@@ -217,7 +217,34 @@
       "regex": false,
       "why": "Tarball belt - dropping the files-negations re-ships repo records via npm",
       "added_at": "2026-07-15T11:14:01Z"
+    },
+    {
+      "id": "W-026",
+      "task": "model-routing-arming",
+      "file": ".claude/hooks/guard_models.py",
+      "must_contain": "def check_spawn_wiring",
+      "regex": false,
+      "why": "run_check wiring assertion - regression means the models gate reads green while Task|Agent enforcement is unwired (code-without-wiring)",
+      "added_at": "2026-07-22T15:23:53Z"
+    },
+    {
+      "id": "W-027",
+      "task": "model-routing-arming",
+      "file": "update.sh",
+      "must_contain": "BYTE-IDENTICAL to the",
+      "regex": false,
+      "why": "models.json merge heredoc coupling marker - install and update must migrate identically",
+      "added_at": "2026-07-22T15:23:53Z"
+    },
+    {
+      "id": "W-028",
+      "task": "model-routing-arming",
+      "file": ".claude/hooks/guard_models.py",
+      "must_contain": "inherit the session model",
+      "regex": false,
+      "why": "Bare builtin-spawn BLOCK path - regression means built-in spawns silently inherit the session model (the live incident)",
+      "added_at": "2026-07-22T15:24:05Z"
     }
   ],
-  "checksum": "8a66b62bddb00facfbd110bd5cc28756f9e8eabb0395ba5f02ab74a1f7764bea"
+  "checksum": "5789e76d6242c45d3e82f0ca3da8895c3e19753e2b88100fe8a44e6f38b6615f"
 }

@@ -327,6 +327,9 @@ nott  "recreated briefs dir is empty of records" bash -c "find '$T14/company/bri
 nott  "recreated specs/shipped empty of records" bash -c "find '$T14/company/specs/shipped' -name 'spec-*.md' | grep -q ."
 
 # --- 12. models.json builtins injection (FR-MRA-14) -----------------------
+# Traceability: FR-MRA-09 (install.sh merge) and FR-MRA-10 (update.sh merge
+# via the FR-UPD-08 finalize_merge infrastructure); BR-MRA-05 write-only-when-
+# injecting; BR-MRA-06 value preservation of roles/pricing/version/user keys.
 # update injects the packaged template's `builtins` into a manifest that
 # predates the section, preserving every other value, and is idempotent.
 echo "== models.json builtins injection (FR-MRA-14) =="

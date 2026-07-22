@@ -14,6 +14,25 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
+000. model-routing-arming SHIPPED 2026-07-22 (PR #77 merged cd07fb6,
+   closes #74-#76; acceptance DECISIONS #11; witnesses W-026 wiring
+   assertion / W-027 merge byte-identity / W-028 bare-builtin block).
+   Integrated main verified by CEO: hooks 222 OK, npm 61, update
+   engine 111, --check 0, trace 21/21 after citation fix, live
+   certification (contradict/bare exit 2, match 0; dormancy probe:
+   Task|Agent group stripped -> --check exit 1 + fix-it). Worktree
+   and task branch removed; brief+spec archived to shipped/.
+   RELEASE 0.2.2 PREPPED (task release-0.2.2-closeout, quick): rolls
+   up unpublished 0.2.1 + #77. Release PR carries version bump,
+   trace-citation fix (test-side FR/BR citations + new
+   test_template_and_doctrine_shipped covering FR-MRA-01/11/12),
+   paperwork archive, DECISIONS #11/#12, board sync. AWAITING OWNER:
+   merge release PR if session dies before merge, then tag v0.2.2 at
+   its merge commit and publish from a clean tag clone (memory:
+   npm-publish-owner-only; registry still on 0.2.0). Near-miss worth
+   remembering: a .format arg mismatch made the wrong-override path
+   fail OPEN until the live replay caught it - pinned by
+   test_builtin_spawn_wrong_override_blocked.
 00. provenance-shipping SHIPPED 2026-07-15 (PR #65, d624cc3, closes #64;
    witnesses W-019/W-020, 20/20): fresh installs now ship
    company/provenance.json (enforcer armed by default); update NEVER
