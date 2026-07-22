@@ -394,6 +394,23 @@ if our_deny:
         if entry not in their_deny:
             their_deny.append(entry)
 
+# --- merge env: add our keys the user lacks, never overwrite theirs --------
+# spawn-depth fix: ship CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2 so a tech-lead
+# can still spawn its developers/QA (Claude Code 2.1.21 defaulted subagent
+# spawn depth to 1, flattening the org). Additive-only, same spirit as
+# permissions.deny above: a user-pinned value (e.g. depth "3") is NEVER
+# overwritten. A theirs.env that is not a dict is replaced-safe (treated as
+# empty, then ours is set) so the merger never bricks an install.
+our_env = ours.get("env") or {}
+if our_env:
+    their_env = theirs.get("env")
+    if not isinstance(their_env, dict):
+        their_env = {}
+        theirs["env"] = their_env
+    for key, value in our_env.items():
+        if key not in their_env:
+            their_env[key] = value
+
 with open(dst_path, "w") as f:
     json.dump(theirs, f, indent=2, sort_keys=False)
     f.write("\n")
