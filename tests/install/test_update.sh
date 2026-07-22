@@ -290,6 +290,65 @@ SAFTER="$(hashf "$T12/.claude/settings.json")"
 bash "$REPO/update.sh" "$T12" >/dev/null 2>&1
 [ "$SAFTER" = "$(hashf "$T12/.claude/settings.json")" ] && pass "healed settings.json stable on next update" || fail "healed settings.json stable on next update"
 
+# --- 10c. settings.json env merge: spawn-depth ships + user pin survives ----
+# Claude Code 2.1.21 defaulted CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH to 1,
+# flattening the org. The settings template ships it at "2" and both engines
+# merge env additively: absent -> added, user-pinned -> never overwritten,
+# second run -> no churn. Same byte-identical merge as install.sh (section 5).
+echo "== settings.json env merge (spawn-depth) =="
+env_depth() { python3 -c 'import json,sys
+print(json.load(open(sys.argv[1])).get("env",{}).get("CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",""))' "$1"; }
+
+# fresh install carries the env var at "2"
+T15="$WORK/t15"; fresh_install "$T15"
+[ "$(env_depth "$T15/.claude/settings.json")" = "2" ] \
+  && pass "fresh install ships spawn-depth env = 2" || fail "fresh install ships spawn-depth env = 2"
+
+# a settings.json that predates the env block gains the key on update
+T16="$WORK/t16"; fresh_install "$T16"
+python3 - "$T16/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d.pop("env", None)
+json.dump(d, open(p, "w"), indent=2); open(p, "a").write("\n")
+PY
+[ -z "$(env_depth "$T16/.claude/settings.json")" ] && pass "precondition: env stripped" || fail "precondition: env stripped"
+bash "$REPO/update.sh" "$T16" >/dev/null 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "update over env-less settings exits 0" || fail "update over env-less settings exits 0 (rc=$RC)"
+[ "$(env_depth "$T16/.claude/settings.json")" = "2" ] && pass "update adds spawn-depth env = 2" || fail "update adds spawn-depth env = 2"
+check "healed env settings still valid JSON" python3 -m json.tool "$T16/.claude/settings.json"
+[ "$(command_matcher_count "$T16/.claude/settings.json" PreToolUse guard_provenance)" -eq 3 ] \
+  && pass "guard_provenance fanout intact after env merge" || fail "guard_provenance fanout intact after env merge"
+# re-run must settle byte-identical (no churn)
+SENV_AFTER="$(hashf "$T16/.claude/settings.json")"
+bash "$REPO/update.sh" "$T16" >/dev/null 2>&1
+[ "$SENV_AFTER" = "$(hashf "$T16/.claude/settings.json")" ] && pass "env settings stable on next update" || fail "env settings stable on next update"
+
+# a user-pinned depth "3" survives update, and a user env key is untouched
+T17="$WORK/t17"; fresh_install "$T17"
+python3 - "$T17/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d.setdefault("env", {})
+d["env"]["CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH"] = "3"
+d["env"]["MY_OWN_VAR"] = "keep"
+json.dump(d, open(p, "w"), indent=2); open(p, "a").write("\n")
+PY
+bash "$REPO/update.sh" "$T17" >/dev/null 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "update over user-pinned depth exits 0" || fail "update over user-pinned depth exits 0 (rc=$RC)"
+[ "$(env_depth "$T17/.claude/settings.json")" = "3" ] && pass "user-pinned depth 3 survives update" || fail "user-pinned depth 3 survives update"
+check "user env key preserved" grep -q "MY_OWN_VAR" "$T17/.claude/settings.json"
+
+# install-over-existing shares the byte-identical merge: never overwrites a user pin
+T18="$WORK/t18"; fresh_install "$T18"
+python3 - "$T18/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p))
+d.setdefault("env", {})["CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH"] = "3"
+json.dump(d, open(p, "w"), indent=2); open(p, "a").write("\n")
+PY
+bash "$REPO/install.sh" "$T18" >/dev/null 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "re-install over user-pinned depth exits 0" || fail "re-install over user-pinned depth exits 0 (rc=$RC)"
+[ "$(env_depth "$T18/.claude/settings.json")" = "3" ] && pass "re-install keeps user-pinned depth 3" || fail "re-install keeps user-pinned depth 3"
+
 # --- 11. record trees: user records untouched, empty dirs restored (issue-68) -
 echo "== record trees never import our records (issue-68) =="
 # 11a. a project with its OWN specs/briefs/CRs: update leaves each byte-identical

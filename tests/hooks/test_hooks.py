@@ -670,6 +670,24 @@ class TestGuardModelsBuiltins(Base):
             "repo .claude/settings.json must wire guard_models.py under a "
             "Task-covering PreToolUse matcher")
 
+    def test_repo_settings_ships_spawn_depth_env(self):
+        # Regression on THIS repo's shipped settings.json: the subagent spawn
+        # depth env var must ship at the STRING "2" so every fresh install AND
+        # every existing install on its next update carries it. Claude Code
+        # 2.1.21 defaulted CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH to 1, which
+        # flattens the org (a tech-lead can no longer spawn its dev/QA). This
+        # is the auto-update-era guard: if the template ever ships without the
+        # env var, the whole hierarchy silently breaks. Value parsed from JSON.
+        repo_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", ".."))
+        with open(os.path.join(repo_root, ".claude", "settings.json")) as f:
+            settings = json.load(f)
+        env = settings.get("env") or {}
+        self.assertEqual(
+            env.get("CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH"), "2",
+            "repo .claude/settings.json must ship env "
+            "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH at the string \"2\"")
+
     def test_template_and_doctrine_shipped(self):
         # FR-MRA-01: the shipped models.json template pins the four built-in
         # types. FR-MRA-11 / FR-MRA-12: the Workflow-tool doctrine (outside
