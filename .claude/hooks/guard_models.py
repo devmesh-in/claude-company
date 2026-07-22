@@ -43,6 +43,26 @@ def load_manifest(root):
     return roles
 
 
+def load_builtins(root):
+    """Return {type: model} from company/models.json `builtins`, or None.
+
+    Mirrors load_manifest and fails open (None) on a missing/malformed/
+    unreadable file or section. Keys starting with '$' (e.g. "$comment") are
+    dropped so they are never treated as a spawnable type, and only string
+    model values are kept.
+    """
+    cfg = c.read_json_file(os.path.join(root, "company", "models.json"))
+    if not isinstance(cfg, dict):
+        return None
+    builtins = cfg.get("builtins")
+    if not isinstance(builtins, dict):
+        return None
+    return {
+        k: v for k, v in builtins.items()
+        if not k.startswith("$") and isinstance(v, str)
+    }
+
+
 def is_hotfix(root):
     task = c.active_task(root)
     return isinstance(task, dict) and task.get("type") == "hotfix"
@@ -67,15 +87,53 @@ def new_text(tool_name, tool_input):
     return "\n".join(parts)
 
 
-def handle_spawn(root, tool_input, roles):
+def handle_spawn(root, tool_input, roles, builtins):
     role = None
     for field in SPAWN_TYPE_FIELDS:
         val = tool_input.get(field)
         if val:
             role = val
             break
-    if role is None or role not in roles:
-        return  # unknown role -> allow
+    if role is None:
+        return  # no spawn type -> allow
+    if role in roles:
+        # OQ-MRA-02 assumption: roles governs on any collision - a type present
+        # in both `roles` and `builtins` is decided here, by the roles branch.
+        handle_role_spawn(root, tool_input, roles, role)
+        return
+    # Not a manifest role. A built-in agent type has no .claude/agents
+    # frontmatter to inherit from, so a bare spawn would silently take the
+    # SESSION model - require an explicit matching override.
+    if builtins is None:
+        return  # no builtins section -> builtin enforcement inert (fail open)
+    if role not in builtins:
+        return  # unknown type -> allow
+    pin = builtins[role]
+    override = tool_input.get("model")
+    if override == pin:
+        return  # explicit matching override -> allow
+    if is_hotfix(root):
+        c.log_bypass(root, HOOK, "spawn " + role, "hotfix mode")
+        return
+    if not override:
+        c.block(
+            root, HOOK, "spawn " + role,
+            "builtin spawn no override (pin {})".format(pin),
+            "BLOCKED: spawning built-in '{}' with no model override would "
+            "inherit the session model - built-in agent types have no "
+            "company/models.json frontmatter pin to fall back on.\n"
+            "Fix: pass model: '{}'".format(role, pin),
+        )
+    c.block(
+        root, HOOK, "spawn " + role,
+        "builtin spawn override {} != pin {}".format(override, pin),
+        "BLOCKED: spawning built-in '{}' with model '{}' contradicts "
+        "company/models.json (built-in pin: '{}').\n"
+        "Fix: pass model: '{}'".format(role, override, pin, pin),
+    )
+
+
+def handle_role_spawn(root, tool_input, roles, role):
     override = tool_input.get("model")
     if not override:
         return  # no override -> role inherits the manifest model, allow
@@ -124,8 +182,53 @@ def handle_frontmatter_edit(root, tool_name, tool_input, roles):
     )
 
 
+def check_spawn_wiring(root):
+    """Assert .claude/settings.json wires guard_models on the Task spawn tool.
+
+    Passes when some PreToolUse group has a matcher covering the Task tool -
+    "Task" is one of its "|"-separated alternatives (the shipped matcher is
+    "Task|Agent") - and one of that group's hooks runs a command referencing
+    guard_models.py. Only the project settings.json counts; settings.local.json
+    is ignored. Returns (ok, fixit_message).
+    """
+    fixit = (
+        "spawn enforcement is not wired: .claude/settings.json has no "
+        "PreToolUse matcher covering the Task spawn tool that runs "
+        "guard_models.py - re-run `claude-company install` or `update` to "
+        "re-add it."
+    )
+    settings = c.read_json_file(
+        os.path.join(root, ".claude", "settings.json")
+    )
+    if not isinstance(settings, dict):
+        return False, fixit
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return False, fixit
+    groups = hooks.get("PreToolUse")
+    if not isinstance(groups, list):
+        return False, fixit
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        matcher = group.get("matcher") or ""
+        if "Task" not in matcher.split("|"):
+            continue
+        for h in group.get("hooks") or []:
+            if isinstance(h, dict) and "guard_models.py" in (
+                h.get("command") or ""
+            ):
+                return True, ""
+    return False, fixit
+
+
 def run_check(root):
-    """Compare every agent frontmatter against the manifest. Exit 0/1."""
+    """Compare every agent frontmatter against the manifest. Exit 0/1.
+
+    FR-MRA-06: this frontmatter/agent-file comparison is based ONLY on `roles`.
+    Built-in types live in the separate `builtins` section and never demand a
+    .claude/agents/<type>.md file, so their absence is never a mismatch here.
+    """
     roles = load_manifest(root)
     if roles is None:
         print("company/models.json missing or unreadable")
@@ -178,6 +281,19 @@ def run_check(root):
         print("\nmismatches:")
         for m in mismatches:
             print("  - " + m)
+
+    # LOUD wiring assertion (FR-MRA-07), gated on builtins presence.
+    # OQ-MRA-04 assumption: guard_models asserts only its OWN enforcement
+    # wiring. Old manifests without a `builtins` section (load_builtins ->
+    # None) skip this entirely and behave exactly as before.
+    wiring_ok = True
+    if load_builtins(root) is not None:
+        wiring_ok, fixit = check_spawn_wiring(root)
+        if not wiring_ok:
+            print("\nspawn wiring:")
+            print("  - " + fixit)
+
+    if mismatches or not wiring_ok:
         return 1
     print("\nall agent models agree with company/models.json")
     return 0
@@ -206,7 +322,7 @@ def main():
         if roles is None:
             sys.exit(0)  # no manifest -> fail open
         if tool_name in ("Task", "Agent"):
-            handle_spawn(root, tool_input, roles)
+            handle_spawn(root, tool_input, roles, load_builtins(root))
         elif tool_name in ("Edit", "Write", "MultiEdit"):
             handle_frontmatter_edit(root, tool_name, tool_input, roles)
     except SystemExit:

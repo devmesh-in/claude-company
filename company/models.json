@@ -7,6 +7,13 @@
     "security-reviewer": "opus", "devops-engineer": "opus",
     "docs-librarian": "opus", "ideation-strategist": "opus"
   },
+  "builtins": {
+    "$comment": "Built-in agent types (Explore, general-purpose, Plan, claude) have no .claude/agents frontmatter pin, so a bare spawn silently inherits the SESSION model - guard_models therefore requires an explicit matching model override for these. The Workflow tool is hook-invisible (its agent() spawns fire no PreToolUse events) and is forbidden by default - see company/METHOD.md.",
+    "Explore": "opus",
+    "general-purpose": "opus",
+    "Plan": "opus",
+    "claude": "opus"
+  },
   "pricing": {
     "$comment": "OQ-W1-01 estimate only, NOT billing truth - used by .claude/hooks/cost_capture.py for rough spend visibility in company/state/costs.log and /standup. USD per million tokens (MTok). cache_write is 1.25x input, cache_read is 0.1x input.",
     "opus": {"input": 15, "output": 75, "cache_write": 18.75, "cache_read": 1.5}

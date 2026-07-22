@@ -178,6 +178,11 @@ building agents into isolated worktrees:
 git worktree add .claude/worktrees/<task-slug> -b task/<task-slug>
 ```
 
+The Workflow tool is FORBIDDEN by default: its internal `agent()` spawns fire no
+PreToolUse events, so `guard_models` cannot pin their model - permit it only
+with explicit owner authorization and a `model` pin in every `agent()` call,
+including all early stages (see `company/METHOD.md`).
+
 Skeleton for a tech-lead (adapt for direct developer dispatch on `quick`):
 
 ```

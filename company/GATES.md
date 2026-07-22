@@ -65,7 +65,9 @@ These rungs are wired for this repo; a project inherits them and adds its own.
 - **G7 models (`python3 .claude/hooks/guard_models.py --check`).** The model
   routing manifest and agent frontmatter must agree: spawn overrides and
   per-agent model declarations match `models.json`, so no agent silently runs
-  on the wrong model. (Shipped in wave 1.)
+  on the wrong model. It also asserts the Task|Agent spawn hook is wired into
+  `.claude/settings.json`, so the enforcement cannot ship as code without teeth.
+  (Shipped in wave 1.)
 - **G8 audit - the last rung, network-bound.** A dependency and CVE scan: no
   known-vulnerable dependency ships. It runs last because it reaches the
   network; keep it blocking anyway.
