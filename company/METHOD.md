@@ -163,6 +163,16 @@ All under `company/state/`, all owned by the CEO:
 6. Business-policy open questions. Agents run on tagged fallbacks; the owner
    answers the question.
 
+## The Workflow tool is outside enforcement
+
+The Workflow tool runs its own internal `agent()` spawns that fire NO PreToolUse
+events - the hooks never see them, so `guard_models` cannot pin their model and
+they inherit the main-loop model. It is therefore FORBIDDEN by default in
+company projects. It is permitted only with explicit owner authorization AND a
+`model` pin in EVERY `agent()` call, including all early-stage agents: resuming
+a dead workflow re-runs the incomplete early-stage agents live, so partial
+pinning does not hold.
+
 ## Writing discipline
 
 All writing in this repository stays hook-clean: straight quotes, ' - ' rather

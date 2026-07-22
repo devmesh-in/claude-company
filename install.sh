@@ -123,6 +123,44 @@ info "Installing project config and state (existing files preserved)"
 copy_if_absent "$SRC/company/gates.config"           "$TARGET/company/gates.config"
 copy_if_absent "$SRC/company/frozen-surfaces.json"   "$TARGET/company/frozen-surfaces.json"
 copy_if_absent "$SRC/company/models.json"            "$TARGET/company/models.json"
+# FR-MRA-09: arm model routing on a PRE-EXISTING models.json that predates the
+# builtins section by injecting the packaged template's builtins in place. On a
+# fresh install the target was just copied from the template (already carries
+# builtins), so the python no-ops and the file stays byte-identical to it.
+# COUPLING: the heredoc between <<'PY' and PY below is BYTE-IDENTICAL to the
+# models.json builtins-injection block in update.sh. Keep them identical; both
+# must merge the same way.
+MODELS_SRC="$SRC/company/models.json"
+MODELS_DST="$TARGET/company/models.json"
+if [ -f "$MODELS_SRC" ] && [ -f "$MODELS_DST" ]; then
+  python3 - "$MODELS_SRC" "$MODELS_DST" <<'PY'
+import json, sys
+
+# OQ-MRA-01 assumption: additive builtins injection by canonical
+# json.load/json.dump re-serialization on the one injecting run. Inject the
+# packaged template's `builtins` only when the target manifest lacks it,
+# preserving the VALUES of roles/pricing/version and any user keys. When
+# `builtins` is already present, emit the target bytes verbatim (no write) so
+# the file stays byte-unchanged.
+src_path, dst_path = sys.argv[1], sys.argv[2]
+with open(src_path) as f:
+    src = json.load(f)
+try:
+    with open(dst_path) as f:
+        tgt = json.load(f)
+except (FileNotFoundError, ValueError):
+    sys.exit(0)  # nothing to merge into - config-if-absent restores separately
+if not isinstance(tgt, dict) or "builtins" in tgt:
+    sys.exit(0)  # already armed (or unmergeable) - leave the target untouched
+src_builtins = src.get("builtins")
+if not isinstance(src_builtins, dict):
+    sys.exit(0)  # template carries no builtins - nothing to inject
+tgt["builtins"] = src_builtins
+with open(dst_path, "w") as f:
+    json.dump(tgt, f, indent=2, sort_keys=False)
+    f.write("\n")
+PY
+fi
 # issue-64: ship provenance.json copy_if_absent so a fresh install arms the
 # delegation enforcer by default (present is never touched, not in the manifest).
 copy_if_absent "$SRC/company/provenance.json"        "$TARGET/company/provenance.json"
