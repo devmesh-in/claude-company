@@ -514,6 +514,151 @@ class TestGuardModels(Base):
         self.assertEqual(r.returncode, 1, r.stdout)
 
 
+class TestGuardModelsBuiltins(Base):
+    # A manifest that opts into builtin enforcement. "developer" appears in
+    # BOTH roles and builtins on purpose, to exercise roles-vs-builtins
+    # precedence.
+    MANIFEST = {
+        "version": 1,
+        "roles": {"developer": "opus"},
+        "builtins": {
+            "$comment": "built-in agent types with no frontmatter pin",
+            "Explore": "opus",
+            "general-purpose": "opus",
+            "Plan": "opus",
+            "claude": "opus",
+            "developer": "opus",
+        },
+    }
+
+    def write_manifest(self, obj=None):
+        self.write("company/models.json",
+                   json.dumps(obj if obj is not None else self.MANIFEST))
+
+    def spawn_payload(self, tool="Task", **fields):
+        return {"hook_event_name": "PreToolUse", "tool_name": tool,
+                "tool_input": dict(fields), "cwd": self.root}
+
+    def write_agent(self, role, model):
+        self.write(".claude/agents/%s.md" % role,
+                   "---\nname: %s\nmodel: %s\n---\nbody\n" % (role, model))
+
+    def write_settings(self, obj):
+        self.write(".claude/settings.json", json.dumps(obj))
+
+    def wired_settings(self):
+        # A PreToolUse group whose matcher covers Task and whose hooks run
+        # guard_models.py - the shape the installer ships.
+        return {"hooks": {"PreToolUse": [
+            {"matcher": "Task|Agent", "hooks": [
+                {"type": "command",
+                 "command": "python3 .claude/hooks/guard_models.py"}]}]}}
+
+    # --- builtin spawn enforcement ----------------------------------------
+    def test_builtin_spawn_bare_blocked(self):
+        # A builtin type with no model override would inherit the session
+        # model - block, and the fix names the required pin.
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="Explore"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("Explore", r.stderr)
+        self.assertIn("session model", r.stderr)
+        self.assertIn("Fix: pass model: 'opus'", r.stderr)
+
+    def test_builtin_spawn_wrong_override_blocked(self):
+        # The near-miss fail-open case: a wrong override must BLOCK (exit 2)
+        # and the message names both the override and the required pin. A
+        # format-arg mismatch here once made the hook fail open - this pins it.
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="Plan", model="haiku"),
+                     self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("Plan", r.stderr)
+        self.assertIn("haiku", r.stderr)
+        self.assertIn("Fix: pass model: 'opus'", r.stderr)
+
+    def test_builtin_spawn_matching_override_allowed(self):
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="Explore",
+                                        model="opus"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_builtin_spawn_hotfix_bypass_logs(self):
+        self.write_manifest()
+        self.set_task({"task": "hf", "type": "hotfix"})
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="Explore"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        self.assertIn("BYPASS", open(log).read())
+
+    def test_builtin_spawn_no_builtins_section_fail_open(self):
+        # An old manifest without a builtins section leaves builtin
+        # enforcement inert - a bare builtin spawn is allowed.
+        self.write_manifest({"version": 1, "roles": {"developer": "opus"}})
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="Explore"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_roles_win_over_builtins_precedence(self):
+        # "developer" is in both roles and builtins. The roles branch decides:
+        # a bare role spawn inherits the manifest model and is ALLOWED, whereas
+        # the builtins branch would have BLOCKED a bare spawn. Exit 0 proves
+        # roles governed.
+        self.write_manifest()
+        r = run_hook("guard_models.py",
+                     self.spawn_payload(subagent_type="developer"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # --- --check wiring assertion -----------------------------------------
+    def test_check_green_with_builtins_and_wiring(self):
+        self.write_manifest()
+        self.write_agent("developer", "opus")
+        self.write_settings(self.wired_settings())
+        r = run_cli("guard_models.py", ["--check"], self.root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        # No builtin type is ever demanded as an agent file / reported as a
+        # mismatch.
+        self.assertNotIn("Explore", r.stdout)
+        self.assertNotIn("mismatches", r.stdout)
+
+    def test_check_red_when_wiring_missing(self):
+        self.write_manifest()
+        self.write_agent("developer", "opus")
+        # settings.json present but with no Task-covering guard_models matcher.
+        self.write_settings({"hooks": {"PreToolUse": [
+            {"matcher": "Edit|Write", "hooks": [
+                {"type": "command",
+                 "command": "python3 .claude/hooks/guard_frozen.py"}]}]}})
+        r = run_cli("guard_models.py", ["--check"], self.root)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("spawn wiring", r.stdout)
+
+    def test_repo_settings_wires_guard_models_under_task(self):
+        # Regression on THIS repo's shipped settings.json: guard_models.py is
+        # registered under a PreToolUse matcher that covers Task. Presence, not
+        # position; names parsed from JSON, never hardcoded matcher strings.
+        repo_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", ".."))
+        with open(os.path.join(repo_root, ".claude", "settings.json")) as f:
+            settings = json.load(f)
+        found = False
+        for group in settings["hooks"]["PreToolUse"]:
+            matcher = group.get("matcher") or ""
+            if "Task" not in matcher.split("|"):
+                continue
+            for h in group.get("hooks") or []:
+                if "guard_models.py" in (h.get("command") or ""):
+                    found = True
+        self.assertTrue(
+            found,
+            "repo .claude/settings.json must wire guard_models.py under a "
+            "Task-covering PreToolUse matcher")
+
+
 class TestGateStampAndCommit(Base):
     def configure_gates(self):
         self.write("company/gates.config", json.dumps(

@@ -326,6 +326,74 @@ check "missing specs/shipped recreated"     test -d "$T14/company/specs/shipped"
 nott  "recreated briefs dir is empty of records" bash -c "find '$T14/company/briefs' -name 'brief-*.md' | grep -q ."
 nott  "recreated specs/shipped empty of records" bash -c "find '$T14/company/specs/shipped' -name 'spec-*.md' | grep -q ."
 
+# --- 12. models.json builtins injection (FR-MRA-14) -----------------------
+# update injects the packaged template's `builtins` into a manifest that
+# predates the section, preserving every other value, and is idempotent.
+echo "== models.json builtins injection (FR-MRA-14) =="
+mj_has_builtins() { # <file> -> 0 if a builtins object is present
+  python3 -c 'import json,sys; sys.exit(0 if isinstance(json.load(open(sys.argv[1])).get("builtins"),dict) else 1)' "$1"
+}
+mj_get() { # <file> <key...> -> canonical JSON of the nested value
+  python3 -c 'import json,sys
+v=json.load(open(sys.argv[1]))
+for k in sys.argv[2:]: v=v[k]
+print(json.dumps(v,sort_keys=True))' "$@"
+}
+
+# 12a. builtins STRIPPED + a custom top-level key -> injected, all else kept,
+# prior file backed up.
+TM1="$WORK/tm1"; fresh_install "$TM1"
+MJ="$TM1/company/models.json"
+python3 - "$MJ" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p))
+d.pop("builtins", None)            # strip the section update must re-inject
+d["myTeamKey"] = {"keep": "me"}    # a custom top-level key update must preserve
+json.dump(d, open(p, "w"), indent=2, sort_keys=False); open(p, "a").write("\n")
+PY
+ROLES_BEFORE="$(mj_get "$MJ" roles)"
+PRICING_BEFORE="$(mj_get "$MJ" pricing)"
+VERSION_BEFORE="$(mj_get "$MJ" version)"
+CUSTOM_BEFORE="$(mj_get "$MJ" myTeamKey)"
+nott "precondition: builtins stripped" mj_has_builtins "$MJ"
+OUT="$(bash "$REPO/update.sh" "$TM1" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "inject flow exits 0" || fail "inject flow exits 0 (rc=$RC)"
+check "builtins injected"           mj_has_builtins "$MJ"
+[ "$(mj_get "$MJ" roles)"   = "$ROLES_BEFORE" ]   && pass "roles preserved"   || fail "roles preserved"
+[ "$(mj_get "$MJ" pricing)" = "$PRICING_BEFORE" ] && pass "pricing preserved" || fail "pricing preserved"
+[ "$(mj_get "$MJ" version)" = "$VERSION_BEFORE" ] && pass "version preserved" || fail "version preserved"
+[ "$(mj_get "$MJ" myTeamKey)" = "$CUSTOM_BEFORE" ] && pass "custom key value preserved" || fail "custom key value preserved"
+# injected builtins equal the packaged template's builtins (read, never hardcoded)
+[ "$(mj_get "$MJ" builtins)" = "$(mj_get "$REPO/company/models.json" builtins)" ] \
+  && pass "injected builtins match packaged template" || fail "injected builtins match packaged template"
+check "backup dir created"          test -d "$TM1/company/state/.update-backups"
+BKM="$(find "$TM1/company/state/.update-backups" -name 'models.json' | head -1)"
+[ -n "$BKM" ] && pass "backup holds the prior models.json" || fail "backup holds the prior models.json"
+nott "backup copy has no builtins (it is the pre-inject file)" mj_has_builtins "$BKM"
+nott "no .new for models.json"      test -e "$MJ.new"
+
+# 12b. a SECOND update leaves models.json byte-unchanged and writes no new backup.
+H_AFTER1="$(hashf "$MJ")"
+N_BK_BEFORE="$(find "$TM1/company/state/.update-backups" -name 'models.json' | wc -l | tr -d ' ')"
+bash "$REPO/update.sh" "$TM1" >/dev/null 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "second update exits 0" || fail "second update exits 0 (rc=$RC)"
+[ "$H_AFTER1" = "$(hashf "$MJ")" ] && pass "second update leaves models.json byte-unchanged" || fail "second update leaves models.json byte-unchanged"
+N_BK_AFTER="$(find "$TM1/company/state/.update-backups" -name 'models.json' | wc -l | tr -d ' ')"
+[ "$N_BK_BEFORE" = "$N_BK_AFTER" ] && pass "second update writes no new models.json backup" || fail "second update writes no new models.json backup"
+
+# 12c. models.json DELETED -> restored via config-if-absent (template already
+# carries builtins) and the merge no-ops.
+TM3="$WORK/tm3"; fresh_install "$TM3"
+MJ3="$TM3/company/models.json"
+rm -f "$MJ3"
+bash "$REPO/update.sh" "$TM3" >/dev/null 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "restore flow exits 0" || fail "restore flow exits 0 (rc=$RC)"
+check "models.json restored"                test -f "$MJ3"
+check "restored models.json valid JSON"     python3 -m json.tool "$MJ3"
+check "restored models.json has builtins"   mj_has_builtins "$MJ3"
+check "restored equals packaged template"   cmp -s "$MJ3" "$REPO/company/models.json"
+nott  "no .new for a restored models.json"  test -e "$MJ3.new"
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"
