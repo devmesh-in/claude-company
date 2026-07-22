@@ -1,4 +1,17 @@
 __pycache__/
 *.pyc
+
+# Local worktree mounts
 .claude/worktrees/
+
+# Machine-local runtime state - never committed (frozen surfaces, machine-written)
 company/state/adherence.log
+company/state/gates.status
+company/state/costs.log
+company/state/.cost-cursor.json
+company/state/provenance-ledger.json
+company/state/active-task.json
+company/state/.update-backups/
+
+# Local agent memory (session field notes)
+.claude/agent-memory/
