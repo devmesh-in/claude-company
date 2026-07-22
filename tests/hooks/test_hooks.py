@@ -515,6 +515,18 @@ class TestGuardModels(Base):
 
 
 class TestGuardModelsBuiltins(Base):
+    # Traceability (FR-MRA-13 - this class is the builtins regression suite):
+    #   FR-MRA-01 shipped template shape -> test_template_and_doctrine_shipped
+    #   FR-MRA-02 load_builtins fail-open -> test_builtin_spawn_no_builtins_section_fail_open
+    #   FR-MRA-03 + BR-MRA-01 decision matrix -> bare / wrong-override / matching tests
+    #   FR-MRA-04 + BR-MRA-02 roles precedence -> test_roles_win_over_builtins_precedence
+    #   FR-MRA-05 hotfix bypass -> test_builtin_spawn_hotfix_bypass_logs
+    #   BR-MRA-03 fail-open conditions -> test_builtin_spawn_no_builtins_section_fail_open
+    #   FR-MRA-06 check ignores builtins -> test_check_green_with_builtins_and_wiring
+    #   FR-MRA-07 + BR-MRA-04 wiring assertion -> test_check_red_when_wiring_missing
+    #   FR-MRA-08 shipped wiring regression -> test_repo_settings_wires_guard_models_under_task
+    #   FR-MRA-11 / FR-MRA-12 Workflow doctrine -> test_template_and_doctrine_shipped
+    #
     # A manifest that opts into builtin enforcement. "developer" appears in
     # BOTH roles and builtins on purpose, to exercise roles-vs-builtins
     # precedence.
@@ -657,6 +669,26 @@ class TestGuardModelsBuiltins(Base):
             found,
             "repo .claude/settings.json must wire guard_models.py under a "
             "Task-covering PreToolUse matcher")
+
+    def test_template_and_doctrine_shipped(self):
+        # FR-MRA-01: the shipped models.json template pins the four built-in
+        # types. FR-MRA-11 / FR-MRA-12: the Workflow-tool doctrine (outside
+        # hook enforcement, forbidden by default) is present in METHOD.md and
+        # ORCHESTRATOR.md - both ship in the overwrite payload, so dropping
+        # either regresses every install on its next update.
+        repo_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", ".."))
+        with open(os.path.join(repo_root, "company", "models.json")) as f:
+            manifest = json.load(f)
+        builtins = manifest.get("builtins") or {}
+        for builtin_type in ("Explore", "general-purpose", "Plan", "claude"):
+            self.assertIn(builtin_type, builtins)
+            self.assertEqual(builtins[builtin_type], "opus")
+        method = open(os.path.join(repo_root, "company", "METHOD.md")).read()
+        orch = open(os.path.join(repo_root, "ORCHESTRATOR.md")).read()
+        for text in (method, orch):
+            self.assertIn("Workflow tool", text)
+            self.assertIn("FORBIDDEN by default", text)
 
 
 class TestGateStampAndCommit(Base):

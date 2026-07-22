@@ -3,13 +3,19 @@
 _Maintained by the CEO. Updated after every dispatch, merge, and CR decision._
 _Red stays red until proven green. Never average a status._
 
-_Last updated: 2026-07-15 - cli-update SHIPPED (PR #57 merged 7726c99, acceptance DECISIONS #6)._
+_Last updated: 2026-07-22 - model-routing-arming SHIPPED (PR #77 merged cd07fb6, acceptance DECISIONS #11); release 0.2.2 prepped._
 
 ## Active tasks
 
 | Task | Class | Lead/Agent | State | Gates | Notes |
 |---|---|---|---|---|---|
-| npm-release-0.2.1 | release | CEO | PREPPED, AWAITING OWNER PUBLISH | integrated main green (213 hooks + 61 CLI) | Bundles #64 (enforcer arms on install), #67 (merger fix + field-heal), #68 (record leak closed). Bump PR + tag, then owner publishes from clean tag clone (link-based 2FA, owner-manual per memory). |
+| release-0.2.2 | release | CEO | PREPPED, AWAITING OWNER TAG + PUBLISH | integrated main green (222 hooks + 61 CLI + 111 engine), trace 21/21, witnesses 27/27 | Rolls up unpublished 0.2.1 + #77 (model-routing arming). Owner: tag v0.2.2 at the release-PR merge commit, publish from clean tag clone (link-based 2FA, owner-manual per memory npm-publish-owner-only). Registry still on 0.2.0. |
+
+## Shipped (recent)
+
+| Task | Date | Evidence |
+|---|---|---|
+| model-routing-arming | 2026-07-22 | PR #77 merged cd07fb6 (closes #74-#76); acceptance DECISIONS #11; witnesses W-026/W-027/W-028; live certification: builtin contradict/bare spawn exit 2, match 0, dormancy probe turns --check red; migration: builtins merge lands on install AND update automatically. |
 
 ## Wave position (programs only)
 
