@@ -9,7 +9,8 @@ _Last updated: 2026-07-22 - model-routing-arming SHIPPED (PR #77 merged cd07fb6,
 
 | Task | Class | Lead/Agent | State | Gates | Notes |
 |---|---|---|---|---|---|
-| release-0.2.2 | release | CEO | PREPPED, AWAITING OWNER TAG + PUBLISH | integrated main green (222 hooks + 61 CLI + 111 engine), trace 21/21, witnesses 27/27 | Rolls up unpublished 0.2.1 + #77 (model-routing arming). Owner: tag v0.2.2 at the release-PR merge commit, publish from clean tag clone (link-based 2FA, owner-manual per memory npm-publish-owner-only). Registry still on 0.2.0. |
+| spawn-depth-shipping | quick | developer | SHIPPED 2026-07-23 (PR #83 merged 6061814, closes #79-#82) | 224 hooks + 61 CLI + 123 engine green (dev AND CEO reruns); integrated main stamped | Template ships env CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2; install/update merge env additively (user pin survives - proven); witness W-029. NOT yet on npm - registry still 0.2.0; owner has v0.2.2 tag+publish pending, and this lands in the NEXT release after that. |
+| release-0.2.3 | release | CEO | BUMP PR IN FLIGHT | 224 hooks + 61 CLI + 123 engine green on main | Supersedes unpublished v0.2.2 (tag pushed, never published): 0.2.3 = 0.2.2 content + #83 spawn-depth. Owner buttons after merge: tag v0.2.3 at merge commit, publish from clean tag clone. Registry 0.2.0 -> 0.2.3 directly. DECISIONS #12-#14. |
 
 ## Shipped (recent)
 
