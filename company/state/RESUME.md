@@ -14,6 +14,63 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
+00000. test-infra-fixes SHIPPED 2026-07-26 (PR #85 merged 65bd070).
+   Self-authored by the CEO in the main checkout, auditor verdict SHIP,
+   CI 9/9 green across ubuntu+macos x node 18/20/22. Integrated main
+   re-verified by the CEO: hooks 224, npm test 61/0, install 96/0, all
+   stamped. Ubuntu job log confirms `Ran 224 tests ... OK` - the 121
+   previously-invisible tests passed on their first ever CI run.
+   Two defects, both found while scoping the multi-session engagement:
+   (a) tests/hooks/run_tests.sh exec'd test_hooks.py directly, so CI ran
+       103 of 224 hook tests - the other 121, including ALL of
+       test_guard_provenance.py, never ran in CI. Now unittest discover
+       with -v (the -v preserves the per-test CI log lines that
+       unittest.main(verbosity=2) used to give).
+   (b) npm test was RED ON MAIN: tests/cli/test_cli.sh piped
+       `npm pack --dry-run --json` into JSON.parse, and npm 10.5.0 writes
+       the prepare lifecycle banner to STDOUT, so all 10 pack-manifest
+       assertions were dead (PASS 51 / FAIL 10). --silent fixes it;
+       --ignore-scripts does NOT. Auditor proved the packed file list is
+       byte-identical across npm 9/10/11 (91 files).
+   RELEASE FACTS CORRECTED 2026-07-26: v0.2.3 is ALREADY PUBLISHED on npm
+   (2026-07-25T16:17Z). Prior RESUME/STATUS claims that the registry sat
+   at 0.2.0 awaiting an owner tag were STALE - the owner had already
+   tagged and published. Registry versions: 0.1.0, 0.1.1, 0.2.0, 0.2.3.
+   Nothing needs publishing for the test-infra work: tests/ is not in the
+   pack list and company/briefs/** is excluded, so the tarball is
+   unchanged by it.
+   NEW P2 WORRY - the pack list excludes company/specs|briefs|
+   change-requests but NOT company/state, so company/state/{RESUME,STATUS,
+   WORRIES,DECISIONS}.md ship into every install. Verified against the
+   live 0.2.3 tarball: those four ARE in it. The runtime files
+   (costs.log, provenance-ledger.json, active-task.json, .cost-cursor.json,
+   gates.status) are untracked, so a CLEAN-CLONE publish leaves them out -
+   but publishing from a dirty working checkout WOULD leak them. Always
+   publish from a clean clone at the tag.
+   Next: multi-session-tasks (feature) - plan approved by the owner
+   2026-07-26 at ~/.claude/plans/flickering-painting-pony.md, core-only
+   scope. active-task.json becomes N entries; the provenance ledger stops
+   wiping itself on slug change. Phase 0 spec via product-manager first.
+   NEW P1 WORRY, directly in scope for that engagement: dispatched
+   worktree agents CANNOT COMMIT - guard_commit judges them to be on main
+   because the harness pins payload cwd to the main checkout. That turns
+   every delegated build into self-authored work needing an audit.
+
+0000. spawn-depth-shipping SHIPPED 2026-07-23 (PR #83 merged 6061814,
+   closes #79-#82; witness W-029; brief archived pending next chore
+   pass - it is tracked at company/briefs/brief-spawn-depth-shipping.md
+   on main, move to shipped/ with the next closeout PR). CC 2.1.21
+   defaulted subagent spawn depth to 1 (flattens CEO->lead->dev);
+   template now ships env CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH="2" and
+   install/update merge env additively (user values win, non-dict env
+   replaced-safe, heredocs byte-identical 3587 chars). CEO independent
+   verification: 224/61/123 all green, own merge probes (pin "3"
+   survives, bare heals to "2"), risk low. This session armed via
+   settings.local.json; memory file spawn-depth-env-required.md saved.
+   guard_tests test_scope papercut hit a THIRD time (see WORRIES P2).
+   NOTE: not on npm until the release AFTER v0.2.2 - owner still owes
+   the v0.2.2 tag+publish (DECISIONS #12), then a v0.2.3 can carry
+   spawn-depth.
 000. model-routing-arming SHIPPED 2026-07-22 (PR #77 merged cd07fb6,
    closes #74-#76; acceptance DECISIONS #11; witnesses W-026 wiring
    assertion / W-027 merge byte-identity / W-028 bare-builtin block).
@@ -22,14 +79,16 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
    certification (contradict/bare exit 2, match 0; dormancy probe:
    Task|Agent group stripped -> --check exit 1 + fix-it). Worktree
    and task branch removed; brief+spec archived to shipped/.
-   RELEASE 0.2.2 PREPPED (task release-0.2.2-closeout, quick): rolls
-   up unpublished 0.2.1 + #77. Release PR carries version bump,
-   trace-citation fix (test-side FR/BR citations + new
-   test_template_and_doctrine_shipped covering FR-MRA-01/11/12),
-   paperwork archive, DECISIONS #11/#12, board sync. AWAITING OWNER:
-   merge release PR if session dies before merge, then tag v0.2.2 at
-   its merge commit and publish from a clean tag clone (memory:
-   npm-publish-owner-only; registry still on 0.2.0). Near-miss worth
+   RELEASE 0.2.2 MERGED (PR #78, merge commit ad3dda8; task
+   release-0.2.2-closeout closed; audits recorded approved after the
+   verdict-parser workaround - see WORRIES P2). Integrated main green
+   + stamped (223/61/111), registry sealed 27/27. AWAITING OWNER
+   BUTTONS ONLY: tag v0.2.2 at ad3dda8, push tag, npm publish from a
+   clean tag clone (memory: npm-publish-owner-only; registry still on
+   0.2.0 - both 0.2.1 and 0.2.2 unpublished until then). Next chore
+   pass: archive brief-release-0.2.2-closeout.md to shipped/, file
+   the guard_provenance verdict-parser issue and the guard_tests
+   test_scope-from-main issue from WORRIES. Near-miss worth
    remembering: a .format arg mismatch made the wrong-override path
    fail OPEN until the live replay caught it - pinned by
    test_builtin_spawn_wrong_override_blocked.
