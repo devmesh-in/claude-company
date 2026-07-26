@@ -105,7 +105,9 @@ grep -qi 'python3' "$WORK/np.err" && pass "missing python names python3 in messa
 
 # --- 8. npm pack manifest --------------------------------------------------
 echo "== npm pack manifest contains payload, excludes dev-only =="
-( cd "$REPO" && npm pack --dry-run --json 2>/dev/null ) \
+# --silent suppresses the `prepare` lifecycle banner, which npm writes to STDOUT
+# and which otherwise corrupts the JSON payload (--ignore-scripts does not).
+( cd "$REPO" && npm pack --dry-run --json --silent 2>/dev/null ) \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);j[0].files.forEach(f=>console.log(f.path))})' \
   > "$WORK/pack.list"
 
