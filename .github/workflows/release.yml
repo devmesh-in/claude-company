@@ -24,9 +24,15 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm >= 11.5.1; Node 20 bundles an older npm.
+      # Trusted publishing needs npm >= 11.5.1; Node 20 bundles 10.8.2.
+      # Pinned to the 11.x major ON PURPOSE: npm@latest is now 12.x, which
+      # requires node >= 22.22.2 and fails EBADENGINE here, killing the job
+      # before the tests ever run. An unpinned latest re-breaks every release
+      # the next time npm raises its node floor. If npm 11 ever stops
+      # satisfying trusted publishing, raise node-version and this pin
+      # TOGETHER.
       - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@latest && npm --version
+        run: npm install -g npm@^11.5.1 && npm --version
 
       # Never publish red: the same gates CI runs must pass here too.
       - name: CLI wrapper tests
