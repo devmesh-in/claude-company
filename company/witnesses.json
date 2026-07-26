@@ -244,7 +244,34 @@
       "regex": false,
       "why": "Bare builtin-spawn BLOCK path - regression means built-in spawns silently inherit the session model (the live incident)",
       "added_at": "2026-07-22T15:24:05Z"
+    },
+    {
+      "id": "W-029",
+      "task": "spawn-depth-shipping",
+      "file": ".claude/settings.json",
+      "must_contain": "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",
+      "regex": false,
+      "why": "Auto-update-era guard: template must ship spawn depth 2 or every install silently flattens to depth 1 on the next Claude Code",
+      "added_at": "2026-07-22T18:50:20Z"
+    },
+    {
+      "id": "W-030",
+      "task": "test-infra-fixes",
+      "file": "tests/hooks/run_tests.sh",
+      "must_contain": "unittest discover",
+      "regex": false,
+      "why": "CI calls this runner; reverting to a direct exec silently drops CI from 224 hook tests back to 103 with no other symptom",
+      "added_at": "2026-07-26T17:30:00Z"
+    },
+    {
+      "id": "W-031",
+      "task": "test-infra-fixes",
+      "file": "tests/cli/test_cli.sh",
+      "must_contain": "--json --silent",
+      "regex": false,
+      "why": "Without --silent the npm prepare banner corrupts the pack JSON and all 10 pack-manifest assertions die as false MISSING, turning the local gate red",
+      "added_at": "2026-07-26T17:30:00Z"
     }
   ],
-  "checksum": "5789e76d6242c45d3e82f0ca3da8895c3e19753e2b88100fe8a44e6f38b6615f"
+  "checksum": "a2bf1d5ece833826945887fde2d32814011ffa242c6916cd31fa05cfab5c3d17"
 }
