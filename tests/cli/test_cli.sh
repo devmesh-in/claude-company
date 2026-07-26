@@ -142,6 +142,10 @@ want_present "company/templates/SPEC-TEMPLATE.md"
 want_absent "^company/specs/"
 want_absent "^company/briefs/"
 want_absent "^company/change-requests/"
+# Same rule for the working board: install.sh scaffolds STATUS/RESUME/WORRIES/
+# DECISIONS at the target, so shipping ours leaks this repo's internal notes
+# into every install (it did, in 0.2.3 and 0.2.4).
+want_absent "^company/state/"
 
 # The root `install` is now a POSIX sh shim, not a Python file.
 [ "$(head -1 "$INSTALL")" = "#!/bin/sh" ] && pass "packed install is a sh shim" \
