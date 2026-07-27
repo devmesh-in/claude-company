@@ -456,6 +456,103 @@ check "restored models.json has builtins"   mj_has_builtins "$MJ3"
 check "restored equals packaged template"   cmp -s "$MJ3" "$REPO/company/models.json"
 nott  "no .new for a restored models.json"  test -e "$MJ3.new"
 
+# --- 13. legacy field install survives an update (FR-MST-29, BR-MST-11) ----
+# The field rollout proof. An install made before multi-session tasks carries a
+# LEGACY SINGLE-OBJECT active-task.json and a V1 provenance ledger. After an
+# update: the new normalizer reads both old shapes and blocks nothing, and the
+# customer's task state is never rewritten, created or deleted.
+#
+# Every hook here is driven from the TARGET's installed copy, not from $REPO -
+# what the update actually delivered into the customer install is the thing
+# under test.
+echo "== legacy shapes survive an update (FR-MST-29 / BR-MST-11) =="
+seal_ledger() { # <ledger-file> - seal it the way the hooks seal it. The salt and
+                # the canonical form come from the real _common.stamp_checksum,
+                # never a copy, so this fixture cannot drift from the hooks.
+  python3 - "$REPO/.claude/hooks" "$1" <<'PY'
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import _common as c
+p = sys.argv[2]
+d = json.load(open(p))
+d.pop("checksum", None)
+d["checksum"] = c.stamp_checksum(d)
+json.dump(d, open(p, "w"))
+PY
+}
+mtime_ns() { python3 -c 'import os,sys; print(os.stat(sys.argv[1]).st_mtime_ns)' "$1"; }
+run_hook() { # <target> <hook.py> <abs-file-path> -> returns the hook's exit code
+  local t="$1" hook="$2" fp="$3"
+  printf '{"hook_event_name":"PreToolUse","tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s"}}' "$t" "$fp" \
+    | CLAUDE_PROJECT_DIR="$t" python3 "$t/.claude/hooks/$hook" >/dev/null 2>&1
+}
+
+T19="$WORK/t19"; fresh_install "$T19"
+AT="$T19/company/state/active-task.json"
+# the pre-multi-session shape: ONE task object, not a list.
+cat > "$AT" <<'JSON'
+{"task": "legacy-x", "type": "feature", "brief": "company/briefs/brief-legacy-x.md", "test_scope": false, "execution": "delegated", "execution_why": "tech-lead owns the build"}
+JSON
+printf '# brief for legacy-x\n' > "$T19/company/briefs/brief-legacy-x.md"
+# a v1 ledger for that slug carrying the dispatch that satisfies its delegated
+# decision. The checksum is stamped the way the hooks stamp it - an unsealed
+# ledger would be read as tampered and reset, which would make this case
+# vacuous. The tamper control below proves the sealed one is really read.
+cat > "$T19/company/state/provenance-ledger.json" <<'JSON'
+{"version": 1, "task": "legacy-x", "self_authored": [], "audits": [], "dispatches": [{"role": "tech-lead", "at": "2026-01-01T00:00:00Z"}], "nudge_state": null}
+JSON
+seal_ledger "$T19/company/state/provenance-ledger.json"
+cp "$AT" "$WORK/legacy-active-task.before"
+AT_MTIME_BEFORE="$(mtime_ns "$AT")"
+LEDGER_BEFORE="$(hashf "$T19/company/state/provenance-ledger.json")"
+
+OUT="$(bash "$REPO/update.sh" "$T19" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "update over a legacy install exits 0" || fail "update over a legacy install exits 0 (rc=$RC)"
+# 13a. update never rewrites, creates or deletes the task state: same bytes,
+# same mtime, no .new, no backup copy.
+check "legacy active-task.json still present"        test -f "$AT"
+check "legacy active-task.json byte-identical"       cmp -s "$WORK/legacy-active-task.before" "$AT"
+[ "$AT_MTIME_BEFORE" = "$(mtime_ns "$AT")" ] \
+  && pass "legacy active-task.json mtime unchanged" || fail "legacy active-task.json mtime unchanged"
+nott "no active-task.json.new"        test -e "$AT.new"
+nott "no active-task.json backed up"  bash -c "find '$T19/company/state/.update-backups' -name 'active-task.json' 2>/dev/null | grep -q ."
+[ "$LEDGER_BEFORE" = "$(hashf "$T19/company/state/provenance-ledger.json")" ] \
+  && pass "v1 provenance ledger byte-unchanged by update" || fail "v1 provenance ledger byte-unchanged by update"
+
+# 13b. neither guard spuriously blocks a source edit on the legacy shapes.
+# guard_spec allows only because it read the single object as one entry AND
+# resolved that entry's brief; the empty case blocks (see the control below).
+# guard_provenance Mode E allows only because migrate_v1 credited the v1
+# ledger's dispatch to the legacy slug.
+LEGACY_EDIT="$T19/src/app.py"
+run_hook "$T19" guard_spec.py "$LEGACY_EDIT"; RC=$?
+[ "$RC" -eq 0 ] && pass "guard_spec allows a source edit on a legacy install" || fail "guard_spec allows a source edit on a legacy install (rc=$RC)"
+run_hook "$T19" guard_provenance.py "$LEGACY_EDIT"; RC=$?
+[ "$RC" -eq 0 ] && pass "guard_provenance Mode E allows on a legacy install" || fail "guard_provenance Mode E allows on a legacy install (rc=$RC)"
+
+# 13c. controls - both allows above are real decisions, not silent fail-opens.
+mv "$AT" "$WORK/legacy-active-task.hidden"
+run_hook "$T19" guard_spec.py "$LEGACY_EDIT"; RC=$?
+[ "$RC" -eq 2 ] && pass "control: guard_spec blocks that same edit with no task file" || fail "control: guard_spec blocks that same edit with no task file (rc=$RC)"
+mv "$WORK/legacy-active-task.hidden" "$AT"
+python3 - "$T19/company/state/provenance-ledger.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d["checksum"] = "0" * 64
+json.dump(d, open(p, "w"))
+PY
+run_hook "$T19" guard_provenance.py "$LEGACY_EDIT"; RC=$?
+[ "$RC" -eq 2 ] && pass "control: an unsealed v1 ledger blocks, so the sealed one was read" || fail "control: an unsealed v1 ledger blocks, so the sealed one was read (rc=$RC)"
+
+# 13d. BR-MST-11: active-task.json is untracked and unscaffolded. Neither
+# install nor update ever brings one into existence.
+T20="$WORK/t20"; fresh_install "$T20"
+nott "fresh install creates no active-task.json"   test -e "$T20/company/state/active-task.json"
+nott "active-task.json absent from the manifest"   grep -q "active-task.json" "$T20/company/state/install-manifest.json"
+bash "$REPO/update.sh" "$T20" >/dev/null 2>&1; RC=$?
+[ "$RC" -eq 0 ] && pass "update with no active-task.json exits 0" || fail "update with no active-task.json exits 0 (rc=$RC)"
+nott "update creates no active-task.json"          test -e "$T20/company/state/active-task.json"
+nott "update creates no active-task.json.new"      test -e "$T20/company/state/active-task.json.new"
+
 echo
 echo "================ SUMMARY ================"
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"

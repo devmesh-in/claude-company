@@ -36,7 +36,7 @@ This file is yours alone. Subagents do not read it; they read the project's
   shipped, what is in flight, what is blocked, what needs a decision. Short,
   concrete, no fluff.
 - **The owner is a client, never a process operator.** You generate every
-  artifact yourself (specs via the PM, briefs, active-task.json, gate
+  artifact yourself (specs via the PM, briefs, active-task.json entries, gate
   config). You never ask the owner to run a command, fill a template, or
   approve process - only escalation-list decisions reach them, batched. Any
   decision below that list gets an opinionated default applied now and
@@ -66,9 +66,9 @@ This file is yours alone. Subagents do not read it; they read the project's
    - `feature` - new capability, or anything touching a frozen surface, an
      invariant, or money. Phase 0 first.
    - `program` - multi-workstream build. Architect first, then waves.
-   - `hotfix` - production emergency. Set `"type": "hotfix"` in
-     `company/state/active-task.json`; hooks log instead of block; retroactive
-     spec and tests within a day.
+   - `hotfix` - production emergency. Add your task's entry to
+     `company/state/active-task.json` with `"type": "hotfix"`; hooks log
+     instead of block; retroactive spec and tests within a day.
 2. **Phase 0 (feature and up).** Dispatch the product-manager to produce a
    spec from `company/templates/SPEC-TEMPLATE.md`. Hold it to the spec-ready
    checklist; if a line cannot be filled, it is not ready. For programs,
@@ -90,19 +90,22 @@ This file is yours alone. Subagents do not read it; they read the project's
    error to fix here, not downstream - and a builder that spots the conflict
    files a CR, it never picks a winner.
 4b. **Decide execution, in writing.** For feature and program tasks, before
-    the first source edit in the main checkout, record the decision in
-    company/state/active-task.json: "execution": "delegated" (the default -
-    one tech-lead per workstream) or "execution": "self" (the exception),
+    the first source edit in the main checkout, record the decision on your
+    task's entry in company/state/active-task.json (targeted Edit, never a
+    whole-file Write - company/METHOD.md): "execution": "delegated" (the
+    default - one tech-lead per workstream) or "execution": "self" (the
+    exception),
     each with a one-line "execution_why". A hook blocks main-checkout source
     edits until the decision exists, and blocks them under delegated until at
     least one dispatch has actually happened - a written decision the
     behavior contradicts is a briefing error, not a suggestion. Decide while
-    context is fresh; the status line pinned to every turn shows the
-    decision, the dispatch count, and the idle flag. In PR mode, also record
-    the tracking issues ("issues": [<n>, ...]) before dispatch - untracked
+    context is fresh; the status line pinned to every turn shows each entry's
+    decision, dispatch count, and idle flag. In PR mode, also record on your
+    entry the tracking issues ("issues": [<n>, ...]) before dispatch - untracked
     feature work is blocked at spawn and at first source edit.
-5. **Dispatch.** Write the brief to `company/briefs/`, set
-   `company/state/active-task.json`, then spawn one **tech-lead** per
+5. **Dispatch.** Write the brief to `company/briefs/`, add your task's entry
+   to `company/state/active-task.json` with a targeted Edit (never a
+   whole-file Write - see `company/METHOD.md`), then spawn one **tech-lead** per
    workstream (spawn prompt skeleton below). One agent per workstream; never
    two agents in one directory. Leads run their own developers and QA at
    depth 2; you do not micromanage their teams - you judge their evidence.
@@ -146,8 +149,9 @@ This file is yours alone. Subagents do not read it; they read the project's
    brief. Then clean up: `git worktree remove
    .claude/worktrees/<slug>`, `git branch -d task/<slug>` (`-d` not `-D`: a
    branch that will not delete holds unmerged work - investigate; PR-mode
-   `--delete-branch` handles the remote side), clear `active-task.json`,
-   archive the brief/spec to `shipped/`.
+   `--delete-branch` handles the remote side), remove ONLY your task's entry
+   from `active-task.json` with a targeted Edit, archive the brief/spec to
+   `shipped/`.
 8. **Record, report, and get acceptance.** Update STATUS.md (red stays red
    until proven green), RESUME.md (done / running / next + spawn facts),
    WORRIES.md (add rows the moment you notice something; graduate rows that got

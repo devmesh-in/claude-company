@@ -21,6 +21,10 @@ import _common as c  # noqa: E402
 
 HOOK = "cost_capture"
 
+# How many slugs the task column names before it collapses to "+more".
+# Display truncation only - this hook logs and exits 0, it decides nothing.
+SLUG_CAP = 3
+
 _ZEROS = {"in": 0, "out": 0, "cache_r": 0, "cache_w": 0}
 
 
@@ -192,8 +196,15 @@ def main():
         if model is None or total_delta <= 0:
             sys.exit(0)
 
-        task = (c.active_task(root) or {})
-        task_slug = task.get("task") if isinstance(task, dict) else None
+        # FR-MST-10: the task column names EVERY entry in flight. Sorted, so
+        # the column is stable regardless of entry order - that is what lets
+        # the standup skill match a slug by containment. Exactly one slug
+        # renders as that slug, unchanged. SLUG_CAP is display truncation
+        # only; this hook never decides anything.
+        names = sorted(c.slugs(c.active_tasks(root)))
+        task_slug = "+".join(names[:SLUG_CAP])
+        if len(names) > SLUG_CAP:
+            task_slug += "+more"
         task_slug = task_slug or "-"
 
         tokens = "in=%d out=%d cache_r=%d cache_w=%d" % (

@@ -12,9 +12,9 @@ it in three modes:
   c) --check CLI: compare every agent frontmatter `model:` against the
      manifest; exit 0 on full agreement, 1 on any mismatch. For CI / gates.
 
-Hotfix mode (active-task type=hotfix) bypasses the PreToolUse modes with a
-logged BYPASS. Everything fails open: a missing/unreadable manifest, an
-unknown role, or any internal error allows the action.
+Hotfix mode (ANY active-task entry with type=hotfix) bypasses the PreToolUse
+modes with a logged BYPASS. Everything fails open: a missing/unreadable
+manifest, an unknown role, or any internal error allows the action.
 """
 
 import glob
@@ -63,9 +63,19 @@ def load_builtins(root):
     }
 
 
-def is_hotfix(root):
-    task = c.active_task(root)
-    return isinstance(task, dict) and task.get("type") == "hotfix"
+def hotfix_bypass(root, target):
+    """FR-MST-07: ANY entry of type hotfix bypasses the PreToolUse modes.
+
+    Logs the BYPASS naming the responsible hotfix entry (the slug is appended
+    only once a second entry exists, per BR-MST-02) and returns True. Returns
+    False without logging when no entry is a hotfix.
+    """
+    tasks = c.active_tasks(root)
+    hf = c.hotfix_entry(tasks)
+    if hf is None:
+        return False
+    c.log_bypass(root, HOOK, target, c.qualify_reason("hotfix mode", tasks, hf))
+    return True
 
 
 def role_from_agent_path(rel):
@@ -112,8 +122,7 @@ def handle_spawn(root, tool_input, roles, builtins):
     override = tool_input.get("model")
     if override == pin:
         return  # explicit matching override -> allow
-    if is_hotfix(root):
-        c.log_bypass(root, HOOK, "spawn " + role, "hotfix mode")
+    if hotfix_bypass(root, "spawn " + role):
         return
     if not override:
         c.block(
@@ -140,8 +149,7 @@ def handle_role_spawn(root, tool_input, roles, role):
     want = roles[role]
     if override == want:
         return  # matches the routing decision, allow
-    if is_hotfix(root):
-        c.log_bypass(root, HOOK, "spawn " + role, "hotfix mode")
+    if hotfix_bypass(root, "spawn " + role):
         return
     c.block(
         root, HOOK, "spawn " + role,
@@ -169,8 +177,7 @@ def handle_frontmatter_edit(root, tool_name, tool_input, roles):
     want = roles[role]
     if new_model == want:
         return
-    if is_hotfix(root):
-        c.log_bypass(root, HOOK, rel, "hotfix mode")
+    if hotfix_bypass(root, rel):
         return
     c.block(
         root, HOOK, rel,

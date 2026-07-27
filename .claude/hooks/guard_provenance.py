@@ -23,9 +23,26 @@ across six modes keyed on (hook_event_name, tool_name):
      with no dispatch) BLOCKS.
 
 The manifest (company/provenance.json) is the rollout switch: missing or
-unreadable, every mode silently allows. Hotfix tasks bypass with a logged
-BYPASS. Everything fails OPEN: any internal error lets the action through.
-Python 3.8 stdlib only.
+unreadable, every mode silently allows. Everything fails OPEN: any internal
+error lets the action through. Python 3.8 stdlib only.
+
+active-task.json holds N entries at once (one owner, several Claude Code
+sessions, one checkout), so every mode reads ALL of them. FR-MST-23 splits
+the hotfix handling in two, and the split is the spine of this file:
+
+  - Exemption TYPES are PER ENTRY. A gate that skips because the single
+    entry's type is exempt now evaluates the NON-EXEMPT entries and blocks if
+    any of them fails. That is Mode D (quick/hotfix) and the FR-DE-15 tracking
+    gate in Mode B-pre and Mode E.
+  - Waiver BYPASSES stay ANY, and only where blocking a declared production
+    emergency behind an unrelated entry is the worse failure. In this file
+    that is Mode C and Mode E ONLY (RISK-MST-01, accepted). No other site has
+    an ANY-hotfix bypass.
+
+BR-MST-02: with exactly one entry every mode produces byte-identical exit
+code, stdout, stderr and adherence.log line to the single-task hook. That is
+what c.qualify_reason exists for - it returns the reason unchanged at N <= 1
+and names the responsible entries only at N > 1.
 """
 
 import json
@@ -44,21 +61,32 @@ HOOK = "guard_provenance"
 LEDGER_REL = "company/state/provenance-ledger.json"
 MANIFEST_REL = "company/provenance.json"
 
-# Fired once per state from Mode A; <slug> is the only interpolation.
+# FR-MST-25: every message below is in the ENTRY idiom - active-task.json
+# holds N entries, so an escape hatch has to say WHICH entry to change and
+# that the change is a targeted Edit, not a whole-file rewrite that would
+# clobber another session's entry.
+#
+# FR-MST-30: <slugs> is the responsible-entry list (c.slug_list, cap 3). It is
+# a single name at N == 1, so the rendered text is unchanged there. The cap is
+# display truncation only and never reaches a decision.
+
+# Fired once per state per entry from Mode A; <slug> is the only
+# interpolation and it always names exactly ONE entry.
 NUDGE_TEXT = (
-    "[company] Reminder - task '<slug>' runs with execution: \"self\" and "
-    "zero dispatches: the team is idle while you build. That is allowed and "
-    "recorded, and the standing price applies - every self-authored commit "
-    "needs a fresh read-only auditor pass before it integrates (one Task "
-    "call, subagent_type: auditor). If this work is growing beyond glue, a "
-    "tech-lead dispatch is cheaper: verification comes free through the "
-    "hierarchy. This note fires once per state; it will not repeat."
+    "[company] Reminder - entry '<slug>' in company/state/active-task.json "
+    "runs with execution: \"self\" and zero dispatches of its own: the team "
+    "is idle while you build. That is allowed and recorded, and the standing "
+    "price applies - every self-authored commit needs a fresh read-only "
+    "auditor pass before it integrates (one Task call, subagent_type: "
+    "auditor). If this work is growing beyond glue, a tech-lead dispatch is "
+    "cheaper: verification comes free through the hierarchy. This note fires "
+    "once per state per entry; it will not repeat."
 )
 
 MODE_C_MSG = (
     "BLOCKED: git commit contains self-authored work with no independent "
     "verification.\n"
-    "Task '<slug>' has source changes produced in the main checkout, and no "
+    "Task '<slugs>' has source changes produced in the main checkout, and no "
     "audit\n"
     "covers the current tree (<reason>).\n"
     "Self-authored paths: <paths>\n"
@@ -75,17 +103,19 @@ MODE_C_MSG = (
     "task branch and give it to a developer - delegated work is verified "
     "inside\n"
     "the hierarchy and needs no extra audit.\n"
-    "Production emergency: set \"type\": \"hotfix\" in "
-    "company/state/active-task.json\n"
+    "Production emergency: set \"type\": \"hotfix\" on YOUR entry in\n"
+    "company/state/active-task.json - targeted Edit, never a whole-file "
+    "rewrite\n"
     "(logged, never silent)."
 )
 
 MODE_E_MSG1 = (
     "BLOCKED: source edit on a feature/program task with no execution "
     "decision.\n"
-    "Decide HOW task '<slug>' executes and record it in "
-    "company/state/active-task.json\n"
-    "(add both fields, then retry the edit):\n"
+    "Decide HOW task '<slugs>' executes and record it on YOUR entry in\n"
+    "company/state/active-task.json - targeted Edit, never a whole-file "
+    "rewrite\n"
+    "(add both fields to that entry, then retry the edit):\n"
     "  \"execution\": \"delegated\", \"execution_why\": \"<one line>\"\n"
     "      - the default: dispatch a tech-lead; developers build in "
     "worktrees and\n"
@@ -97,12 +127,16 @@ MODE_E_MSG1 = (
     "        at task close).\n"
     "Team on payroll: <roster>.\n"
     "Worktree edits are never gated by this. Production emergency: set\n"
-    "\"type\": \"hotfix\" in active-task.json (logged, never silent)."
+    "\"type\": \"hotfix\" on YOUR entry in active-task.json (logged, never "
+    "silent)."
 )
 
+# The literal task/<slug> on the attribution line is documentation shown to
+# the reader, which is why this message interpolates <slugs> and never
+# <slug>.
 MODE_E_MSG2 = (
     "BLOCKED: active-task.json records execution: \"delegated\" for task "
-    "'<slug>',\n"
+    "'<slugs>',\n"
     "but no dispatch has happened and this is a source edit in the main "
     "checkout.\n"
     "That contradicts your own written decision. Fix either side:\n"
@@ -112,25 +146,30 @@ MODE_E_MSG2 = (
     "2) Or change the record: set \"execution\": \"self\" with a fresh\n"
     "   \"execution_why\" - self-built work then pays the mandatory audit at "
     "commit.\n"
-    "Production emergency: set \"type\": \"hotfix\" (logged, never silent)."
+    "With more than one entry active, the spawn prompt must name task/<slug> "
+    "or\n"
+    "the dispatch is not attributed to this entry.\n"
+    "Production emergency: set \"type\": \"hotfix\" on YOUR entry (logged, "
+    "never silent)."
 )
 
-# FR-DE-15 tracking gate. Interpolate only <slug> and <type>; the '...' and
+# FR-DE-15 tracking gate. Interpolate only <slugs> and <type>; the '...' and
 # '<n>' inside the body are literal text shown to the reader, not fields.
 A3_MESSAGE = (
-    "BLOCKED: task '<slug>' is a <type> task in PR mode with no tracking "
+    "BLOCKED: task '<slugs>' is a <type> task in PR mode with no tracking "
     "issues\n"
     "recorded. All work ships through GitHub here (owner rule) - work that is "
     "not\n"
     "tracked does not start. Self-serve fix:\n"
     "1) Create one issue per deliverable: gh issue create --title ... --body "
     "...\n"
-    "2) Record the numbers in company/state/active-task.json:\n"
+    "2) Record the numbers on YOUR entry in "
+    "company/state/active-task.json:\n"
     "   \"issues\": [<n>, ...]\n"
     "3) Retry. The integration PR body will close them (Closes #<n> ...).\n"
     "No remote configured = this gate is off (local mode). Production "
     "emergency:\n"
-    "set \"type\": \"hotfix\" (logged, never silent)."
+    "set \"type\": \"hotfix\" on YOUR entry (logged, never silent)."
 )
 
 
@@ -273,43 +312,210 @@ def tracking_untracked(root, task):
 
 
 # --- ledger ---------------------------------------------------------------
+#
+# FR-MST-14: the ledger is v2 and holds N entries at once:
+#
+#   {"version": 2,
+#    "tasks": {"<slug>": {"dispatches": [...], "nudge_state": {...}|None}},
+#    "unattributed_dispatches": [...],
+#    "self_authored": [...],
+#    "audits": [...],
+#    "checksum": "..."}
+#
+# Dispatches and nudge state are PER-SLUG. Audits, self_authored and
+# unattributed_dispatches are GLOBAL and are never keyed or pruned by slug:
+# one auditor pass over the tree at work_hash H covers every entry's changes
+# in that tree, so demanding N audits of one identical tree would be both
+# wasteful and dishonest. nudge_state is per-slug (OQ-MST-08 assumption)
+# because the nudge text names a slug, so a global fingerprint would suppress
+# a true nudge for a second entry. self_authored stays global (OQ-MST-07
+# assumption) - it is a property of the tree, not of an entry.
 
-def read_ledger(root):
-    """Validated ledger for the ACTIVE task. Fresh on tamper/miss/slug-change.
+LEDGER_VERSION = 2
 
-    A tampered checksum resets audits and dispatches to empty so blocks stay
-    honest (unverifiable history counts as no verification). Never raises.
+
+def ledger_key(entry):
+    """The `tasks` key for one active-task entry.
+
+    OQ-MST-03 assumption: a slugless entry keys under the EMPTY STRING, so it
+    still gets its own record rather than colliding with a real slug.
     """
-    task = c.active_task(root)
-    slug = task.get("task") if isinstance(task, dict) else None
-    fresh = {
-        "version": 1,
-        "task": slug,
+    if not isinstance(entry, dict):
+        return ""
+    return entry.get("task") or ""
+
+
+def active_keys(root):
+    """The ledger key of every entry in flight, order preserved."""
+    return [ledger_key(e) for e in c.active_tasks(root)]
+
+
+def fresh_ledger():
+    """An empty v2 ledger: no dispatches, no audits, nothing verified."""
+    return {
+        "version": LEDGER_VERSION,
+        "tasks": {},
+        "unattributed_dispatches": [],
         "self_authored": [],
         "audits": [],
-        "dispatches": [],
-        "nudge_state": None,
     }
+
+
+def task_record(ledger, slug):
+    """The per-slug record, created empty if absent. Mutable in place."""
+    tasks = ledger.get("tasks")
+    if not isinstance(tasks, dict):
+        tasks = {}
+        ledger["tasks"] = tasks
+    record = tasks.get(slug)
+    if not isinstance(record, dict):
+        record = {}
+        tasks[slug] = record
+    if not isinstance(record.get("dispatches"), list):
+        record["dispatches"] = []
+    if not record.get("nudge_state"):
+        record["nudge_state"] = None
+    return record
+
+
+def dispatches_for(ledger, slug):
+    """The dispatch list recorded against THIS slug. [] when absent.
+
+    Per-slug lookup is the point: it is what stops one session's dispatch
+    from vacuously satisfying another session's delegated decision. A
+    regression to whole-ledger matching must fail a witness.
+    """
+    tasks = ledger.get("tasks")
+    if not isinstance(tasks, dict):
+        return []
+    record = tasks.get(slug)
+    if not isinstance(record, dict):
+        return []
+    dispatches = record.get("dispatches")
+    return dispatches if isinstance(dispatches, list) else []
+
+
+def credited_dispatches(ledger, entry, tasks):
+    """The dispatches THIS entry may count, given who else is in flight.
+
+    OQ-MST-03 assumption, fail-closed: with more than one entry active a
+    dispatch is attributed by matching the entry slug in the spawn text, so a
+    slugless entry can never be credited one. Its delegated decision therefore
+    stays unsatisfied until the entry is given a slug.
+    """
+    if len(tasks or []) > 1 and not (entry or {}).get("task"):
+        return []
+    return dispatches_for(ledger, ledger_key(entry))
+
+
+def migrate_v1(raw, keys):
+    """FR-MST-16: a v1 ledger read as v2, IN MEMORY only.
+
+    The v1 slug carries its dispatches and nudge state forward only while it
+    is still in flight; self_authored and audits come with it. A v1 ledger
+    written for a slug that has closed resets, exactly as it does today -
+    carrying a closed task's audit forward would newly satisfy Mode C and be
+    WEAKER than shipped behaviour.
+    """
+    key = ledger_key(raw)
+    if key not in keys:
+        return fresh_ledger()
+    ledger = fresh_ledger()
+    nudge = raw.get("nudge_state")
+    ledger["tasks"][key] = {
+        "dispatches": raw.get("dispatches") or [],
+        "nudge_state": nudge if nudge else None,
+    }
+    ledger["self_authored"] = raw.get("self_authored") or []
+    ledger["audits"] = raw.get("audits") or []
+    return ledger
+
+
+def generation_closed(raw_tasks, keys):
+    """True when EVERY slug this ledger was written for has closed.
+
+    FR-MST-15 removed the per-slug wipe: entries appearing and disappearing
+    around a live entry never reset the ledger, which is the reported bug.
+    A total turnover is a different thing - the ledger belongs to a finished
+    generation of work, and keeping it would let a closed task's audit
+    vacuously verify the next task's tree. That is a BLOCK today and no band
+    may turn it into an ALLOW.
+
+    An EMPTY recorded map counts as closed for the same reason. write_ledger
+    prunes `tasks` to the active keys, so `tasks == {}` means the last write
+    happened while nothing was active: it is a generation no ledger write ever
+    claimed, while the global audits list still carries whatever the previous
+    generation verified. Treating it as open let a closed task's audit be
+    inherited by a task added afterwards at the same work_hash, which turns
+    the Mode C and Mode D BLOCK of the single-task hook into an ALLOW. The
+    ledger resets instead.
+    """
+    recorded = list(raw_tasks)
+    if not recorded:
+        return True
+    return not any(k in keys for k in recorded)
+
+
+def read_ledger(root):
+    """The validated v2 ledger. NEVER writes; a migration is in-memory only.
+
+    Fresh on an unusable file, on a tampered checksum, and on a closed
+    generation. A tampered checksum resets audits and dispatches to empty so
+    blocks stay honest (unverifiable history counts as no verification).
+    Never raises.
+    """
+    keys = active_keys(root)
     raw = c.read_json_file(ledger_path(root))
     if not isinstance(raw, dict):
-        return fresh
+        return fresh_ledger()
     stored = raw.get("checksum")
     recomputed = c.stamp_checksum(
         {k: v for k, v in raw.items() if k != "checksum"}
     )
     if stored != recomputed:
-        return fresh
-    if raw.get("task") != slug:
-        return fresh
-    nudge = raw.get("nudge_state")
-    return {
-        "version": raw.get("version", 1),
-        "task": slug,
-        "self_authored": raw.get("self_authored") or [],
-        "audits": raw.get("audits") or [],
-        "dispatches": raw.get("dispatches") or [],
-        "nudge_state": nudge if nudge else None,
-    }
+        return fresh_ledger()
+    if raw.get("version") != LEDGER_VERSION:
+        return migrate_v1(raw, keys)
+    raw_tasks = raw.get("tasks")
+    if not isinstance(raw_tasks, dict):
+        raw_tasks = {}
+    if generation_closed(raw_tasks, keys):
+        return fresh_ledger()
+    ledger = fresh_ledger()
+    for key, record in raw_tasks.items():
+        if not isinstance(record, dict):
+            continue
+        nudge = record.get("nudge_state")
+        ledger["tasks"][key] = {
+            "dispatches": record.get("dispatches") or [],
+            "nudge_state": nudge if nudge else None,
+        }
+    ledger["unattributed_dispatches"] = (
+        raw.get("unattributed_dispatches") or []
+    )
+    ledger["self_authored"] = raw.get("self_authored") or []
+    ledger["audits"] = raw.get("audits") or []
+    return ledger
+
+
+def prune_tasks(root, ledger):
+    """FR-MST-17: `tasks` carries exactly the currently active ledger keys.
+
+    A recorded slug with no entry in active-task.json is a closed task and its
+    record goes. Every active key keeps a record even when empty, so the
+    ledger always names the generation it was written for. The global lists
+    (unattributed_dispatches, self_authored, audits) are never pruned by slug.
+    """
+    existing = ledger.get("tasks")
+    if not isinstance(existing, dict):
+        existing = {}
+    pruned = {}
+    for key in active_keys(root):
+        record = existing.get(key)
+        if not isinstance(record, dict):
+            record = {"dispatches": [], "nudge_state": None}
+        pruned[key] = record
+    return pruned
 
 
 def write_ledger(root, ledger):
@@ -319,6 +525,11 @@ def write_ledger(root, ledger):
         d = os.path.dirname(path)
         os.makedirs(d, exist_ok=True)
         body = {k: v for k, v in ledger.items() if k != "checksum"}
+        body["version"] = LEDGER_VERSION
+        body["tasks"] = prune_tasks(root, body)
+        for key in ("unattributed_dispatches", "self_authored", "audits"):
+            if not isinstance(body.get(key), list):
+                body[key] = []
         body["checksum"] = c.stamp_checksum(
             {k: v for k, v in body.items() if k != "checksum"}
         )
@@ -371,6 +582,29 @@ def role_of(tool_input):
     return None
 
 
+def attributed_entries(tasks, tool_input):
+    """FR-MST-18: the entries one builder dispatch counts for.
+
+    N == 1: the single entry, unconditionally - no prompt matching at all, so
+    the shipped behaviour is untouched.
+
+    N > 1: every entry whose slug appears in the spawn text. OQ-MST-04
+    assumption: case-sensitive SUBSTRING match of the slug against the
+    tool_input `prompt` and `description` fields, with no word boundary and no
+    normalisation - doctrine already requires `task/<slug>` in the spawn
+    prompt. The two fields are joined with a newline so a slug cannot match
+    across the seam. A slugless entry is never matched (see
+    credited_dispatches); returning [] means the dispatch was attributed to
+    nobody.
+    """
+    tasks = tasks or []
+    if len(tasks) <= 1:
+        return list(tasks)
+    ti = tool_input or {}
+    text = "{}\n{}".format(ti.get("prompt") or "", ti.get("description") or "")
+    return [e for e in tasks if e.get("task") and e.get("task") in text]
+
+
 def execution_decision(task):
     """'self' / 'delegated' only when both fields are present and meaningful."""
     if not isinstance(task, dict):
@@ -393,15 +627,23 @@ def emit_nudge(text):
 # --- modes ----------------------------------------------------------------
 
 def mode_a(root, ti):
-    """PostToolUse Edit|Write|MultiEdit: telemetry + drift nudge. No block."""
+    """PostToolUse Edit|Write|MultiEdit: telemetry + drift nudge. No block.
+
+    FR-MST-19: the nudge condition is evaluated PER ENTRY against that entry's
+    own nudge_state, but at most ONE nudge fires per invocation (the first
+    entry that both qualifies and is not already armed). The others fire on
+    subsequent edits. self_authored stays GLOBAL - it is a property of the
+    tree, not of an entry.
+    """
     file_path = ti.get("file_path")
     if not file_path:
         sys.exit(0)
-    task = c.active_task(root)
-    if not isinstance(task, dict):
+    tasks = c.active_tasks(root)
+    if not tasks:
         sys.exit(0)
-    slug = task.get("task")
-    if not slug:
+    # Today's early exit, generalised: no entry carries a slug, so there is
+    # nothing to record a nudge against and nothing is written.
+    if not c.slugs(tasks):
         sys.exit(0)
     if in_worktree_or_out_of_tree(file_path, root):
         sys.exit(0)
@@ -410,6 +652,8 @@ def mode_a(root, ti):
         sys.exit(0)
 
     ledger = read_ledger(root)
+    # self_authored is a property of the tree, so it stays GLOBAL; the nudge
+    # fingerprint names a slug, so it lives on that entry's record.
     seen = any(
         isinstance(e, dict) and e.get("path") == rel
         for e in ledger["self_authored"]
@@ -417,54 +661,102 @@ def mode_a(root, ti):
     if not seen:
         ledger["self_authored"].append({"path": rel, "at": c.iso_now()})
 
-    condition = (
-        task.get("type") in ("feature", "program")
-        and execution_decision(task) == "self"
-        and len(ledger["dispatches"]) == 0
-    )
-    if condition:
-        if (ledger.get("nudge_state") or {}).get("fingerprint") != "self-idle":
-            ledger["nudge_state"] = {
-                "fingerprint": "self-idle", "at": c.iso_now()
-            }
-            c.adherence_log(root, HOOK, "NUDGE", slug, "self-idle")
-            write_ledger(root, ledger)
-            emit_nudge(NUDGE_TEXT.replace("<slug>", slug))
-        write_ledger(root, ledger)
-        sys.exit(0)
+    nudge_entry = None
+    for task in tasks:
+        key = ledger_key(task)
+        record = task_record(ledger, key)
+        qualifies = (
+            bool(task.get("task"))
+            and task.get("type") in ("feature", "program")
+            and execution_decision(task) == "self"
+            and len(credited_dispatches(ledger, task, tasks)) == 0
+        )
+        if not qualifies:
+            if record.get("nudge_state"):
+                record["nudge_state"] = None
+            continue
+        armed = (
+            record.get("nudge_state") or {}
+        ).get("fingerprint") == "self-idle"
+        if armed or nudge_entry is not None:
+            continue
+        record["nudge_state"] = {"fingerprint": "self-idle", "at": c.iso_now()}
+        nudge_entry = task
 
-    if ledger.get("nudge_state"):
-        ledger["nudge_state"] = None
+    if nudge_entry is not None:
+        slug = nudge_entry.get("task")
+        c.adherence_log(
+            root, HOOK, "NUDGE", slug,
+            c.qualify_reason("self-idle", tasks, nudge_entry),
+        )
+        write_ledger(root, ledger)
+        emit_nudge(NUDGE_TEXT.replace("<slug>", slug))
+
     write_ledger(root, ledger)
     sys.exit(0)
 
 
 def mode_b_pre(root, ti):
-    """PreToolUse Task|Agent: record a builder dispatch. No block."""
+    """PreToolUse Task|Agent: record a builder dispatch, attributed per entry.
+
+    FR-DE-15 runs first: an untracked feature/program entry does not start, and
+    the gate is checked BEFORE any telemetry so a blocked spawn leaves no
+    dispatch behind. FR-MST-23 makes that an ALL check over the non-exempt
+    (feature/program) entries - the hotfix TYPE is an exemption, so a hotfix
+    entry is simply not one of the entries this gate evaluates. It is NOT an
+    ANY-hotfix waiver: a hotfix entry sitting beside an untracked feature entry
+    must not start that feature's work. Verifier and other non-builder roles
+    never reach here.
+    """
     manifest = load_manifest(root)
     if manifest is None:
         sys.exit(0)
     role = role_of(ti)
     builders = manifest.get("builder_roles") or []
-    task = c.active_task(root)
-    if role in builders and isinstance(task, dict):
-        # FR-DE-15: an untracked feature/program task does not start. Gate the
-        # builder spawn BEFORE recording telemetry (a blocked spawn leaves no
-        # dispatch). Hotfix is an explicit, logged bypass; verifier and other
-        # non-builder roles never reach here.
-        if task.get("type") == "hotfix":
-            c.log_bypass(root, HOOK, role, "hotfix mode")
-        elif tracking_untracked(root, task):
-            slug = task.get("task") or "<task-slug>"
-            ttype = task.get("type") or "feature"
+    tasks = c.active_tasks(root)
+    if role in builders and tasks:
+        gated = c.entries_of_type(tasks, ("feature", "program"))
+        untracked = [e for e in gated if tracking_untracked(root, e)]
+        hotfix = c.hotfix_entry(tasks)
+        if untracked:
             c.block(
                 root, HOOK, "spawn " + role,
-                "untracked feature/program task",
-                A3_MESSAGE.replace("<slug>", slug).replace("<type>", ttype),
+                c.qualify_reason(
+                    "untracked feature/program task", tasks, untracked
+                ),
+                A3_MESSAGE
+                .replace("<slugs>", c.slug_list(untracked))
+                .replace("<type>", untracked[0].get("type") or "feature"),
             )
+        if hotfix is not None:
+            c.log_bypass(
+                root, HOOK, role,
+                c.qualify_reason("hotfix mode", tasks, hotfix),
+            )
+
         ledger = read_ledger(root)
-        ledger["dispatches"].append({"role": role, "at": c.iso_now()})
-        c.adherence_log(root, HOOK, "DISPATCH", role, "builder spawn")
+        at = c.iso_now()
+        attributed = attributed_entries(tasks, ti)
+        if attributed:
+            for entry in attributed:
+                task_record(ledger, ledger_key(entry))["dispatches"].append(
+                    {"role": role, "at": at}
+                )
+            c.adherence_log(
+                root, HOOK, "DISPATCH", role,
+                c.qualify_reason("builder spawn", tasks, attributed),
+            )
+        else:
+            # FR-MST-18: a dispatch naming no active slug satisfies no entry's
+            # delegated requirement. Record it globally and log it so the false
+            # negative is diagnosable rather than invisible.
+            ledger["unattributed_dispatches"].append({"role": role, "at": at})
+            c.adherence_log(
+                root, HOOK, "DISPATCH", role,
+                c.qualify_reason(
+                    "builder spawn attributed to no active task", tasks, tasks
+                ),
+            )
         write_ledger(root, ledger)
     sys.exit(0)
 
@@ -478,8 +770,8 @@ def mode_b_post(root, ti, payload):
         sys.exit(0)
     role = role_of(ti)
     verifiers = manifest.get("verifier_roles") or []
-    task = c.active_task(root)
-    if role in verifiers and isinstance(task, dict):
+    tasks = c.active_tasks(root)
+    if role in verifiers and tasks:
         try:
             resp = payload.get("tool_response")
             if resp is None:
@@ -500,7 +792,21 @@ def mode_b_post(root, ti, payload):
 
 
 def mode_c(root, ti, payload):
-    """PreToolUse Bash: the commit gate."""
+    """PreToolUse Bash: the commit gate.
+
+    FR-MST-20. Order: git-commit segment, manifest, entries non-empty, ANY
+    hotfix, worktree/merge exemptions, dirty source paths, fresh audit.
+
+    RISK-MST-01, accepted: the hotfix waiver is ANY. One commit writes one
+    tree, so blocking a declared production emergency behind an unrelated
+    entry is the worse failure. Every bypass is logged and names the hotfix
+    entry.
+
+    Audits stay GLOBAL and are not demanded per entry: one auditor pass over
+    the tree at work_hash H covers every entry's changes in that tree, so
+    demanding N audits of one identical tree would be both wasteful and
+    dishonest.
+    """
     command = ti.get("command") or ""
     for seg in guard_commit.segments(command):
         sub, _ = guard_commit.git_subcmd(seg)
@@ -508,11 +814,15 @@ def mode_c(root, ti, payload):
             continue
         if load_manifest(root) is None:
             continue
-        task = c.active_task(root)
-        if not isinstance(task, dict):
+        tasks = c.active_tasks(root)
+        if not tasks:
             continue
-        if task.get("type") == "hotfix":
-            c.log_bypass(root, HOOK, "git commit", "hotfix mode")
+        hotfix = c.hotfix_entry(tasks)
+        if hotfix is not None:
+            c.log_bypass(
+                root, HOOK, "git commit",
+                c.qualify_reason("hotfix mode", tasks, hotfix),
+            )
             continue
         if in_worktree_or_out_of_tree(payload.get("cwd"), root):
             continue
@@ -525,38 +835,58 @@ def mode_c(root, ti, payload):
         ledger = read_ledger(root)
         if fresh_audit(root, ledger):
             continue
-        slug = task.get("task") or "<task-slug>"
+        # No hotfix reached here, so every entry in flight is non-exempt.
+        slugs_str = c.slug_list(tasks)
         reason = staleness_reason(root, ledger)
         shown = dp[:5]
         paths_str = ", ".join(shown)
         if len(dp) > 5:
             paths_str += ", ... and {} more".format(len(dp) - 5)
         msg = (
-            MODE_C_MSG.replace("<slug>", slug)
+            MODE_C_MSG.replace("<slugs>", slugs_str)
             .replace("<reason>", reason)
             .replace("<paths>", paths_str)
         )
-        c.block(root, HOOK, "git commit", "self-authored, no fresh audit", msg)
+        c.block(
+            root, HOOK, "git commit",
+            c.qualify_reason("self-authored, no fresh audit", tasks, tasks),
+            msg,
+        )
     sys.exit(0)
 
 
 def mode_d(root, payload):
-    """Stop: the close gate. Mirrors stop_gate.py (prints a JSON decision)."""
+    """Stop: the close gate. Mirrors stop_gate.py (prints a JSON decision).
+
+    FR-MST-21, and this is NOT an ANY-hotfix site. quick and hotfix are
+    exemption TYPES and FR-MST-23 makes exemptions PER ENTRY: the gate drops
+    the exempt entries and evaluates the rest, so [quick, feature] still
+    blocks. The exemption belongs to the quick entry, not to the tree.
+    """
     if payload.get("stop_hook_active"):
         sys.exit(0)
-    task = c.active_task(root)
-    if not isinstance(task, dict):
+    tasks = c.active_tasks(root)
+    if not tasks:
         sys.exit(0)
-    if task.get("type") in ("quick", "hotfix"):
+    gated = [
+        e for e in tasks if e.get("type") not in ("quick", "hotfix")
+    ]
+    if not gated:
         sys.exit(0)
     if load_manifest(root) is None:
         sys.exit(0)
     dp = dirty_source_paths(root)
     ledger = read_ledger(root)
     if dp and not fresh_audit(root, ledger):
-        slug = task.get("task", "(unknown)")
+        # N == 1 keeps the two-argument .get verbatim so a `{}` entry still
+        # renders as (unknown).
+        if len(tasks) <= 1:
+            slug = tasks[0].get("task", "(unknown)")
+        else:
+            slug = c.slug_list(gated)
         c.adherence_log(
-            root, HOOK, "BLOCK", slug, "self-authored, no fresh audit"
+            root, HOOK, "BLOCK", slug,
+            c.qualify_reason("self-authored, no fresh audit", tasks, gated),
         )
         reason = (
             "Active task '{}' has self-authored source changes in the main "
@@ -569,7 +899,24 @@ def mode_d(root, payload):
 
 
 def mode_e(root, ti):
-    """PreToolUse Edit|Write|MultiEdit: the execution gate."""
+    """PreToolUse Edit|Write|MultiEdit: the execution gate.
+
+    FR-MST-22, and the ORDER is the point:
+      1. path and manifest checks
+      2. no entries -> allow
+      3. ANY hotfix -> logged bypass, allow (RISK-MST-01, accepted: one edit
+         touches one tree, and blocking a declared production emergency behind
+         an unrelated entry is the worse failure)
+      4. filter to the feature/program entries; none -> allow
+      5. ALL tracking      - block if ANY of them is untracked
+      6. ALL execution     - block if ANY of them lacks a decision
+      7. per-entry dispatch - block for any delegated entry with zero
+         dispatches OF ITS OWN
+    Steps 5-7 are ALL checks, so a second feature entry can only make this
+    gate block MORE. Step 7 goes through credited_dispatches (per-slug); a
+    whole-ledger dispatch count would let session B's dispatch vacuously
+    satisfy session A's delegated decision.
+    """
     file_path = ti.get("file_path")
     if not file_path:
         sys.exit(0)
@@ -580,43 +927,63 @@ def mode_e(root, ti):
         sys.exit(0)
     if load_manifest(root) is None:
         sys.exit(0)
-    task = c.active_task(root)
-    if not isinstance(task, dict):
-        sys.exit(0)
-    ttype = task.get("type")
-    if ttype not in ("feature", "program"):
-        # OQ-DE-04 assumption: non-feature/program (quick, ideation, ...) are
-        # ungated here; hotfix is an explicit, logged bypass.
-        if ttype == "hotfix":
-            c.log_bypass(root, HOOK, rel, "hotfix mode")
+    tasks = c.active_tasks(root)
+    if not tasks:
         sys.exit(0)
 
-    slug = task.get("task") or "<task-slug>"
-    # FR-DE-15: an untracked feature/program task in PR mode is blocked before
-    # the execution-decision check, so a task missing BOTH is told to track
-    # first. Step 6 already handled hotfix; only feature/program reach here.
-    if tracking_untracked(root, task):
-        c.block(
-            root, HOOK, rel, "untracked feature/program task",
-            A3_MESSAGE.replace("<slug>", slug).replace("<type>", ttype),
+    hotfix = c.hotfix_entry(tasks)
+    if hotfix is not None:
+        c.log_bypass(
+            root, HOOK, rel, c.qualify_reason("hotfix mode", tasks, hotfix)
         )
-    decision = execution_decision(task)
-    if decision == "self":
         sys.exit(0)
-    if decision == "delegated":
-        ledger = read_ledger(root)
-        if len(ledger["dispatches"]) >= 1:
-            sys.exit(0)
+
+    # OQ-DE-04 assumption: non-feature/program entries (quick, ideation, ...)
+    # are ungated here.
+    gated = c.entries_of_type(tasks, ("feature", "program"))
+    if not gated:
+        sys.exit(0)
+
+    # FR-DE-15: untracked entries are blocked before the execution-decision
+    # check, so an entry missing BOTH is told to track first.
+    untracked = [e for e in gated if tracking_untracked(root, e)]
+    if untracked:
         c.block(
-            root, HOOK, rel, "delegated but no dispatch",
-            MODE_E_MSG2.replace("<slug>", slug),
+            root, HOOK, rel,
+            c.qualify_reason(
+                "untracked feature/program task", tasks, untracked
+            ),
+            A3_MESSAGE
+            .replace("<slugs>", c.slug_list(untracked))
+            .replace("<type>", untracked[0].get("type") or "feature"),
         )
-    c.block(
-        root, HOOK, rel, "no execution decision",
-        MODE_E_MSG1.replace("<slug>", slug).replace(
-            "<roster>", ", ".join(roster(root))
-        ),
-    )
+
+    undecided = [e for e in gated if execution_decision(e) is None]
+    if undecided:
+        c.block(
+            root, HOOK, rel,
+            c.qualify_reason("no execution decision", tasks, undecided),
+            MODE_E_MSG1
+            .replace("<slugs>", c.slug_list(undecided))
+            .replace("<roster>", ", ".join(roster(root))),
+        )
+
+    delegated = [e for e in gated if execution_decision(e) == "delegated"]
+    if delegated:
+        ledger = read_ledger(root)
+        starving = [
+            e for e in delegated
+            if len(credited_dispatches(ledger, e, tasks)) == 0
+        ]
+        if starving:
+            c.block(
+                root, HOOK, rel,
+                c.qualify_reason(
+                    "delegated but no dispatch", tasks, starving
+                ),
+                MODE_E_MSG2.replace("<slugs>", c.slug_list(starving)),
+            )
+    sys.exit(0)
 
 
 def main():

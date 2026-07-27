@@ -271,7 +271,25 @@
       "regex": false,
       "why": "Without --silent the npm prepare banner corrupts the pack JSON and all 10 pack-manifest assertions die as false MISSING, turning the local gate red",
       "added_at": "2026-07-26T17:30:00Z"
+    },
+    {
+      "id": "W-032",
+      "task": "multi-session-tasks",
+      "file": ".claude/skills/orchestrator/SKILL.md",
+      "must_contain": "remove ONLY your entry on integration",
+      "regex": false,
+      "why": "active-task.json holds N entries; a session must add and remove only its OWN entry with a targeted Edit, or it silently drops a concurrent session's task",
+      "added_at": "2026-07-27T13:54:29Z"
+    },
+    {
+      "id": "W-033",
+      "task": "multi-session-tasks",
+      "file": ".claude/hooks/guard_provenance.py",
+      "must_contain": "def dispatches_for(ledger, slug):",
+      "regex": false,
+      "why": "dispatch credit must stay PER-SLUG; a regression to a whole-ledger dispatch count lets one session's dispatch vacuously satisfy another session's delegated decision",
+      "added_at": "2026-07-27T13:54:30Z"
     }
   ],
-  "checksum": "a2bf1d5ece833826945887fde2d32814011ffa242c6916cd31fa05cfab5c3d17"
+  "checksum": "3329ace9c207b8e33bd23446e0634f53d97168fbeea9d7e5abe0141885b31cbc"
 }

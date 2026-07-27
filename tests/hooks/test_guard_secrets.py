@@ -82,6 +82,10 @@ class Base(unittest.TestCase):
     def set_task(self, obj):
         self.write("company/state/active-task.json", json.dumps(obj))
 
+    def set_tasks(self, *objs):
+        self.write("company/state/active-task.json",
+                   json.dumps({"version": 2, "tasks": list(objs)}))
+
     def init_git(self):
         git(self.root, "init")
         git(self.root, "config", "user.email", "t@example.com")

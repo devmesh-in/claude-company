@@ -32,6 +32,16 @@ import _common as c  # noqa: E402
 HOOK = "guard_commit"
 PROTECTED = {"main", "master"}
 
+# DISPLAY truncation for the branch recipe only (FR-MST-30). It never reaches
+# a block/allow decision - the gate arms on presence, not on a count.
+RECIPE_CAP = 3
+
+BRANCH_TAIL = (
+    "then retry your commit on that branch.\n"
+    "If this task is finished and you are integrating, use git merge "
+    "(allowed on main) - see company/GIT.md."
+)
+
 
 def segments(command):
     parts = re.split(r"&&|\|\||;|\|", command)
@@ -88,6 +98,45 @@ def push_targets_protected(branch_dir, args):
     return False
 
 
+def branch_recipe(entries):
+    """FR-MST-30: the protected-branch message, naming who caused the block.
+
+    A message that does not say WHICH task caused the block is not a recipe.
+    At exactly one entry this renders TODAY'S EXACT TEXT (BR-MST-02); beyond
+    one it renders a `git switch -c task/<slug>` line per non-exempt entry.
+    """
+    head = "BLOCKED: work belongs on a task branch, never directly on main.\n"
+    if len(entries) == 1:
+        slug = entries[0].get("task") or "<task-slug>"
+        return (
+            head
+            + "Create the isolated task branch and commit there:\n"
+            "  git worktree add .claude/worktrees/{slug} -b task/{slug}\n"
+            "or, if you are already in the right working tree:\n"
+            "  git switch -c task/{slug}\n".format(slug=slug)
+            + BRANCH_TAIL
+        )
+    names = [e.get("task") or "<task-slug>" for e in entries]
+    lines = [
+        head,
+        "{} task entries are in flight. Switch to the branch for the entry "
+        "you are committing:\n".format(len(names)),
+    ]
+    for slug in names[:RECIPE_CAP]:
+        lines.append("  git switch -c task/{}\n".format(slug))
+    hidden = len(names) - len(names[:RECIPE_CAP])
+    if hidden > 0:
+        lines.append(
+            "  plus {} more in company/state/active-task.json\n".format(hidden)
+        )
+    lines.append(
+        "or create an isolated worktree for it:\n"
+        "  git worktree add .claude/worktrees/<slug> -b task/<slug>\n"
+    )
+    lines.append(BRANCH_TAIL)
+    return "".join(lines)
+
+
 def main():
     payload = c.read_stdin_json()
     if payload is None:
@@ -119,7 +168,7 @@ def main():
                 continue
 
             if sub in ("commit", "merge"):
-                task = c.active_task(root)
+                tasks = c.active_tasks(root)
 
                 # All work happens on task branches. A plain commit on a
                 # protected branch while a task is active is misplaced work.
@@ -127,36 +176,38 @@ def main():
                 # commit with NO active task is a founding commit and is
                 # exempt.) Branch message wins over the gate-stamp checks
                 # below. Fail open when the branch is unknown.
-                if sub == "commit" and isinstance(task, dict):
+                # FR-MST-08: the gate arms on PRESENCE of any entry, and is
+                # bypassed by ANY hotfix entry (RISK-MST-01, accepted: a
+                # production emergency in flight waives the branch rule for
+                # the whole tree, and the bypass names the hotfix in the log).
+                if sub == "commit" and tasks:
                     branch = c.current_branch(branch_dir)
                     if branch in PROTECTED:
-                        if task.get("type") == "hotfix":
+                        hf = c.hotfix_entry(tasks)
+                        if hf is not None:
                             c.log_bypass(
                                 root, HOOK, "git commit",
-                                "hotfix commit on protected branch",
+                                c.qualify_reason(
+                                    "hotfix commit on protected branch",
+                                    tasks, hf,
+                                ),
                             )
                             continue
-                        slug = task.get("task") or "<task-slug>"
+                        # No hotfix here, so every entry is non-exempt.
                         c.block(
                             root, HOOK, "git commit",
-                            "commit on protected branch",
-                            "BLOCKED: work belongs on a task branch, never "
-                            "directly on main.\n"
-                            "Create the isolated task branch and commit "
-                            "there:\n"
-                            "  git worktree add .claude/worktrees/{slug} "
-                            "-b task/{slug}\n"
-                            "or, if you are already in the right working "
-                            "tree:\n"
-                            "  git switch -c task/{slug}\n"
-                            "then retry your commit on that branch.\n"
-                            "If this task is finished and you are "
-                            "integrating, use git merge (allowed on main) "
-                            "- see company/GIT.md.".format(slug=slug),
+                            c.qualify_reason(
+                                "commit on protected branch", tasks, tasks
+                            ),
+                            branch_recipe(tasks),
                         )
 
-                if isinstance(task, dict) and task.get("type") == "hotfix":
-                    c.log_bypass(root, HOOK, "git " + sub, "hotfix mode")
+                hf = c.hotfix_entry(tasks)
+                if hf is not None:
+                    c.log_bypass(
+                        root, HOOK, "git " + sub,
+                        c.qualify_reason("hotfix mode", tasks, hf),
+                    )
                     continue
                 cfg = c.gates_config(root)
                 gates = cfg.get("gates") if isinstance(cfg, dict) else None

@@ -77,8 +77,8 @@ These rungs are wired for this repo; a project inherits them and adds its own.
 `guard_secrets` blocks at commit time: a staged secret stops the commit, full
 stop. This one does not yield to `hotfix` - a production emergency is exactly
 when a leaked credential does the most damage, so the secrets guard blocks even
-while `active-task.json` is `"type": "hotfix"` and other guards only log their
-bypass. There is no waiver; scrub the secret and recommit.
+while an entry in `active-task.json` carries `"type": "hotfix"` and other
+guards only log their bypass. There is no waiver; scrub the secret and recommit.
 
 ## Gates and the hierarchy
 

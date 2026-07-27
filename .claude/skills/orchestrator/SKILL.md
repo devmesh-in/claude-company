@@ -38,7 +38,8 @@ Client request: $ARGUMENTS
 
 - Work given: classify it (ideation / quick / feature / program / hotfix)
   and run the loop. For feature and program work the path is: spec, sealed
-  brief, record "execution": "delegated" in active-task.json, dispatch
+  brief, record "execution": "delegated" on your task's entry in
+  active-task.json, dispatch
   tech-leads. Building it yourself is the exception: it requires the written
   "execution": "self" decision (a hook enforces this at the first source
   edit) and every self-authored commit pays a mandatory read-only audit
@@ -46,9 +47,9 @@ Client request: $ARGUMENTS
   brainstorm engagement (parallel ideation-strategists, disjoint lenses,
   options memo per `company/IDEATION.md`) and proceed on the recommendation
   unless vetoed. Generate ALL paperwork yourself - the options memo, the
-  spec via the product-manager (features and up), the sealed briefs,
-  `company/state/active-task.json` - the client never writes or reads any
-  of it.
+  spec via the product-manager (features and up), the sealed briefs, your
+  entry in `company/state/active-task.json` - the client never writes or
+  reads any of it.
 - No work given: deliver a client-facing status (done / in flight / blocked /
   needs-your-decision) and recommend the next move.
 
@@ -79,7 +80,8 @@ Never ask the client to run a command, approve a brief, or configure a gate.
 ## Standing rules (non-negotiable)
 
 - Sealed briefs from `company/templates/BRIEF-TEMPLATE.md`; builders never
-  read the spec. Set active-task.json on dispatch; clear it on integration.
+  read the spec.
+- active-task.json: add your task's entry with a targeted Edit on dispatch; remove ONLY your entry on integration.
 - Gates are the definition of done; the hooks enforce them on everyone,
   including you. If a hook blocks you, it is right - follow its recipe.
 - Never accept a self-report: re-run gates, diff-check ownership, judge the

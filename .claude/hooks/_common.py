@@ -80,10 +80,97 @@ def read_json_file(path):
         return None
 
 
-def active_task(root):
-    return read_json_file(
+def active_tasks(root):
+    """Every task entry in flight in this working tree. Never raises; [] on
+    anything unusable (today's fail-open).
+    """
+    raw = read_json_file(
         os.path.join(root, "company", "state", "active-task.json")
     )
+    try:
+        if isinstance(raw, list):
+            return [e for e in raw if isinstance(e, dict)]
+        if not isinstance(raw, dict):
+            return []
+        tasks = raw.get("tasks")
+        if isinstance(tasks, list):
+            return [e for e in tasks if isinstance(e, dict)]
+        return [raw]
+    except Exception:
+        return []
+
+
+def has_active_task(tasks):
+    """True iff at least one entry is in flight."""
+    return bool(tasks)
+
+
+def hotfix_entry(tasks):
+    """The FIRST entry with type == "hotfix", else None."""
+    for entry in tasks or []:
+        if isinstance(entry, dict) and entry.get("type") == "hotfix":
+            return entry
+    return None
+
+
+def entries_of_type(tasks, types):
+    """Entries whose type is in `types` (a string or an iterable of strings)."""
+    wanted = (types,) if isinstance(types, str) else tuple(types or ())
+    return [
+        entry for entry in tasks or []
+        if isinstance(entry, dict) and entry.get("type") in wanted
+    ]
+
+
+def slugs(tasks):
+    """Truthy `task` values, order preserved."""
+    out = []
+    for entry in tasks or []:
+        if not isinstance(entry, dict):
+            continue
+        slug = entry.get("task")
+        if slug:
+            out.append(slug)
+    return out
+
+
+def slug_list(tasks, cap=3):
+    """Display string over ENTRIES (not slugs). A slugless entry renders as
+    the literal <task-slug>. Joined with ", "; overflow beyond `cap` appends
+    " and <n> more". Empty list -> "".
+
+    `cap` is display truncation only and must never reach a block/allow
+    decision.
+    """
+    names = []
+    for entry in tasks or []:
+        slug = entry.get("task") if isinstance(entry, dict) else None
+        names.append(slug if slug else "<task-slug>")
+    if not names:
+        return ""
+    shown = names[:cap]
+    text = ", ".join(shown)
+    hidden = len(names) - len(shown)
+    if hidden > 0:
+        text += " and {} more".format(hidden)
+    return text
+
+
+def qualify_reason(reason, tasks, responsible):
+    """`reason` unchanged when len(tasks) <= 1; otherwise
+    "<reason> (<slugs>)" where <slugs> is slug_list of `responsible`.
+    `responsible` may be a single entry dict or a list of entries.
+    This is what keeps adherence.log lines byte-identical at N == 1 while
+    still naming the responsible entry at N > 1.
+    """
+    if len(tasks or []) <= 1:
+        return reason
+    if isinstance(responsible, dict):
+        responsible = [responsible]
+    named = slug_list(responsible)
+    if not named:
+        return reason
+    return "{} ({})".format(reason, named)
 
 
 def gates_config(root):

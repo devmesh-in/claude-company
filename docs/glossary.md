@@ -140,9 +140,10 @@ produces an ownership map and wave plan; leads run in parallel within each wave.
 
 ### hotfix
 
-Production is on fire. Declared by the CEO in `active-task.json`. Hooks log the
-bypass instead of blocking, but `guard_secrets` still holds. A retroactive spec
-and tests follow within a day, and no hotfix closes without a postmortem.
+Production is on fire. Declared by the CEO on that task's entry in
+`active-task.json`. Hooks log the bypass instead of blocking, but
+`guard_secrets` still holds. A retroactive spec and tests follow within a day,
+and no hotfix closes without a postmortem.
 
 ## Documents and artifacts
 
@@ -336,7 +337,7 @@ All under `company/state/`, all owned by the CEO.
 | `RESUME.md` | The session handoff: done, running, next, plus the facts every spawn needs. Read first on session start. |
 | `WORRIES.md` | A terse ledger of suspected-but-unproven risks. A row graduates out when it becomes a CR, a STATUS risk, or a verified fix. |
 | `DECISIONS.md` | Owner escalations and their outcomes, including recorded acceptance of a delivery. |
-| `active-task.json` | The machine-readable pointer to the task in flight, read by hooks. |
+| `active-task.json` | The machine-readable list of tasks in flight in this working tree, read by hooks. One entry per task; add your entry with a targeted Edit and remove ONLY your entry, never rewriting the whole file (`company/METHOD.md`). |
 | `provenance-ledger.json` | Audit and dispatch records for the task in flight, written only by the provenance hook. |
 | `gates.status` | The stamped gate result, written only by the gate runner. |
 | `adherence.log` | Every hook block and bypass, one line each. |

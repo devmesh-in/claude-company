@@ -10,10 +10,12 @@ notice (note them as worries instead).
 
 Read, in order: `company/state/RESUME.md`, `company/state/STATUS.md`,
 `company/state/WORRIES.md`, `company/state/DECISIONS.md`,
-`company/state/active-task.json` (if present), open CRs in
-`company/change-requests/`, `git log --oneline -10`, and the tail of
-`company/state/adherence.log`. If a task is in flight, check its worktree's
-git log for progress that has not been reported.
+`company/state/active-task.json` (if present - it lists every task entry in
+flight in this working tree), open CRs in `company/change-requests/`,
+`git log --oneline -10`, and the tail of
+`company/state/adherence.log`. Report every entry in flight, in the file's
+order, and check each one's worktree git log for progress that has not been
+reported. Read only: a standup never adds or removes an entry.
 
 Also run `bash company/run-gates.sh` if the last stamp in
 `company/state/gates.status` is missing or stale - the standup states gate
@@ -21,12 +23,17 @@ truth, not gate memory.
 
 Also tail `company/state/costs.log` if present (one line per stop, pipe
 separated: `ts | session | kind | task | model | in=.. out=.. cache_r=..
-cache_w=.. | est=$X.XX`). Sum the `est=$` column two ways for the Spend line:
-spend for TODAY (lines whose `ts` date matches today) and spend for the ACTIVE
-task (lines whose task column matches `active-task.json`'s `task`). If a line
-has no `est=$` segment (no pricing configured), report token totals instead of
-dollars and say estimates are unavailable. Costs are estimates only, not
-billing.
+cache_w=.. | est=$X.XX`). The task column can name several slugs joined with
+`+` (truncated to three plus `+more`), so match by CONTAINMENT, not equality:
+a line belongs to an entry when the task column CONTAINS that entry's `task`
+slug (OQ-MST-05 assumption). Sum the `est=$` column two ways for the Spend
+line: spend for TODAY (lines whose `ts` date matches today) and spend PER
+ENTRY (for each entry, sum every line whose task column contains its slug).
+Never split a shared line - it is attributed in full to every entry it names,
+so whenever more than one entry was in flight the per-entry figures are
+APPROXIMATE and the output must say so explicitly. If a line has no `est=$`
+segment (no pricing configured), report token totals instead of dollars and
+say estimates are unavailable. Costs are estimates only, not billing.
 
 Then report, in this shape, tight and factual:
 
@@ -34,9 +41,9 @@ Then report, in this shape, tight and factual:
 ## Standup - <date>
 
 **Done since last update:** ...
-**In flight:** <task> - <agent/worktree> - <last known state>
+**In flight:** one line per entry: <task> - <agent/worktree> - <last known state>
 **Gates:** <green/red + which> (stamped <when>, fresh/stale)
-**Spend (est):** today $<X.XX> - active task <slug> $<Y.YY> (or tokens if no pricing)
+**Spend (est):** today $<X.XX> - per entry <slug> $<Y.YY>, ... (mark APPROXIMATE when more than one entry is in flight; tokens if no pricing)
 **Blocked:** <what, on whom>
 **Decisions needed (owner):** <numbered, each with what it blocks>
 **Open CRs:** <n> (<newest slugs>)

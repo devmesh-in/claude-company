@@ -22,8 +22,10 @@ route it as quick instead of forcing ceremony.
 2. **Brief.** Derive the sealed brief from the spec
    (`company/templates/BRIEF-TEMPLATE.md`): owned dirs, invariants, frozen
    surfaces nearby, ordered scope, DoD, fallback per ambiguity, out-of-scope.
-   Write it to `company/briefs/`, set `company/state/active-task.json`
-   (`type: "feature"`, `brief: <path>`, `test_scope` as appropriate).
+   Write it to `company/briefs/`, then add your task's entry to
+   `company/state/active-task.json` with a targeted Edit (`type: "feature"`,
+   `brief: <path>`, `test_scope` as appropriate) - never rewrite the whole
+   file, see `company/METHOD.md`.
 3. **Build.** Spawn one **tech-lead** in a worktree
    (`git worktree add .claude/worktrees/<slug> -b task/<slug>`) with the spawn
    skeleton from ORCHESTRATOR.md. The lead runs its own developers, fills
@@ -34,8 +36,9 @@ route it as quick instead of forcing ceremony.
    spot-read 2-3 FRs, hand-exercise one unhappy path, judge the screenshots
    against the acceptance criteria yourself. Findings under an hour: fix and
    note. Bigger: back to the lead with precise findings.
-5. **Integrate.** Merge in dependency order, clear active-task.json, remove
-   the worktree, archive spec + brief to `shipped/`, dispatch docs-librarian
+5. **Integrate.** Merge in dependency order, remove ONLY your entry from
+   active-task.json with a targeted Edit, remove the worktree,
+   archive spec + brief to `shipped/`, dispatch docs-librarian
    if docs are affected.
 6. **Record and report.** Update STATUS/RESUME/WORRIES; report to the owner:
    what shipped, evidence summary, CRs decided, anything needing an owner

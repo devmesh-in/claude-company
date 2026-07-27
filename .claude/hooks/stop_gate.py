@@ -2,7 +2,7 @@
 """Stop hook: refuse to finish a real task on red or stale gates.
 
 Loop protection: if stop_hook_active is true, exit 0 immediately. Otherwise, if
-an active task exists whose type is not quick/hotfix and the gates.status is
+ANY active entry has a type that is not quick/hotfix and the gates.status is
 missing/red/stale, emit the Stop-hook block decision as JSON on stdout and exit
 0. Anything else exits 0 silently. Fails open.
 """
@@ -26,24 +26,34 @@ def main():
 
     try:
         root = c.project_root(payload)
-        task = c.active_task(root)
-        if not isinstance(task, dict):
+        tasks = c.active_tasks(root)
+        if not tasks:
             sys.exit(0)
-        if task.get("type") in ("quick", "hotfix"):
+        # FR-MST-09: quick/hotfix exempt THEMSELVES, not the tree. Any other
+        # entry still in flight keeps the gate armed - the tree is red with
+        # real work on it, and the exemption belongs to the exempt entry only.
+        gating = [
+            e for e in tasks if e.get("type") not in ("quick", "hotfix")
+        ]
+        if not gating:
             sys.exit(0)
 
         ok, reason = c.check_stamp(root)
         if ok:
             sys.exit(0)
 
-        slug = task.get("task", "(unknown)")
+        if len(gating) == 1:
+            slug = gating[0].get("task", "(unknown)")
+        else:
+            slug = c.slug_list(gating)
         c.adherence_log(root, HOOK, "BLOCK", slug, reason)
         decision = {
             "decision": "block",
             "reason": (
                 "Active task '{}' has red or stale gates. Run the gate suite "
-                "(/gates) and make it green, or close the task in "
-                "company/state/active-task.json, before finishing.".format(slug)
+                "(/gates) and make it green, or close YOUR entry in "
+                "company/state/active-task.json with a targeted Edit, before "
+                "finishing.".format(slug)
             ),
         }
         print(json.dumps(decision))

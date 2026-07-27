@@ -24,9 +24,11 @@ HOOK = "guard_tests"
 TEST_DIR_SEGMENTS = {"tests", "test", "__tests__", "e2e"}
 OUT_OF_SCOPE = (
     "BLOCKED: editing tests is out of scope for this brief. Tests are the "
-    "oracle; changing them to pass is reward-hacking. Open test scope in "
-    "company/state/active-task.json (\"test_scope\": true) only if the brief "
-    "calls for it."
+    "oracle; changing them to pass is reward-hacking.\n"
+    "Fix, only if the brief calls for test work: set \"test_scope\": true on "
+    "YOUR entry in company/state/active-task.json with a targeted Edit of "
+    "that entry - other sessions own the other entries, so never rewrite the "
+    "whole file."
 )
 
 
@@ -49,9 +51,29 @@ def is_test_path(path):
     return False
 
 
-def test_scope_open(root):
-    task = c.active_task(root)
-    return isinstance(task, dict) and task.get("test_scope") is True
+def test_scope_open(root, target):
+    """True iff ANY entry has "test_scope": true (FR-MST-06 / RISK-MST-02).
+
+    This is the ONE accepted BLOCK-to-ALLOW weakening of the multi-entry work:
+    a second entry can open test scope for the whole tree, because glob-scoped
+    grants were scoped out. It is therefore logged BY NAME the moment more than
+    one entry is in flight - at N == 1 nothing is logged, which is what keeps
+    the single-entry path byte-identical (BR-MST-02).
+    """
+    tasks = c.active_tasks(root)
+    granting = None
+    for entry in tasks:
+        if entry.get("test_scope") is True:
+            granting = entry
+            break
+    if granting is None:
+        return False
+    if len(tasks) > 1:
+        c.adherence_log(
+            root, HOOK, "GRANT", target,
+            "test scope open (" + c.slug_list([granting]) + ")",
+        )
+    return True
 
 
 def segments(command):
@@ -89,12 +111,14 @@ def main():
 
     try:
         if tool == "Bash":
-            if test_scope_open(root):
-                sys.exit(0)
             command = tool_input.get("command") or ""
             for seg in segments(command):
                 for target in rm_targets(seg):
                     if is_test_path(target):
+                        # Scope is resolved only once a test path is actually
+                        # at stake, so the GRANT line can name what it allowed.
+                        if test_scope_open(root, target):
+                            sys.exit(0)
                         c.block(
                             root, HOOK, target, "rm of test file",
                             "BLOCKED: removing test file '{}'. {}".format(
@@ -109,7 +133,7 @@ def main():
         rel = c.rel_path(root, file_path)
         if not is_test_path(rel):
             sys.exit(0)
-        if test_scope_open(root):
+        if test_scope_open(root, rel):
             sys.exit(0)
         c.block(root, HOOK, rel, "test edit out of scope", OUT_OF_SCOPE)
     except SystemExit:
