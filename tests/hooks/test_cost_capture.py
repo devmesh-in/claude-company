@@ -85,6 +85,10 @@ class Base(unittest.TestCase):
     def set_task(self, obj):
         self.write("company/state/active-task.json", json.dumps(obj))
 
+    def set_tasks(self, *objs):
+        self.write("company/state/active-task.json",
+                   json.dumps({"version": 2, "tasks": list(objs)}))
+
     def write_pricing(self, obj):
         self.write("company/models.json", json.dumps(obj))
 

@@ -218,9 +218,20 @@ def load_brief(root, brief_arg):
     """Return (text, note). text is None (with a note) when there is no brief."""
     path = brief_arg
     if not path:
-        task = c.active_task(root)
-        if isinstance(task, dict):
-            path = task.get("brief")
+        tasks = c.active_tasks(root)
+        # OQ-MST-06 assumption: with several entries in flight there is no
+        # honest default brief. Scoring one entry's ownership section against
+        # a diff that mixes every entry's work would invent a signal, which is
+        # worse than none - so name the count and ask for --brief. This is
+        # advisory: the ownership signal scores 0 and the exit code is
+        # unchanged at every N.
+        if len(tasks) > 1:
+            return None, (
+                "{} active task entries - pass --brief to score "
+                "ownership".format(len(tasks))
+            )
+        if tasks:
+            path = tasks[0].get("brief")
     if not path:
         return None, "no brief (no --brief, no active-task brief field)"
     if not os.path.isabs(path):
