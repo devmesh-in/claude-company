@@ -14,6 +14,37 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
+000000. v0.2.5 PUBLISHED 2026-07-26. Registry latest = 0.2.5, SLSA provenance
+   attached, published tarball verified to contain NO company/state directory
+   (81 files). main = e86860f. Three things landed in it:
+   (a) pack-state-leak (PR #86, d60db11): package.json negated only specs/
+       briefs/change-requests, so company/state/{RESUME,STATUS,WORRIES,
+       DECISIONS}.md shipped in every tarball through 0.2.4. The leak NEVER
+       reached a user project - install.sh scaffolds its own stubs and never
+       copies packaged ones (a 0.2.4 install yields 77-83 byte stubs), so it
+       was confined to the registry tarball and node_modules. Also closes the
+       dirty-publish hole for the untracked runtime files.
+   (b) test-infra-fixes (PR #85, 65bd070): CI ran 103 of 224 hook tests;
+       pack-manifest assertions were dead under npm 10.5.0.
+   (c) release-npm-pin (PR #87, e86860f): the publish workflow installed
+       UNPINNED npm@latest against pinned node 20. npm 12 raised its node
+       floor to 22.22.2, so the first v0.2.5 publish died EBADENGINE before
+       any test ran. Now npm@^11.5.1.
+   RETAG NOTE: the first v0.2.5 tag (at d60db11) predated the pin and failed
+   to publish. It was deleted and re-cut at e86860f only after confirming the
+   registry never received it. 0.2.3 and 0.2.4 remain published WITH the
+   board inside them - deprecating them is an open owner decision.
+   NEXT: multi-session-tasks. The spec is on main at
+   company/specs/spec-multi-session-tasks.md (31 FRs / 11 BRs / 10 OQs, all
+   fallbacks decided). Still needed before dispatch: tracking issues (PR mode
+   blocks a feature spawn without them) and the sealed brief. Owner decision
+   still open on whether to fold the P1 worktree-commit bug into it.
+   PROMPT HYGIENE THAT MATTERS: never write the negative verdict token in an
+   auditor prompt - the provenance parser substring-matches it and records a
+   passing audit as its opposite. Use SHIP / SHIP-WITH-FIXES / HALT. And a
+   re-audit must be a FRESH Task dispatch: SendMessage resumption records no
+   provenance at all.
+
 00000. test-infra-fixes SHIPPED 2026-07-26 (PR #85 merged 65bd070).
    Self-authored by the CEO in the main checkout, auditor verdict SHIP,
    CI 9/9 green across ubuntu+macos x node 18/20/22. Integrated main
