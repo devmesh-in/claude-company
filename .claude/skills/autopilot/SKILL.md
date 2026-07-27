@@ -32,7 +32,8 @@ role yet. Optional argument focuses the tick: $ARGUMENTS
 ## The tick, in order
 
 1. **Read state** (RESUME first, then STATUS, WORRIES, DECISIONS,
-   active-task.json, open CRs, `git worktree list`, `git log --oneline -10`).
+   every entry in active-task.json, open CRs, `git worktree list`,
+   `git log --oneline -10`).
    Create `company/state/BACKLOG.md` if it does not exist yet (owner wishes
    on top, company-discovered candidates below).
 2. **Triage in fixed priority order** - the first hit wins:

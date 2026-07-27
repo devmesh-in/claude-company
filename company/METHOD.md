@@ -119,7 +119,7 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 | `quick` | Small bug, copy change, config tweak | Brief only. One developer or the CEO itself. No Phase 0. Gates still gate. |
 | `feature` | New user-visible capability, or anything touching a frozen surface, an invariant, or money | Phase 0 spec -> spec-ready gate -> brief -> one tech lead + team -> QA evidence -> verify -> integrate |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |
-| `hotfix` | Production is on fire | Declared by the CEO in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day, and no hotfix closes without a postmortem (`company/templates/POSTMORTEM-TEMPLATE.md`) filed next to its retroactive spec in `company/specs/shipped/` as `postmortem-<slug>.md`. The CEO checks its prevention line at close: the postmortem must name a real mechanical change that prevents recurrence (a new witness, a new gate, a new frozen pattern) or state why none is possible. |
+| `hotfix` | Production is on fire | Declared by the CEO on that task's entry in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day, and no hotfix closes without a postmortem (`company/templates/POSTMORTEM-TEMPLATE.md`) filed next to its retroactive spec in `company/specs/shipped/` as `postmortem-<slug>.md`. The CEO checks its prevention line at close: the postmortem must name a real mechanical change that prevents recurrence (a new witness, a new gate, a new frozen pattern) or state why none is possible. |
 
 ## The context discipline
 
@@ -143,11 +143,35 @@ All under `company/state/`, all owned by the CEO:
 | `RESUME.md` | Session handoff: done / running / next, plus the facts every spawn prompt needs. Read first on every session start. |
 | `WORRIES.md` | Terse ledger of suspected-but-unproven risks: `P (P0-P3) \| Worry \| What \| Logic`. A row graduates OUT when it becomes a CR, a STATUS risk, or a verified fix. |
 | `DECISIONS.md` | Owner escalations and their outcomes. |
-| `active-task.json` | The machine-readable pointer to the task in flight (read by hooks). Carries the task's written execution decision (execution / execution_why) for feature/program work, plus reclassified_why on downgrades. |
+| `active-task.json` | The machine-readable list of tasks in flight in this working tree (read by hooks). One entry per task; an entry carries that task's written execution decision (execution / execution_why) for feature/program work, plus reclassified_why on downgrades. Write it per the rule below. |
 | `provenance-ledger.json` | Audit and dispatch records for the task in flight (written only by the provenance hook). |
 | `gates.status` | The stamped gate result (written only by the gate runner). |
 | `adherence.log` | Every hook block and bypass, one line each. Proof the system enforces. |
 | `costs.log` | One line per agent stop: token usage and an estimated spend, appended by the cost_capture hook. Estimates only, not billing. |
+
+### active-task.json holds a list
+
+Several sessions can run against one working tree at once, so the file is a
+list of entries, not one task:
+
+```json
+{"version": 2, "tasks": [{"task": "<slug>", "type": "<class>", "brief": "<path>"}]}
+```
+
+An entry carries the same fields one task carries: `task`, `type`, `brief`,
+`test_scope`, `execution`, `execution_why`, `issues`, `reclassified_why`.
+Insertion order is the stable render order everywhere the entries are shown.
+A legacy single-object file is still read correctly, so an existing install
+needs no migration.
+
+Slugs are unique per working tree, and no slug may be a prefix of another. A
+dispatch is credited to an entry by finding that entry's slug in the spawn
+prompt, so a `feat` entry would be credited by a prompt naming `task/feat-a`.
+
+**Write safety, the one rule.** Add your task's entry with a targeted Edit.
+Remove ONLY your entry. Never rewrite the whole file. An Edit replaces against
+current disk content, so two sessions editing at different anchors both
+survive. A whole-file Write drops the other session's entry.
 
 ## What is never decided below the owner
 

@@ -156,5 +156,9 @@ or roll back on its own.
   (deploys) in `company/METHOD.md`, never an agent decision.
 - The changelog and notes are built from `main` after integration, never from a
   task worktree - a worktree's view can miss merged work or carry unmerged work.
+- An update is never run mid-task: `guard_provenance` imports `guard_spec`,
+  `guard_models` and `guard_commit`, and `context_pin` / `session_start` import
+  `guard_provenance`, so a mid-turn tree swap can mix hook versions for
+  sub-second windows.
 - Preparation runs only on a green board. A red readiness criterion is a stop,
   not a footnote.
