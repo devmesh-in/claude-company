@@ -33,6 +33,12 @@ jobs:
         run: bash tests/install/test_tui.sh
       - name: Installer + gates tests
         run: bash tests/install/run_tests.sh
+      # run_tests.sh does NOT cover update: test_update.sh is a separate file and
+      # was only ever reached through package.json prepublishOnly, so its 139
+      # cases - including the whole legacy field-install rollout proof - never ran
+      # on a PR. Same class of hole as the run_tests.sh direct-exec bug (W-030).
+      - name: Update engine tests
+        run: bash tests/install/test_update.sh
       - name: Hook tests
         run: bash tests/hooks/run_tests.sh
       - name: Syntax check bin and lib

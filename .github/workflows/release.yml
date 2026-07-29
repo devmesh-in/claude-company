@@ -41,6 +41,8 @@ jobs:
         run: bash tests/install/test_tui.sh
       - name: Installer + gates tests
         run: bash tests/install/run_tests.sh
+      - name: Update engine tests
+        run: bash tests/install/test_update.sh
       - name: Hook tests
         run: bash tests/hooks/run_tests.sh
 
