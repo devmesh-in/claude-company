@@ -14,6 +14,55 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
+00000000. v0.2.6 PREPARED 2026-07-29 - THE ONLY THING LEFT IS THE OWNER'S TAG.
+   package.json is bumped to 0.2.6 on main. The registry is still on 0.2.5, so
+   multi-session-tasks is NOT yet in anyone's install. The publish path is the
+   release.yml workflow, which fires on a PUBLISHED GitHub release (not on a
+   bare tag push) and authenticates by OIDC trusted publishing - no token
+   exists anywhere, so an agent cannot publish even by accident.
+   OWNER-ONLY, from a clean clone at the tag:
+     git tag -a v0.2.6 <main-sha> -m "v0.2.6" && git push origin v0.2.6
+   then publish the GitHub release to trigger release.yml.
+   TWO READINESS CRITERIA ARE RED and were escalated rather than waived:
+   R7 (two open P1 worries) and R3 (27 orphan MST requirement IDs, though
+   trace_check itself exits 0). Neither is a defect in the installed product.
+   The proposal row is on DECISIONS.md awaiting the owner.
+   CI COVERAGE FIX RIDES ALONG: neither ci.yml nor release.yml ran
+   tests/install/test_update.sh - 139 cases, including the whole FR-MST-29
+   legacy field-install rollout proof, only ever ran via prepublishOnly. Both
+   workflows now run it. This is the SECOND instance of this exact hole
+   (W-030 was the first). When adding a test FILE, check it is reachable from
+   a CI step, not just from a runner that happens to sit next to it.
+
+0000000. multi-session-tasks SHIPPED 2026-07-27 (PR #93 merged 171421f, closes
+   #89-#92); CLOSED OUT 2026-07-29. active-task.json now holds N entries
+   (`{"version": 2, "tasks": [...]}`), `_common.active_task` is gone and
+   `active_tasks` replaces it, and the provenance ledger is v2 with per-slug
+   dispatches - the slug-mismatch wipe at guard_provenance.py:302 is deleted,
+   which was the reported bug. Witnesses W-032 (the orchestrator entry idiom)
+   and W-033 (per-slug dispatch credit) recorded; registry 32/32.
+   THE SESSION THAT DISPATCHED THIS DIED before close-out, and main sat three
+   commits behind origin with the board still reading IN FLIGHT for two days.
+   The recovery lesson: `gh pr list` and `git log origin/main` are the first
+   things to check on resume, not the board - the board is the thing most
+   likely to be stale, because it is written last.
+   WHAT WAS VERIFIED AT CLOSE-OUT, by the CEO, on integrated main:
+   hooks 393 OK, npm test 62/0, install 96/0, update 139/0, witnesses 32/32,
+   guard_models --check clean, CI 9/9 on the PR.
+   WHAT WAS NOT: no auditor ever passed over this diff. The dispatch plan
+   assumed the P1 worktree-commit bug would force the CEO to commit the staged
+   bands (making the work self-authored and the audit mandatory). It did not
+   bite - the lead committed 77ba45f and 4402ee6 from the worktree itself and
+   the ledger shows self_authored=0, so the mandatory-audit trigger never
+   armed and nobody dispatched one by hand. That is worth knowing before the
+   next delegated build: the audit is triggered by self-authorship, so a
+   delegated build that commits cleanly gets NO independent read. If you want
+   an auditor on a delegated diff, you must dispatch it deliberately.
+   ALSO WORTH RE-PROBING: the P1 guard_commit.git_cwd row predicts what did not
+   happen here. Either the row is narrower than written or the harness changed.
+   It stays P1 until someone probes it on purpose rather than inferring from
+   one success.
+
 000000. v0.2.5 PUBLISHED 2026-07-26. Registry latest = 0.2.5, SLSA provenance
    attached, published tarball verified to contain NO company/state directory
    (81 files). main = e86860f. Three things landed in it:
@@ -34,11 +83,10 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
    to publish. It was deleted and re-cut at e86860f only after confirming the
    registry never received it. 0.2.3 and 0.2.4 remain published WITH the
    board inside them - deprecating them is an open owner decision.
-   NEXT: multi-session-tasks. The spec is on main at
-   company/specs/spec-multi-session-tasks.md (31 FRs / 11 BRs / 10 OQs, all
-   fallbacks decided). Still needed before dispatch: tracking issues (PR mode
-   blocks a feature spawn without them) and the sealed brief. Owner decision
-   still open on whether to fold the P1 worktree-commit bug into it.
+   NEXT (now in flight - see entry 0000000 above): multi-session-tasks.
+   Dispatched 2026-07-27; tracking issues and the sealed brief are done. The P1
+   worktree-commit bug was NOT folded into it - it stays a WORRIES row and is
+   worked around by the CEO committing the staged bands.
    PROMPT HYGIENE THAT MATTERS: never write the negative verdict token in an
    auditor prompt - the provenance parser substring-matches it and records a
    passing audit as its opposite. Use SHIP / SHIP-WITH-FIXES / HALT. And a
@@ -188,7 +236,7 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 | Agent | Task | Worktree | Last known state |
 |---|---|---|---|
-| developer | cli-self-update | .claude/worktrees/cli-self-update | Dispatched 2026-07-15; brief brief-cli-self-update.md; no-commit rule - check worktree git status for finished-on-disk work before respawning |
+| _(none)_ | - | - | Nothing in flight as of 2026-07-29. All worktrees removed, active-task.json cleared. The only open item is the owner's v0.2.6 tag. |
 
 ## 4. Facts every spawn prompt needs
 
