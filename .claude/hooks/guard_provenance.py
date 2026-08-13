@@ -14,13 +14,26 @@ across six modes keyed on (hook_event_name, tool_name):
   B-pre)  PreToolUse Task|Agent  - record a builder dispatch. NEVER blocks.
   B-post) PostToolUse Task|Agent - record a verifier (auditor) completion and
      its verdict against the current work_hash. NEVER blocks.
-  C) PreToolUse Bash - the commit gate: a git commit carrying dirty
-     self-authored source in the main checkout with no fresh audit BLOCKS.
-  D) Stop - the close gate: finishing a task with dirty self-authored source
-     and no fresh audit emits a Stop block decision.
+  C) PreToolUse Bash - the commit gate: a git commit BLOCKS while the tree it
+     lands in carries armed dirty source with no fresh audit covering it.
+  D) Stop - the close gate: finishing a task whose tree carries armed dirty
+     source with no fresh audit emits a Stop block decision.
   E) PreToolUse Edit|Write|MultiEdit - the execution gate: a source edit on a
      feature/program task whose execution decision is missing (or delegated
      with no dispatch) BLOCKS.
+
+FR-HP-44/45 and scope item 6: the audit demand in modes C and D is ARMED by
+provenance, not by the shape of the tree. Three conditions arm it, any one of
+them sufficient: a dirty path the ledger RECORDS as self-authored, a ledger
+whose authorship history cannot be trusted (every dirty path arms it then -
+fail closed), and a diff that risk_score.py bands high. A fresh audit at the
+current work_hash satisfies it, exactly as before.
+
+The one accepted hole: source written through Bash (a heredoc, sed, a
+generator script) fires no PostToolUse Edit event, so it is never recorded
+self-authored and never arms the demand on its own. OQ-HP-05, accepted - the
+risk band still covers the high-risk subset, and the hole is characterized by
+a test rather than left implicit.
 
 The manifest (company/provenance.json) is the rollout switch: missing or
 unreadable, every mode silently allows. Everything fails OPEN: any internal
@@ -48,8 +61,8 @@ and names the responsible entries only at N > 1.
 import json
 import os
 import re
+import subprocess
 import sys
-import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
@@ -104,6 +117,63 @@ MODE_C_MSG = (
     "task branch and give it to a developer - delegated work is verified "
     "inside\n"
     "the hierarchy and needs no extra audit.\n"
+    "Production emergency: set \"type\": \"hotfix\" on YOUR entry in\n"
+    "company/state/active-task.json - targeted Edit, never a whole-file "
+    "rewrite\n"
+    "(logged, never silent)."
+)
+
+# FR-HP-44. <why> names WHICH reset discarded the authorship history, from the
+# in-memory _untrusted marker read_ledger sets; UNTRUSTED_WHY is the whole
+# vocabulary.
+MODE_C_UNTRUSTED_MSG = (
+    "BLOCKED: git commit with no verifiable record of who authored this "
+    "work.\n"
+    "Task '<slugs>' has dirty source and the provenance ledger <why>, so "
+    "the\n"
+    "self-authorship history that would narrow this demand cannot be "
+    "trusted.\n"
+    "Every dirty source path arms the audit demand until it can be "
+    "(<reason>).\n"
+    "Dirty source: <paths>\n"
+    "The ledger is written only by this hook and is never hand-edited; if it "
+    "was\n"
+    "edited, that is what reset it. Fix, in order:\n"
+    "1) Run `bash company/run-gates.sh` until green.\n"
+    "2) Dispatch the read-only auditor over your diff (Task tool,\n"
+    "   subagent_type: auditor). Its completion is recorded automatically.\n"
+    "3) Retry the commit WITHOUT editing source in between - any edit stales "
+    "the\n"
+    "   audit, which is correct.\n"
+    "Production emergency: set \"type\": \"hotfix\" on YOUR entry in\n"
+    "company/state/active-task.json - targeted Edit, never a whole-file "
+    "rewrite\n"
+    "(logged, never silent)."
+)
+
+# Scope item 6 / DECISIONS #19. The line count in the body is history, not a
+# threshold: nothing in this file decides on a number of lines.
+MODE_C_RISK_MSG = (
+    "BLOCKED: git commit of a high-risk diff with no independent "
+    "verification.\n"
+    "Task '<slugs>' carries a diff that risk_score.py bands HIGH, and no "
+    "audit\n"
+    "covers the current tree (<reason>).\n"
+    "Delegation does not waive this. The hierarchy verifies each piece and "
+    "nothing\n"
+    "checks that anyone read the whole: a 4,791-line fully delegated change\n"
+    "integrated here once with no independent read at all, which is what this "
+    "gate\n"
+    "exists to stop.\n"
+    "Fix, in order:\n"
+    "1) Run `bash company/run-gates.sh` until green.\n"
+    "2) Dispatch the read-only auditor over your diff (Task tool,\n"
+    "   subagent_type: auditor). Its completion is recorded automatically.\n"
+    "3) Retry the commit WITHOUT editing source in between - any edit stales "
+    "the\n"
+    "   audit, which is correct.\n"
+    "See the band and the six signals that drove it:\n"
+    "  python3 .claude/hooks/risk_score.py\n"
     "Production emergency: set \"type\": \"hotfix\" on YOUR entry in\n"
     "company/state/active-task.json - targeted Edit, never a whole-file "
     "rewrite\n"
@@ -224,7 +294,17 @@ def roster(root):
 # --- location and git -----------------------------------------------------
 
 def in_worktree_or_out_of_tree(path, root):
-    """True if path is inside a worktree checkout OR outside the project root.
+    """True if path belongs to a nested checkout under root, or sits outside root.
+
+    Scope item 8. The checkout that owns a path is DERIVED - the nearest
+    ancestor holding a `.git` entry - and never guessed from the literal
+    string `/.claude/worktrees/`. `git worktree add` accepts any path, so a
+    worktree at build/elsewhere/wt2 used to lose this exemption here while
+    _common.rel_path resolved it correctly; two answers to one question is
+    the bug class this program just fixed. This calls the kernel's own
+    derivation rather than carrying a second copy of it. That name is private
+    today - CR-HP-3 asks L1 to expose it - and the whole body is fail-open,
+    so an unexpected shape degrades to "not a worktree" rather than raising.
 
     Relative paths resolve against root. Empty path -> False.
     """
@@ -235,16 +315,18 @@ def in_worktree_or_out_of_tree(path, root):
         if not os.path.isabs(p):
             p = os.path.join(root, p)
         norm = os.path.normpath(p).replace(os.sep, "/")
-        if "/.claude/worktrees/" in norm:
-            return True
         root_norm = os.path.normpath(os.path.abspath(root)).replace(
             os.sep, "/"
         ).rstrip("/")
         if norm == root_norm:
             return False
-        if norm.startswith(root_norm + "/"):
-            return False
-        return True
+        if not norm.startswith(root_norm + "/"):
+            return True
+        # _enclosing_checkout starts at the PARENT of its candidate, so a
+        # directory candidate (a payload cwd, which may be the worktree root
+        # itself) is probed one level down.
+        probe = os.path.join(norm, "_") if os.path.isdir(norm) else norm
+        return bool(c._enclosing_checkout(probe, root_norm))
     except Exception:
         return False
 
@@ -351,15 +433,63 @@ def active_keys(root):
     return [ledger_key(e) for e in c.active_tasks(root)]
 
 
-def fresh_ledger():
-    """An empty v2 ledger: no dispatches, no audits, nothing verified."""
-    return {
+def active_keys_known(root):
+    """False while active-task.json EXISTS but does not parse.
+
+    A torn read is a concurrent session mid-write and is transient, so
+    c.active_tasks returns [] for it. Reading that [] as the active key set
+    would make generation_closed() see EVERY recorded slug as closed, and the
+    next write would then PERSIST that reset - destroying a real recorded
+    audit and the self_authored list the FR-HP-44 narrowing reads. That path
+    only became reachable with FR-HP-43, which gave a torn task file its own
+    ledger write, and it turns a shipped BLOCK into an ALLOW: once the record
+    of who authored the dirty paths is gone, the next Mode A event rewrites a
+    valid ledger around a DIFFERENT path and the dirty work is no longer
+    recorded as anyone's.
+
+    c.active_tasks_unreadable exists precisely so a caller can tell "nothing
+    in flight" from "cannot tell right now". This is the second one, and the
+    answer to it is to touch nothing keyed on the slug set.
+    """
+    return not c.active_tasks_unreadable(root)
+
+
+def fresh_ledger(untrusted=None):
+    """An empty v2 ledger: no dispatches, no audits, nothing verified.
+
+    `untrusted` names why the ledger's history was discarded, when it was.
+    It is IN MEMORY ONLY - write_ledger strips every underscore-prefixed key
+    - and it exists because a reset destroys the self_authored record along
+    with everything else. FR-HP-44 narrows the audit demand to what this
+    company is RECORDED as having authored, so a ledger that cannot account
+    for authorship must fall back to arming on every dirty path, which is
+    exactly the shipped behaviour. Without this, hand-editing the ledger
+    would DISARM the gate instead of arming it.
+    """
+    ledger = {
         "version": LEDGER_VERSION,
         "tasks": {},
         "unattributed_dispatches": [],
         "self_authored": [],
         "audits": [],
     }
+    if untrusted:
+        ledger["_untrusted"] = untrusted
+    return ledger
+
+
+# The whole vocabulary of the _untrusted marker, rendered into the block
+# messages. Keys are exactly the markers read_ledger sets.
+UNTRUSTED_WHY = {
+    "checksum": "does not verify its own checksum",
+    "generation": "was reset when its task generation closed",
+    "unreadable": "exists but does not parse",
+}
+
+
+def untrusted_why(marker):
+    """The phrase naming what discarded the ledger's authorship history."""
+    return UNTRUSTED_WHY.get(marker, "cannot account for authorship")
 
 
 def task_record(ledger, slug):
@@ -409,7 +539,7 @@ def credited_dispatches(ledger, entry, tasks):
     return dispatches_for(ledger, ledger_key(entry))
 
 
-def migrate_v1(raw, keys):
+def migrate_v1(raw, keys, keys_known=True):
     """FR-MST-16: a v1 ledger read as v2, IN MEMORY only.
 
     The v1 slug carries its dispatches and nudge state forward only while it
@@ -417,10 +547,14 @@ def migrate_v1(raw, keys):
     written for a slug that has closed resets, exactly as it does today -
     carrying a closed task's audit forward would newly satisfy Mode C and be
     WEAKER than shipped behaviour.
+
+    `keys_known` False means active-task.json could not be read this instant
+    (see active_keys_known), so "still in flight" is unanswerable and the
+    record is carried forward rather than discarded on a torn read.
     """
     key = ledger_key(raw)
-    if key not in keys:
-        return fresh_ledger()
+    if keys_known and key not in keys:
+        return fresh_ledger("generation")
     ledger = fresh_ledger()
     nudge = raw.get("nudge_state")
     ledger["tasks"][key] = {
@@ -464,24 +598,34 @@ def read_ledger(root):
     generation. A tampered checksum resets audits and dispatches to empty so
     blocks stay honest (unverifiable history counts as no verification).
     Never raises.
+
+    FR-HP-44: every reset that DISCARDS an existing self_authored record
+    carries the in-memory _untrusted marker, so the narrowed audit demand
+    falls back to arming on every dirty path. An ABSENT file carries no
+    marker: nothing was lost, this company has simply authored nothing
+    through the hooks in this tree, which is the case the narrowing exists
+    to allow.
     """
     keys = active_keys(root)
+    keys_known = active_keys_known(root)
     raw = c.read_json_file(ledger_path(root))
     if not isinstance(raw, dict):
+        if os.path.exists(ledger_path(root)):
+            return fresh_ledger("unreadable")
         return fresh_ledger()
     stored = raw.get("checksum")
     recomputed = c.stamp_checksum(
         {k: v for k, v in raw.items() if k != "checksum"}
     )
     if stored != recomputed:
-        return fresh_ledger()
+        return fresh_ledger("checksum")
     if raw.get("version") != LEDGER_VERSION:
-        return migrate_v1(raw, keys)
+        return migrate_v1(raw, keys, keys_known)
     raw_tasks = raw.get("tasks")
     if not isinstance(raw_tasks, dict):
         raw_tasks = {}
-    if generation_closed(raw_tasks, keys):
-        return fresh_ledger()
+    if keys_known and generation_closed(raw_tasks, keys):
+        return fresh_ledger("generation")
     ledger = fresh_ledger()
     for key, record in raw_tasks.items():
         if not isinstance(record, dict):
@@ -510,6 +654,12 @@ def prune_tasks(root, ledger):
     existing = ledger.get("tasks")
     if not isinstance(existing, dict):
         existing = {}
+    if not active_keys_known(root):
+        # A torn active-task.json makes the active key set unknowable, and
+        # pruning against an unknowable set deletes every record. FR-HP-43
+        # writes the ledger on exactly that path, so without this the torn
+        # read is PERSISTED as a closed generation.
+        return existing
     pruned = {}
     for key in active_keys(root):
         record = existing.get(key)
@@ -520,12 +670,18 @@ def prune_tasks(root, ledger):
 
 
 def write_ledger(root, ledger):
-    """Atomically write the ledger with a fresh checksum. Swallows all errors."""
+    """Atomically write the ledger with a fresh checksum. Swallows all errors.
+
+    Underscore-prefixed keys are IN-MEMORY only (FR-HP-44's _untrusted
+    marker), so they reach neither the file nor the checksum. Wrap the whole
+    read-modify-write in c.state_lock at every call site - locking the write
+    alone still loses the other session's update.
+    """
     try:
-        path = ledger_path(root)
-        d = os.path.dirname(path)
-        os.makedirs(d, exist_ok=True)
-        body = {k: v for k, v in ledger.items() if k != "checksum"}
+        body = {
+            k: v for k, v in ledger.items()
+            if k != "checksum" and not k.startswith("_")
+        }
         body["version"] = LEDGER_VERSION
         body["tasks"] = prune_tasks(root, body)
         for key in ("unattributed_dispatches", "self_authored", "audits"):
@@ -534,17 +690,7 @@ def write_ledger(root, ledger):
         body["checksum"] = c.stamp_checksum(
             {k: v for k, v in body.items() if k != "checksum"}
         )
-        fd, tmp = tempfile.mkstemp(dir=d)
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(body, f)
-            os.replace(tmp, path)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except Exception:
-                pass
-            raise
+        c.write_json_atomic(ledger_path(root), body)
     except Exception:
         pass
 
@@ -571,6 +717,117 @@ def staleness_reason(root, ledger):
             # matches the tree but fresh_audit rejected it -> do-not-ship
             return "last audit verdict was DO-NOT-SHIP"
     return "audit is stale - the tree changed after the last audit"
+
+
+def paths_display(paths, cap=5):
+    """The path list as one display string. Display only, never a decision."""
+    shown = list(paths)[:cap]
+    text = ", ".join(shown)
+    if len(paths) > cap:
+        text += ", ... and {} more".format(len(paths) - cap)
+    return text
+
+
+def self_authored_set(ledger):
+    """The project-relative paths the ledger records as self-authored."""
+    return {
+        e.get("path") for e in (ledger.get("self_authored") or [])
+        if isinstance(e, dict) and e.get("path")
+    }
+
+
+def armed_self_paths(ledger, dirty):
+    """FR-HP-44: the dirty paths this company is RECORDED as having authored.
+
+    METHOD mechanism 5 says nothing SELF-AUTHORED integrates unaudited. The
+    gate has always asked a tree-shaped question instead - every dirty source
+    path, including another session's and the owner's own - so a clean,
+    fully-delegated session could not commit or reach Stop without deleting
+    files it did not own. This asks the provenance-shaped question the
+    doctrine actually states. Mode A is what populates self_authored, one
+    entry per main-checkout source Edit/Write.
+    """
+    # OQ-HP-05 assumption: source written through Bash (heredoc, sed, a
+    # generator script) fires no PostToolUse Edit event, so it never lands in
+    # self_authored and never arms the demand here. Accepted: the risk band
+    # still covers the high-risk subset of that hole.
+    return sorted(self_authored_set(ledger).intersection(dirty or []))
+
+
+def delegated_with_dispatches(ledger, tasks, gated, dirty):
+    """FR-HP-45: an ENTRY-shaped route to the exemption mechanism 5 already
+    grants delegated work - its verification happened inside the hierarchy.
+
+    Requires ALL THREE, and only the first is a declaration:
+      - every gated entry declares execution: delegated
+      - each of them has at least one HOOK-RECORDED credited dispatch
+      - no dirty path appears in the HOOK-RECORDED self_authored list
+    The declaration alone unlocks nothing. Both load-bearing conditions are
+    written by this hook and cannot be asserted by the agent being gated.
+
+    Its allow set is a strict SUBSET of what armed_self_paths() already
+    allows, since the third condition makes armed_self_paths() empty. It is
+    kept because it is the entry-shaped statement of the doctrine and because
+    it leaves a named, greppable BYPASS line in adherence.log where the
+    path-shaped narrowing allows silently. It is deliberately evaluated AFTER
+    the risk band, so it can never waive a high-band diff.
+    """
+    if not gated:
+        return False
+    if self_authored_set(ledger).intersection(dirty or []):
+        return False
+    return all(
+        execution_decision(e) == "delegated"
+        and len(credited_dispatches(ledger, e, tasks)) > 0
+        for e in gated
+    )
+
+
+# Scope item 6 / DECISIONS #19. risk_score.py is READ-ONLY to this lane, so
+# the band is taken through its documented machine contract (the single
+# RISK_JSON line it prints last) rather than by importing and re-composing
+# its scorers. Running it as a child process is deliberate on three counts:
+# its own secret scan carries a 30s subprocess timeout that must never be
+# inherited by a PreToolUse hook, the child ALWAYS exits 0 so its internal
+# failures cannot leak into this gate, and the band is only ever computed on
+# the narrow path where it can change the verdict.
+# A latency bound, deliberately NOT a risk threshold: no verdict is derived
+# from it, and exceeding it yields "no answer", which arms nothing. The bands
+# remain the only fence, which is the DECISIONS #19 condition. (This carries
+# no OQ tag on purpose - OQ-HP-05 is the Bash hole, not this.)
+RISK_TIMEOUT_SECONDS = 10
+
+
+def risk_band(root):
+    """The band risk_score.py reports for this tree, or None. Never raises.
+
+    None means "no answer", and no answer never arms anything - a broken or
+    slow scorer must not start blocking commits.
+    """
+    # Known limitation, CR-HP-4: risk_score scores `base...HEAD`, which is
+    # COMMITTED work on the branch. It cannot see uncommitted working-tree
+    # changes, so the first commit on a fresh task branch is always scored
+    # against an empty diff. The band therefore arms from the second commit
+    # onward, and at task close.
+    script = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "risk_score.py"
+    )
+    try:
+        env = dict(os.environ)
+        env["CLAUDE_PROJECT_DIR"] = root
+        result = subprocess.run(
+            [sys.executable, script, "--json"],
+            capture_output=True, timeout=RISK_TIMEOUT_SECONDS, env=env,
+        )
+        out = result.stdout.decode("utf-8", "replace")
+        for line in reversed(out.splitlines()):
+            if line.startswith("RISK_JSON: "):
+                data = json.loads(line[len("RISK_JSON: "):])
+                band = data.get("band")
+                return band if band in ("low", "medium", "high") else None
+    except Exception:
+        return None
+    return None
 
 
 # --- payload readers ------------------------------------------------------
@@ -734,58 +991,71 @@ def mode_a(root, ti):
     tasks = c.active_tasks(root)
     if not tasks:
         sys.exit(0)
-    # Today's early exit, generalised: no entry carries a slug, so there is
-    # nothing to record a nudge against and nothing is written.
-    if not c.slugs(tasks):
-        sys.exit(0)
+    # There USED to be an early exit here for "no entry carries a slug", on
+    # the grounds that there is nothing to record a nudge against. FR-HP-44
+    # makes that exit unsafe: self_authored is now what ARMS Modes C and D,
+    # and it is GLOBAL - a property of the tree, never keyed by slug - so
+    # skipping the write let a slugless entry hold dirty source that nothing
+    # was recorded as having authored, turning a shipped BLOCK into an ALLOW.
+    # The nudge is unaffected: its own per-entry test already requires
+    # bool(task.get("task")), so a slugless entry still never nudges, and the
+    # empty-string key is the documented OQ-MST-03 shape.
     if in_worktree_or_out_of_tree(file_path, root):
         sys.exit(0)
     rel = c.rel_path(root, file_path)
     if not guard_spec.is_source(rel, os.path.basename(rel)):
         sys.exit(0)
 
-    ledger = read_ledger(root)
-    # self_authored is a property of the tree, so it stays GLOBAL; the nudge
-    # fingerprint names a slug, so it lives on that entry's record.
-    seen = any(
-        isinstance(e, dict) and e.get("path") == rel
-        for e in ledger["self_authored"]
-    )
-    if not seen:
-        ledger["self_authored"].append({"path": rel, "at": c.iso_now()})
-
-    nudge_entry = None
-    for task in tasks:
-        key = ledger_key(task)
-        record = task_record(ledger, key)
-        qualifies = (
-            bool(task.get("task"))
-            and task.get("type") in ("feature", "program")
-            and execution_decision(task) == "self"
-            and len(credited_dispatches(ledger, task, tasks)) == 0
+    # FR-HP-40: the whole read-modify-write is one critical section. The nudge
+    # is DECIDED here and EMITTED after the lock is released - emit_nudge
+    # exits the process, and exiting from inside the manager would skip the
+    # release path.
+    nudge_slug = None
+    with c.state_lock(root):
+        ledger = read_ledger(root)
+        # self_authored is a property of the tree, so it stays GLOBAL; the
+        # nudge fingerprint names a slug, so it lives on that entry's record.
+        seen = any(
+            isinstance(e, dict) and e.get("path") == rel
+            for e in ledger["self_authored"]
         )
-        if not qualifies:
-            if record.get("nudge_state"):
-                record["nudge_state"] = None
-            continue
-        armed = (
-            record.get("nudge_state") or {}
-        ).get("fingerprint") == "self-idle"
-        if armed or nudge_entry is not None:
-            continue
-        record["nudge_state"] = {"fingerprint": "self-idle", "at": c.iso_now()}
-        nudge_entry = task
+        if not seen:
+            ledger["self_authored"].append({"path": rel, "at": c.iso_now()})
 
-    if nudge_entry is not None:
-        slug = nudge_entry.get("task")
-        c.adherence_log(
-            root, HOOK, "NUDGE", slug,
-            c.qualify_reason("self-idle", tasks, nudge_entry),
-        )
+        nudge_entry = None
+        for task in tasks:
+            key = ledger_key(task)
+            record = task_record(ledger, key)
+            qualifies = (
+                bool(task.get("task"))
+                and task.get("type") in ("feature", "program")
+                and execution_decision(task) == "self"
+                and len(credited_dispatches(ledger, task, tasks)) == 0
+            )
+            if not qualifies:
+                if record.get("nudge_state"):
+                    record["nudge_state"] = None
+                continue
+            armed = (
+                record.get("nudge_state") or {}
+            ).get("fingerprint") == "self-idle"
+            if armed or nudge_entry is not None:
+                continue
+            record["nudge_state"] = {
+                "fingerprint": "self-idle", "at": c.iso_now()
+            }
+            nudge_entry = task
+
+        if nudge_entry is not None:
+            nudge_slug = nudge_entry.get("task")
+            c.adherence_log(
+                root, HOOK, "NUDGE", nudge_slug,
+                c.qualify_reason("self-idle", tasks, nudge_entry),
+            )
         write_ledger(root, ledger)
-        emit_nudge(NUDGE_TEXT.replace("<slug>", slug))
 
-    write_ledger(root, ledger)
+    if nudge_slug:
+        emit_nudge(NUDGE_TEXT.replace("<slug>", nudge_slug))
     sys.exit(0)
 
 
@@ -800,33 +1070,59 @@ def mode_b_pre(root, ti):
     ANY-hotfix waiver: a hotfix entry sitting beside an untracked feature entry
     must not start that feature's work. Verifier and other non-builder roles
     never reach here.
+
+    FR-HP-43: the early exits are flat, so a builder spawn is never silently
+    dropped when the task file cannot be read.
     """
     manifest = load_manifest(root)
     if manifest is None:
         sys.exit(0)
     role = role_of(ti)
     builders = manifest.get("builder_roles") or []
+    if role not in builders:
+        sys.exit(0)
     tasks = c.active_tasks(root)
-    if role in builders and tasks:
-        gated = c.entries_of_type(tasks, ("feature", "program"))
-        untracked = [e for e in gated if tracking_untracked(root, e)]
-        hotfix = c.hotfix_entry(tasks)
-        if untracked:
-            c.block(
-                root, HOOK, "spawn " + role,
-                c.qualify_reason(
-                    "untracked feature/program task", tasks, untracked
-                ),
-                A3_MESSAGE
-                .replace("<slugs>", c.slug_list(untracked))
-                .replace("<type>", untracked[0].get("type") or "feature"),
+    if not tasks:
+        # A builder spawn while active-task.json EXISTS but does not parse is a
+        # concurrent session mid-write, not an absence of work. Dropping it
+        # silently is what produces the false "delegated but no dispatch" block
+        # later, so record it globally; a later repair can attribute it.
+        if c.active_tasks_unreadable(root):
+            with c.state_lock(root):
+                ledger = read_ledger(root)
+                ledger["unattributed_dispatches"].append(
+                    {"role": role, "at": c.iso_now()}
+                )
+                write_ledger(root, ledger)
+            c.adherence_log(
+                root, HOOK, "DISPATCH", role,
+                "builder spawn with no readable task entries "
+                "(recorded unattributed)",
             )
-        if hotfix is not None:
-            c.log_bypass(
-                root, HOOK, role,
-                c.qualify_reason("hotfix mode", tasks, hotfix),
-            )
+        sys.exit(0)
 
+    # The FR-DE-15 tracking gate and the hotfix bypass stay OUTSIDE and BEFORE
+    # the lock, so a blocked spawn still leaves no dispatch behind.
+    gated = c.entries_of_type(tasks, ("feature", "program"))
+    untracked = [e for e in gated if tracking_untracked(root, e)]
+    hotfix = c.hotfix_entry(tasks)
+    if untracked:
+        c.block(
+            root, HOOK, "spawn " + role,
+            c.qualify_reason(
+                "untracked feature/program task", tasks, untracked
+            ),
+            A3_MESSAGE
+            .replace("<slugs>", c.slug_list(untracked))
+            .replace("<type>", untracked[0].get("type") or "feature"),
+        )
+    if hotfix is not None:
+        c.log_bypass(
+            root, HOOK, role,
+            c.qualify_reason("hotfix mode", tasks, hotfix),
+        )
+
+    with c.state_lock(root):  # FR-HP-41
         ledger = read_ledger(root)
         at = c.iso_now()
         attributed = attributed_entries(tasks, ti)
@@ -872,15 +1168,16 @@ def mode_b_post(root, ti, payload):
             verdict = audit_verdict(response_text(resp))
         except Exception:
             verdict = "unknown"
-        ledger = read_ledger(root)
-        ledger["audits"].append({
-            "role": role,
-            "at": c.iso_now(),
-            "work_hash": c.work_hash(root),
-            "verdict": verdict,
-        })
-        c.adherence_log(root, HOOK, "AUDIT", role, verdict)
-        write_ledger(root, ledger)
+        with c.state_lock(root):  # FR-HP-42
+            ledger = read_ledger(root)
+            ledger["audits"].append({
+                "role": role,
+                "at": c.iso_now(),
+                "work_hash": c.work_hash(root),
+                "verdict": verdict,
+            })
+            c.adherence_log(root, HOOK, "AUDIT", role, verdict)
+            write_ledger(root, ledger)
     sys.exit(0)
 
 
@@ -888,7 +1185,11 @@ def mode_c(root, ti, payload):
     """PreToolUse Bash: the commit gate.
 
     FR-MST-20. Order: git-commit segment, manifest, entries non-empty, ANY
-    hotfix, worktree/merge exemptions, dirty source paths, fresh audit.
+    hotfix, worktree/merge exemptions, dirty source paths, fresh audit, then
+    the three arming conditions in order - untrusted ledger, recorded
+    self-authorship, high risk band - and finally the FR-HP-45 delegated
+    bypass. Anything that reaches the end allows: dirty source nobody is
+    recorded as having authored, in a band under high, arms nothing.
 
     RISK-MST-01, accepted: the hotfix waiver is ANY. One commit writes one
     tree, so blocking a declared production emergency behind an unrelated
@@ -917,11 +1218,18 @@ def mode_c(root, ti, payload):
                 c.qualify_reason("hotfix mode", tasks, hotfix),
             )
             continue
-        if in_worktree_or_out_of_tree(payload.get("cwd"), root):
+        # Scope item 7: the exemption belongs to the repo the commit LANDS in,
+        # not to the session cwd. guard_commit.seg_git_dir is L2's resolver for
+        # exactly that question (last -C wins, verified by git itself);
+        # reusing it keeps one answer instead of two.
+        target = guard_commit.seg_git_dir(seg, payload, root)
+        if in_worktree_or_out_of_tree(target, root):
             continue
         if os.path.isfile(os.path.join(root, ".git", "MERGE_HEAD")):
             c.log_bypass(root, HOOK, "git commit", "merge conclusion")
             continue
+        # Any nested checkout has been exempted above, so the only tree left
+        # to judge is the project root.
         dp = dirty_source_paths(root)
         if not dp:
             continue
@@ -931,20 +1239,80 @@ def mode_c(root, ti, payload):
         # No hotfix reached here, so every entry in flight is non-exempt.
         slugs_str = c.slug_list(tasks)
         reason = staleness_reason(root, ledger)
-        shown = dp[:5]
-        paths_str = ", ".join(shown)
-        if len(dp) > 5:
-            paths_str += ", ... and {} more".format(len(dp) - 5)
-        msg = (
-            MODE_C_MSG.replace("<slugs>", slugs_str)
-            .replace("<reason>", reason)
-            .replace("<paths>", paths_str)
-        )
-        c.block(
-            root, HOOK, "git commit",
-            c.qualify_reason("self-authored, no fresh audit", tasks, tasks),
-            msg,
-        )
+
+        # FR-HP-44, arming condition 2: with no trustworthy authorship record
+        # every dirty path arms the demand, which is the shipped behaviour.
+        untrusted = ledger.get("_untrusted")
+        if untrusted:
+            c.block(
+                root, HOOK, "git commit",
+                c.qualify_reason(
+                    "unverifiable provenance ledger, no fresh audit",
+                    tasks, tasks,
+                ),
+                MODE_C_UNTRUSTED_MSG.replace("<slugs>", slugs_str)
+                .replace("<why>", untrusted_why(untrusted))
+                .replace("<reason>", reason)
+                .replace("<paths>", paths_display(dp)),
+            )
+
+        # Arming condition 1. MODE_C_MSG's <paths> line is labelled
+        # "Self-authored paths:" and until now rendered every dirty path;
+        # feeding it `armed` makes that label true.
+        armed = armed_self_paths(ledger, dp)
+        if armed:
+            c.block(
+                root, HOOK, "git commit",
+                c.qualify_reason(
+                    "self-authored, no fresh audit", tasks, tasks
+                ),
+                MODE_C_MSG.replace("<slugs>", slugs_str)
+                .replace("<reason>", reason)
+                .replace("<paths>", paths_display(armed)),
+            )
+
+        # Arming condition 3, and the compensating control for the narrowing
+        # below: the band is computed ONLY here, so the common paths (clean
+        # tree, fresh audit, self-authored dirty) pay nothing for it.
+        band = risk_band(root)
+        if band == "high":
+            c.block(
+                root, HOOK, "git commit",
+                c.qualify_reason(
+                    "high-risk diff, no fresh audit", tasks, tasks
+                ),
+                MODE_C_RISK_MSG.replace("<slugs>", slugs_str)
+                .replace("<reason>", reason),
+            )
+
+        # FR-HP-45: the entry-shaped statement of the same exemption, kept for
+        # the named BYPASS line it leaves where the narrowing allows silently.
+        if delegated_with_dispatches(ledger, tasks, tasks, dp):
+            c.log_bypass(
+                root, HOOK, "git commit",
+                c.qualify_reason(
+                    "delegated execution with recorded dispatches",
+                    tasks, tasks,
+                ),
+            )
+            continue
+        # FR-HP-44 narrowing: dirty source nobody recorded as self-authored,
+        # in a low or medium band, arms nothing.
+        continue
+    sys.exit(0)
+
+
+def stop_block(root, tasks, gated, slug, short_reason, reason):
+    """Log the BLOCK line and print one Stop block decision. Never returns.
+
+    The three Mode D arming conditions differ only in their reason strings,
+    so the evidence line and the decision shape are written once here.
+    """
+    c.adherence_log(
+        root, HOOK, "BLOCK", slug,
+        c.qualify_reason(short_reason, tasks, gated),
+    )
+    print(json.dumps({"decision": "block", "reason": reason}))
     sys.exit(0)
 
 
@@ -955,6 +1323,10 @@ def mode_d(root, payload):
     exemption TYPES and FR-MST-23 makes exemptions PER ENTRY: the gate drops
     the exempt entries and evaluates the rest, so [quick, feature] still
     blocks. The exemption belongs to the quick entry, not to the tree.
+
+    After those preconditions the arming order is Mode C's, condition for
+    condition: untrusted ledger, recorded self-authorship, high risk band,
+    then the FR-HP-45 delegated bypass. Reaching the end allows.
     """
     if payload.get("stop_hook_active"):
         sys.exit(0)
@@ -970,44 +1342,83 @@ def mode_d(root, payload):
         sys.exit(0)
     dp = dirty_source_paths(root)
     ledger = read_ledger(root)
-    if dp and not fresh_audit(root, ledger):
-        # N == 1 keeps the two-argument .get verbatim so a `{}` entry still
-        # renders as (unknown).
-        if len(tasks) <= 1:
-            slug = tasks[0].get("task", "(unknown)")
-        else:
-            slug = c.slug_list(gated)
-        c.adherence_log(
-            root, HOOK, "BLOCK", slug,
-            c.qualify_reason("self-authored, no fresh audit", tasks, gated),
+    if not dp:
+        sys.exit(0)
+    if fresh_audit(root, ledger):
+        sys.exit(0)
+
+    # N == 1 keeps the two-argument .get verbatim so a `{}` entry still
+    # renders as (unknown). The slug is shared by all three block reasons.
+    if len(tasks) <= 1:
+        slug = tasks[0].get("task", "(unknown)")
+    else:
+        slug = c.slug_list(gated)
+
+    # The same three arming conditions as Mode C, in the same order.
+    untrusted = ledger.get("_untrusted")
+    if untrusted:
+        stop_block(
+            root, tasks, gated, slug,
+            "unverifiable provenance ledger, no fresh audit",
+            (
+                "Active task '{}' has dirty source and the provenance ledger "
+                "{}, so there is no verifiable record of who authored this "
+                "work. Every dirty source path arms the audit demand until "
+                "there is. Dispatch the auditor (Task tool, subagent_type: "
+                "auditor) and commit the audited work, or move it to a "
+                "worktree task branch, before finishing."
+            ).format(slug, untrusted_why(untrusted)),
         )
+
+    # FR-HP-16: name the paths that armed the gate. self_authored is a
+    # property of the TREE, so the offending work may predate this session,
+    # and an unnamed block reads as an accusation the agent being blocked
+    # cannot check. FR-HP-44 makes that same intersection the ARMING set.
+    armed = armed_self_paths(ledger, dp)
+    if armed:
         reason = (
             "Active task '{}' has self-authored source changes in the main "
             "checkout with no fresh independent audit. Dispatch the auditor "
             "(Task tool, subagent_type: auditor) and commit the audited work, "
             "or move it to a worktree task branch, before finishing."
         ).format(slug)
-        # FR-HP-16: name the paths that armed the gate. self_authored is a
-        # property of the TREE, so the offending work may predate this
-        # session, and an unnamed block reads as an accusation the agent
-        # being blocked cannot check. Display only - it reaches no decision.
-        self_dirty = sorted(
-            {
-                e.get("path")
-                for e in (ledger.get("self_authored") or [])
-                if isinstance(e, dict)
-            }.intersection(dp)
+        shown = ", ".join(armed[:5])
+        more = len(armed) - 5
+        if more > 0:
+            shown += " (+{} more)".format(more)
+        reason += (
+            " Self-authored dirty paths (possibly from an earlier "
+            "session): {}.".format(shown)
         )
-        if self_dirty:
-            shown = ", ".join(self_dirty[:5])
-            more = len(self_dirty) - 5
-            if more > 0:
-                shown += " (+{} more)".format(more)
-            reason += (
-                " Self-authored dirty paths (possibly from an earlier "
-                "session): {}.".format(shown)
-            )
-        print(json.dumps({"decision": "block", "reason": reason}))
+        stop_block(
+            root, tasks, gated, slug,
+            "self-authored, no fresh audit", reason,
+        )
+
+    band = risk_band(root)
+    if band == "high":
+        stop_block(
+            root, tasks, gated, slug,
+            "high-risk diff, no fresh audit",
+            (
+                "Active task '{}' has uncommitted source changes and "
+                "risk_score.py bands this diff high, with no fresh "
+                "independent audit. Delegation does not waive a high band - "
+                "the hierarchy verifies each piece and nothing checks that "
+                "anyone read the whole. Dispatch the auditor (Task tool, "
+                "subagent_type: auditor) and commit the audited work before "
+                "finishing. Run `python3 .claude/hooks/risk_score.py` to see "
+                "what drove the band."
+            ).format(slug),
+        )
+
+    if delegated_with_dispatches(ledger, tasks, gated, dp):
+        c.log_bypass(
+            root, HOOK, "stop",
+            c.qualify_reason(
+                "delegated execution with recorded dispatches", tasks, gated
+            ),
+        )
     sys.exit(0)
 
 

@@ -280,14 +280,13 @@ class TestResponseText(unittest.TestCase):
 # FR-HP-16 - the Mode D block reason names the offending paths
 # --------------------------------------------------------------------------
 class TestStopReasonNamesPaths(ClassifierBase):
-    # Byte-identical to the reason the hook printed before FR-HP-16, for the
-    # case where nothing dirty is recorded as self-authored.
-    BASE_REASON = (
-        "Active task 'feat-x' has self-authored source changes in the main "
-        "checkout with no fresh independent audit. Dispatch the auditor "
-        "(Task tool, subagent_type: auditor) and commit the audited work, "
-        "or move it to a worktree task branch, before finishing."
-    )
+    # FR-HP-16's bare reason - the text with no "Self-authored dirty paths"
+    # suffix - is no longer reachable and has been removed from this fixture.
+    # Under FR-HP-44 the Mode D self-authored branch only fires when the
+    # dirty/self-authored intersection is NON-empty, and that same intersection
+    # is what feeds the suffix, so the suffix is now always present on that
+    # branch. The case that used to produce the bare reason is the case
+    # test_no_self_authored_intersection_no_longer_arms_the_gate covers.
 
     def test_seven_self_authored_paths_show_five_and_a_count(self):
         self.init_git()
@@ -313,19 +312,41 @@ class TestStopReasonNamesPaths(ClassifierBase):
         self.assertIn("(+2 more)", reason)
         self.assertIn("earlier session", reason)
 
-    def test_no_self_authored_intersection_leaves_the_reason_untouched(self):
+    def test_no_self_authored_intersection_no_longer_arms_the_gate(self):
+        """SUPERSEDED BEHAVIOUR, rewritten deliberately - FR-HP-44.
+
+        This case used to BLOCK and assert a bare reason line. It was the one
+        place the old gate's tree-shaped question was visible: dirty source
+        that no Mode A event ever recorded still armed the close gate, so a
+        session was told it had "self-authored source changes" over files it
+        had never touched. Measured against a real polyrepo install that was
+        71 unrelated paths against 8 authored ones, and it left no way out
+        except faking an audit or deleting another session's work.
+
+        The demand is now armed by dirty paths INTERSECTED WITH the ledger's
+        self_authored list, so this exact fixture ALLOWS. The control below is
+        what keeps that honest: the identical tree blocks the moment the same
+        path is recorded through a real Mode A event, so the allow is the
+        narrowing and not an inert fixture.
+        """
         self.init_git()
         self.set_manifest()
         self.feature_task()
         # Dirty source exists, but no Mode A edit recorded it, so nothing in
-        # the tree is attributable to this session.
+        # the tree is attributable to this company.
         self.write("src/app.py", "x = 1")
         git(self.root, "add", "src/app.py")
         r = run_hook(HOOK, self.stop_payload(), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "")
+
+        # Control: record the SAME path through a real Mode A event.
+        rec = run_hook(HOOK, self.postedit_payload("src/app.py"), self.root)
+        self.assertEqual(rec.returncode, 0, rec.stderr)
+        r = run_hook(HOOK, self.stop_payload(), self.root)
         decision = json.loads(r.stdout)
         self.assertEqual(decision["decision"], "block")
-        self.assertEqual(decision["reason"], self.BASE_REASON)
+        self.assertIn("src/app.py", decision["reason"])
 
 
 if __name__ == "__main__":

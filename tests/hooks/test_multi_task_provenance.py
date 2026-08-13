@@ -378,7 +378,16 @@ class TestSingleEntryParity(MultiBase):
         parts = line.split(" | ")
         return " | ".join(parts[1:]) if len(parts) > 1 else line
 
-    def both_ways(self, obj, drive, seed=None):
+    def both_ways(self, obj, drive, seed=None, arm=False):
+        """`arm` records setUp's dirty source as self-authored first.
+
+        FR-HP-44 arms Modes C and D on dirty paths INTERSECTED WITH what the
+        hooks recorded this company as authoring, and setUp's stage_source
+        runs before any entry exists, so nothing is recorded then. Driving a
+        real Mode A event AFTER the entry is written is the only honest way
+        to arm these two gates. It runs identically on both sides, so the
+        parity claim is untouched.
+        """
         seen = []
         for as_list in (False, True):
             self.reset_state()
@@ -386,6 +395,10 @@ class TestSingleEntryParity(MultiBase):
                 self.set_tasks(obj)
             else:
                 self.set_task(obj)
+            if arm:
+                r0 = run_hook(HOOK, self.postedit_payload("src/app.py"),
+                              self.root)
+                self.assertEqual(r0.returncode, 0, r0.stderr)
             if seed is not None:
                 seed()
             r = drive()
@@ -424,7 +437,7 @@ class TestSingleEntryParity(MultiBase):
 
     def test_mode_c_parity(self):
         rc, _, stderr, log = self.both_ways(
-            self.selfbuilt("feat-x"), self.commit
+            self.selfbuilt("feat-x"), self.commit, arm=True
         )
         self.assertEqual(rc, 2)
         self.assertIn("feat-x", stderr)
@@ -442,7 +455,7 @@ class TestSingleEntryParity(MultiBase):
 
     def test_mode_d_parity(self):
         rc, stdout, _, log = self.both_ways(
-            self.selfbuilt("feat-x"), self.stop
+            self.selfbuilt("feat-x"), self.stop, arm=True
         )
         self.assertEqual(rc, 0)
         self.assertEqual(json.loads(stdout)["decision"], "block")
@@ -453,7 +466,7 @@ class TestSingleEntryParity(MultiBase):
 
     def test_mode_d_unknown_slug_parity(self):
         # the two-argument .get is kept verbatim, so {} still renders (unknown)
-        rc, stdout, _, log = self.both_ways({}, self.stop)
+        rc, stdout, _, log = self.both_ways({}, self.stop, arm=True)
         self.assertEqual(rc, 0)
         self.assertIn("(unknown)", json.loads(stdout)["reason"])
         self.assertIn(

@@ -93,13 +93,19 @@ class TestAnyBypassSites(InventoryBase):
         payload = self.bash_payload("git commit -m x")
         armed = self.feature(execution="self", execution_why="glue")
 
+        # FR-HP-44: Mode C arms on dirty source RECORDED as self-authored, so
+        # both legs drive a real Mode A event first. They then differ in
+        # exactly one thing - the hotfix entry - which is what makes the
+        # second leg a control rather than a second fixture.
         self.reset_state()
         self.alone(armed)
+        self.record_self_authored()
         self.assertEqual(
             self.capture("guard_provenance.py", payload)["rc"], 2)
 
         self.reset_state()
         self.arm(armed)
+        self.record_self_authored()
         got = self.capture("guard_provenance.py", payload)
         self.assertEqual(got["rc"], 0, "RISK-MST-01: ANY hotfix waives")
         self.assertIn("hotfix-b", got["adherence"])
@@ -156,6 +162,7 @@ class TestPerEntryExemptionSites(InventoryBase):
     def test_mode_d_is_not_an_any_site(self):
         self.reset_state()
         self.arm(self.feature(execution="self", execution_why="glue"))
+        self.record_self_authored()  # FR-HP-44: recorded authorship arms it
         got = self.capture("guard_provenance.py",
                            {"hook_event_name": "Stop", "cwd": self.root})
         decision = json.loads(got["stdout"])

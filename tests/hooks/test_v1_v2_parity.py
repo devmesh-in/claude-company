@@ -184,21 +184,46 @@ class ParityBase(unittest.TestCase):
         with open(path) as f:
             return f.read()
 
-    def parity(self, hook, payload=None, argv=None, entry=None, expect=None):
+    def record_self_authored(self, rel="src/app.py"):
+        """Drive a REAL Mode A event so `rel` is recorded self-authored.
+
+        FR-HP-44: the audit demand is armed by dirty paths INTERSECTED WITH
+        what the hooks recorded this company as authoring, so setUp's plain
+        file write no longer arms Modes C and D on its own. Writing the file
+        was enough while the gate asked a tree-shaped question; it is not
+        enough now that it asks a provenance-shaped one. Seeding it any other
+        way would test a ledger this hook cannot produce.
+        """
+        return self.capture("guard_provenance.py", {
+            "hook_event_name": "PostToolUse", "tool_name": "Write",
+            "tool_input": {"file_path": rel, "content": "x = 1"},
+            "cwd": self.root,
+        })
+
+    def parity(self, hook, payload=None, argv=None, entry=None, expect=None,
+               arm=False):
         """Assert v1 and v2 are indistinguishable for one hook invocation.
 
         `expect` is a callable asserting the run actually DID something. Without
         it a parity test passes trivially when both runs no-op, which would
         prove nothing at all.
+
+        `arm` records the fixture's dirty source as self-authored first, for
+        the Mode C and Mode D cases that FR-HP-44 would otherwise leave
+        unarmed. It runs identically on both sides, so parity is unaffected.
         """
         entry = ENTRY if entry is None else entry
 
         self.reset_state()
         self.write_v1(entry)
+        if arm:
+            self.record_self_authored()
         v1 = self.capture(hook, payload, argv)
 
         self.reset_state()
         self.write_v2(entry)
+        if arm:
+            self.record_self_authored()
         v2 = self.capture(hook, payload, argv)
 
         if expect is not None:
@@ -361,7 +386,7 @@ class TestProvenanceModeParity(ParityBase):
 
     def test_mode_c_commit_gate(self):
         self.parity(self.HOOK, self.bash_payload("git commit -m x"),
-                    entry=self.self_entry(), expect=blocks)
+                    entry=self.self_entry(), expect=blocks, arm=True)
 
     def test_mode_c_hotfix_bypass(self):
         self.parity(self.HOOK, self.bash_payload("git commit -m x"),
@@ -371,7 +396,7 @@ class TestProvenanceModeParity(ParityBase):
     def test_mode_d_close_gate(self):
         self.parity(self.HOOK,
                     {"hook_event_name": "Stop", "cwd": self.root},
-                    entry=self.self_entry(), expect=prints)
+                    entry=self.self_entry(), expect=prints, arm=True)
 
     def test_mode_e_no_decision_blocks(self):
         self.parity(self.HOOK, self.edit_payload("src/app.py"), expect=blocks)
