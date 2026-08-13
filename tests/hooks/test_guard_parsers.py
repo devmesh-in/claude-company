@@ -39,6 +39,7 @@ HOOKS_DIR = os.path.abspath(
 if HOOKS_DIR not in sys.path:
     sys.path.insert(0, HOOKS_DIR)
 
+import _common  # noqa: E402
 import guard_commit  # noqa: E402
 import guard_secrets  # noqa: E402
 
@@ -115,16 +116,31 @@ class Base(unittest.TestCase):
         self.addCleanup(lambda: git(self.root, "worktree", "prune"))
         return path
 
-    def configure_gates(self):
-        """One REAL gate, so the gate-stamp check is armed (not bypassed)."""
-        self.write("company/gates.config", json.dumps(
-            {"gates": [{"name": "tests", "command": "true",
-                        "blocking": True}]}))
+    def configure_gates(self, tree=None):
+        """One REAL gate, so the gate-stamp check is armed (not bypassed).
 
-    def stamp(self):
-        """A green, fresh gates.status via the real gate_stamp CLI."""
+        `tree` defaults to the project root. Pass a worktree when the segment
+        under test acts on one: the commit gate reads gates.config and
+        gates.status from the ACTING tree, so a config that exists only in the
+        main checkout leaves a worktree segment unarmed.
+        """
+        tree = tree or self.root
+        path = os.path.join(tree, "company", "gates.config")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(json.dumps(
+                {"gates": [{"name": "tests", "command": "true",
+                            "blocking": True}]}))
+
+    def stamp(self, tree=None):
+        """A green, fresh gates.status for `tree`, via the real gate_stamp CLI.
+
+        Stamp LAST for a given tree: the work hash covers that tree's
+        untracked files, so anything written afterwards stales it.
+        """
+        tree = tree or self.root
         env = os.environ.copy()
-        env["CLAUDE_PROJECT_DIR"] = self.root
+        env["CLAUDE_PROJECT_DIR"] = tree
         r = subprocess.run(
             [sys.executable, hook_path("gate_stamp.py"), "--results",
              json.dumps({"gates": [{"name": "tests", "ok": True}]})],
@@ -272,8 +288,13 @@ class TestSegGitDirEndToEnd(Base):
         # appear. The segment IS now seen, so the gate-stamp check below it
         # refuses instead - which is why this asserts on the ABSENCE of the
         # branch string rather than on the exit code alone.
-        self.add_worktree(".claude/worktrees/x", "task/x")
-        self.configure_gates()
+        # The gates.config goes in the WORKTREE: that is the tree the commit
+        # acts on, so that is the tree whose gates and stamp are read. A
+        # config in the main checkout only would leave this segment unarmed
+        # and the "no gates configured" bypass, not the stamp gate, would
+        # decide it.
+        wt = self.add_worktree(".claude/worktrees/x", "task/x")
+        self.configure_gates(wt)
         self.set_tasks({"task": "x", "type": "feature"})
         r = self.commit_guard("git -C .claude/worktrees/x commit -m y")
         self.assertNotIn(BRANCH_MSG, r.stderr)
@@ -305,11 +326,17 @@ class TestSegGitDirEndToEnd(Base):
 
     def test_per_segment_dirs_do_not_leak(self):
         # A -C in one segment must not decide the NEXT segment: the worktree
-        # commit passes (task/x, green stamp), and the bare commit that
-        # follows is still judged on main and blocks.
-        self.add_worktree(".claude/worktrees/x", "task/x")
+        # commit passes (task/x, its OWN green stamp), and the bare commit
+        # that follows is still judged on main and blocks.
+        # Each tree carries its own config and its own stamp, which is what
+        # the gate reads. The two hash independently - writing into the
+        # worktree does not stale the root's stamp - so the order below only
+        # has to keep each tree's stamp last within that tree.
+        wt = self.add_worktree(".claude/worktrees/x", "task/x")
         self.configure_gates()
+        self.configure_gates(wt)
         self.set_tasks({"task": "x", "type": "feature"})
+        self.stamp(wt)
         self.stamp()  # last, so root's work hash matches at hook time
         r = self.commit_guard(
             "git -C .claude/worktrees/x commit -m y && git commit -m y")
@@ -325,6 +352,36 @@ class TestSegGitDirEndToEnd(Base):
         r = self.commit_guard(
             "git push origin task/x && git -C .claude/worktrees/x push")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+
+# --- one implementation: guard_commit re-exports _common's parsers --------
+class TestParserAliases(unittest.TestCase):
+    """The parsers live in _common. guard_commit keeps the public NAMES.
+
+    guard_secrets and guard_provenance both reach these through guard_commit,
+    and the monkeypatch test below depends on the name resolving on this
+    module at call time. Deleting an alias as dead code breaks callers in
+    other files, so the aliases are pinned here.
+    """
+
+    ALIASES = ("ARG_OPTS", "segments", "git_subcmd", "git_cwd", "seg_git_dir")
+
+    def test_aliases_are_the_common_implementations(self):
+        for name in self.ALIASES:
+            self.assertIs(getattr(guard_commit, name),
+                          getattr(_common, name),
+                          "guard_commit.{} is not _common.{}".format(
+                              name, name))
+
+    def test_guard_commit_defines_no_second_parser(self):
+        with open(hook_path("guard_commit.py")) as f:
+            source = f.read()
+        # assertFalse, not assertNotIn: the failure message must not dump the
+        # whole hook source into the run output.
+        for name in ("segments", "git_subcmd", "git_cwd", "seg_git_dir"):
+            self.assertFalse(
+                "def {}(".format(name) in source,
+                "guard_commit re-defines {} instead of aliasing".format(name))
 
 
 # --- FR-HP-12: guard_secrets delegates instead of duplicating -------------
