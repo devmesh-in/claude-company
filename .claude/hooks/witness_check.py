@@ -64,12 +64,21 @@ def empty_registry():
 
 
 def write_registry(root, registry):
+    """Seal the registry with a fresh checksum and replace it in one rename.
+
+    The checksum is still computed here, over exactly the same object as
+    before - this changes HOW the registry lands, never WHAT is in it. The
+    write goes through c.write_json_atomic so a concurrent --check can never
+    read a half-written registry and report a bogus checksum mismatch.
+
+    Callers hold c.state_lock around the whole read-modify-write; atomicity
+    alone does not stop two adders from computing the same W-NNN.
+
+    Returns True on success and False if the write could not be made.
+    """
     registry["checksum"] = compute_checksum(registry)
     path = registry_path(root)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(registry, f, indent=2)
-        f.write("\n")
+    return c.write_json_atomic(path, registry, indent=2)
 
 
 def next_id(witnesses):
@@ -90,31 +99,44 @@ def cmd_add(root, args):
               file=sys.stderr)
         return 2
 
+    # FR-HP-30: the read, next_id, the append and the write are ONE critical
+    # section. Locking only the write leaves two concurrent adders computing
+    # the same W-NNN off the same stale list, so the ids collide and one row
+    # is lost. state_lock fails open - a lock it cannot take proceeds unlocked
+    # rather than jamming the CLI.
     path = registry_path(root)
-    if os.path.exists(path):
-        registry = c.read_json_file(path)
-        if not isinstance(registry, dict) or not isinstance(
-                registry.get("witnesses"), list):
-            print("witness_check: {} is malformed - cannot add".format(path),
-                  file=sys.stderr)
-            return 1
-    else:
-        registry = empty_registry()
+    with c.state_lock(root):
+        if os.path.exists(path):
+            registry = c.read_json_file(path)
+            if not isinstance(registry, dict) or not isinstance(
+                    registry.get("witnesses"), list):
+                print("witness_check: {} is malformed - cannot add".format(path),
+                      file=sys.stderr)
+                return 1
+        else:
+            registry = empty_registry()
 
-    witnesses = registry["witnesses"]
-    wid = next_id(witnesses)
-    witness = {
-        "id": wid,
-        "task": args.task,
-        "file": args.file,
-        "must_contain": args.contains,
-        "regex": bool(args.regex),
-        "why": args.why,
-        # FALLBACK OQ-W2-03: UTC ISO, second precision; determinism not required.
-        "added_at": c.iso_now(),
-    }
-    witnesses.append(witness)
-    write_registry(root, registry)
+        witnesses = registry["witnesses"]
+        wid = next_id(witnesses)
+        witness = {
+            "id": wid,
+            "task": args.task,
+            "file": args.file,
+            "must_contain": args.contains,
+            "regex": bool(args.regex),
+            "why": args.why,
+            # FALLBACK OQ-W2-03: UTC ISO, second precision; determinism not required.
+            "added_at": c.iso_now(),
+        }
+        witnesses.append(witness)
+        if not write_registry(root, registry):
+            # write_json_atomic returns False rather than raising. Reporting a
+            # witness as added when nothing landed on disk is worse than the
+            # race this locking fixes, so this path is LOUD.
+            print("witness_check: could not write {} - witness NOT added".format(
+                path), file=sys.stderr)
+            return 1
+
     c.adherence_log(root, HOOK, "INFO", wid,
                     "added witness for {}".format(args.file))
     print("added {} -> {} (must_contain: {!r}, regex={})".format(
@@ -129,27 +151,35 @@ def cmd_remove(root, args):
         print("witness_check --remove requires --why", file=sys.stderr)
         return 2
 
+    # FR-HP-30: same one critical section as --add. A remove that reads a list
+    # a concurrent add has already grown would write the pre-add list back and
+    # silently drop the new row.
     path = registry_path(root)
-    if not os.path.exists(path):
-        print("witness_check: no registry at {} - nothing to remove".format(
-            path), file=sys.stderr)
-        return 1
-    registry = c.read_json_file(path)
-    if not isinstance(registry, dict) or not isinstance(
-            registry.get("witnesses"), list):
-        print("witness_check: {} is malformed - cannot remove".format(path),
-              file=sys.stderr)
-        return 1
+    with c.state_lock(root):
+        if not os.path.exists(path):
+            print("witness_check: no registry at {} - nothing to remove".format(
+                path), file=sys.stderr)
+            return 1
+        registry = c.read_json_file(path)
+        if not isinstance(registry, dict) or not isinstance(
+                registry.get("witnesses"), list):
+            print("witness_check: {} is malformed - cannot remove".format(path),
+                  file=sys.stderr)
+            return 1
 
-    witnesses = registry["witnesses"]
-    kept = [w for w in witnesses if w.get("id") != wid]
-    if len(kept) == len(witnesses):
-        print("witness_check: no witness with id {} - nothing removed".format(
-            wid), file=sys.stderr)
-        return 1
+        witnesses = registry["witnesses"]
+        kept = [w for w in witnesses if w.get("id") != wid]
+        if len(kept) == len(witnesses):
+            print("witness_check: no witness with id {} - nothing removed".format(
+                wid), file=sys.stderr)
+            return 1
 
-    registry["witnesses"] = kept
-    write_registry(root, registry)
+        registry["witnesses"] = kept
+        if not write_registry(root, registry):
+            print("witness_check: could not write {} - witness NOT removed".format(
+                path), file=sys.stderr)
+            return 1
+
     c.adherence_log(root, HOOK, "INFO", wid, "removed: {}".format(args.why))
     # Removal is never silent.
     print("removed {} ({} witnesses remain): {}".format(

@@ -3,9 +3,10 @@
 
 Writing SOURCE CODE requires an active brief. Non-source files (docs, config,
 data, dotfiles, and anything under company/, .claude/, docs/, .github/) are
-exempt. Hotfix entries exempt THEMSELVES from the check (logged); every other
-entry in flight is still evaluated, and one unusable brief blocks. Fails open
-on error.
+exempt. quick and hotfix entries exempt THEMSELVES from the check (logged);
+every other entry in flight is still evaluated, and one unusable brief blocks.
+An existing-but-unparseable task file is a torn read and allows the edit.
+Fails open on error.
 """
 
 import os
@@ -60,6 +61,23 @@ def is_source(rel, base):
     return True
 
 
+def exempt_reason(exempt):
+    """The bypass reason for a set of entries that are ALL exemption types.
+
+    Derived from the types actually present, never fixed: a hotfix-only set
+    must keep logging the literal "hotfix mode" it logged before quick became
+    an exemption type, because that string is what the adherence log has
+    always carried for that case and what reads back out of it.
+
+    The type pair here is the same pair as the gating predicate in main() and
+    is only ever asked about entries that predicate already excluded, so it
+    stays fixed in that order: quick, then hotfix, both when both are present.
+    """
+    present = set(e.get("type") for e in exempt)
+    names = [t for t in ("quick", "hotfix") if t in present]
+    return "/".join(names) + " mode"
+
+
 def render_offenders(offenders):
     """FR-MST-30: name every entry at fault and say what is wrong with it.
 
@@ -99,28 +117,49 @@ def main():
 
         tasks = c.active_tasks(root)
 
-        # FR-MST-05 step (a). THE EMPTY CHECK MUST STAY FIRST. The brief check
-        # below is an ALL over the non-hotfix entries, and an ALL is vacuously
-        # TRUE on an empty list - so evaluating it before this guard would
-        # silently flip the gate from BLOCK to ALLOW exactly when NO task is
-        # active, which is the case it exists to catch. Do not reorder.
+        # FR-HP-32: a torn read is not an absent task file. active-task.json
+        # is written whole by several sessions, so a reader can catch its
+        # truncated middle - and blocking work that HAS a good brief because
+        # another session was mid-write is a wrong block. Fail open on it.
+        #
+        # THE ORDER HERE IS LOAD-BEARING. c.active_tasks() already retries a
+        # torn read internally before giving up; c.active_tasks_unreadable()
+        # does NOT retry. Probing unreadable first would throw that retry away
+        # and fail open on every transient blip, which loses real enforcement.
+        # Ask active_tasks() first, consult unreadable only on its empty
+        # answer. Do not reorder.
+        if not tasks and c.active_tasks_unreadable(root):
+            c.log_bypass(root, HOOK, rel, "task file unreadable")
+            sys.exit(0)
+
+        # FR-MST-05 step (a). THE EMPTY CHECK MUST STAY FIRST of the task
+        # checks. The brief check below is an ALL over the gating entries, and
+        # an ALL is vacuously TRUE on an empty list - so evaluating it before
+        # this guard would silently flip the gate from BLOCK to ALLOW exactly
+        # when NO task is active, which is the case it exists to catch. Do not
+        # reorder. An ABSENT file still lands here and blocks; only the
+        # unreadable probe above lets an empty answer through.
         if not tasks:
             c.block(root, HOOK, rel, "no active brief", NO_BRIEF_MSG)
 
-        # (b) hotfix is a per-entry EXEMPTION, never an ANY waiver: it removes
-        # its own entry from the check and nothing else. Only when EVERY entry
-        # is a hotfix does the whole gate step aside.
-        non_hotfix = [e for e in tasks if e.get("type") != "hotfix"]
-        if not non_hotfix:
+        # (b) quick and hotfix are per-entry EXEMPTION types, never an ANY
+        # waiver: each removes its OWN entry from the check and nothing else.
+        # Only when EVERY entry in flight is quick or hotfix does the whole
+        # gate step aside. One briefless quick entry beside a feature entry
+        # must still leave the feature entry blocking - otherwise a single
+        # briefless quick entry bricks source edits for every concurrent
+        # session against this working tree.
+        gating = [e for e in tasks if e.get("type") not in ("quick", "hotfix")]
+        if not gating:
             c.log_bypass(
                 root, HOOK, rel,
-                c.qualify_reason("hotfix mode", tasks, tasks),
+                c.qualify_reason(exempt_reason(tasks), tasks, tasks),
             )
             sys.exit(0)
 
-        # (c) ALL over the non-hotfix entries: one unusable brief blocks.
+        # (c) ALL over the gating entries: one unusable brief blocks.
         offenders = []  # (entry, brief-or-None)
-        for entry in non_hotfix:
+        for entry in gating:
             brief = entry.get("brief")
             if not brief:
                 offenders.append((entry, None))

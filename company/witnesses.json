@@ -289,7 +289,43 @@
       "regex": false,
       "why": "dispatch credit must stay PER-SLUG; a regression to a whole-ledger dispatch count lets one session's dispatch vacuously satisfy another session's delegated decision",
       "added_at": "2026-07-27T13:54:30Z"
+    },
+    {
+      "id": "W-034",
+      "task": "hp-guards",
+      "file": ".claude/hooks/guard_commit.py",
+      "must_contain": "ARG_OPTS",
+      "regex": false,
+      "why": "Reverting the separated-argument option skip reopens four enforcement escapes at once (commit gate, owner-only protected-branch push, secrets scan, provenance mode C) and every existing test stays green.",
+      "added_at": "2026-08-13T08:16:06Z"
+    },
+    {
+      "id": "W-035",
+      "task": "hp-guards",
+      "file": ".claude/hooks/guard_spec.py",
+      "must_contain": "segs[0] in EXEMPT_DIRS",
+      "regex": false,
+      "why": "Anchoring the exempt-dir test to the first segment. Reverting to any-segment matching silently un-gates nested product source across every install, and 0 of 138 tracked files here change classification, so no local test catches it.",
+      "added_at": "2026-08-13T08:16:13Z"
+    },
+    {
+      "id": "W-036",
+      "task": "hp-kernel",
+      "file": ".claude/hooks/_common.py",
+      "must_contain": "GIT_INDEX_FILE",
+      "regex": false,
+      "why": "The throwaway index for content-based work_hash. Lose this and every hook invocation stages the working tree into the developer real git index.",
+      "added_at": "2026-08-13T08:16:19Z"
+    },
+    {
+      "id": "W-037",
+      "task": "hp-runner",
+      "file": "company/run-gates.sh",
+      "must_contain": "BASH_SOURCE",
+      "regex": false,
+      "why": "Root resolved from the runner own location. Revert it and a worktree ladder silently gates and stamps the main checkout again, producing a green stamp for code it never saw.",
+      "added_at": "2026-08-13T08:16:25Z"
     }
   ],
-  "checksum": "3329ace9c207b8e33bd23446e0634f53d97168fbeea9d7e5abe0141885b31cbc"
+  "checksum": "b8ca2c5e23b60fe3801eb951945097e5c18f870a5599445932e309fb98f27c5a"
 }
