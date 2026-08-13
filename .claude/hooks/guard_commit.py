@@ -36,8 +36,14 @@ PROTECTED = {"main", "master"}
 # a block/allow decision - the gate arms on presence, not on a count.
 RECIPE_CAP = 3
 
+# FR-HP-17: the tail is shared by the one-entry and the many-entry recipe, so
+# the compound-command warning renders in both.
 BRANCH_TAIL = (
     "then retry your commit on that branch.\n"
+    "NOTE: run the switch as its OWN command first - this gate judges every "
+    "segment of a compound command against the CURRENT branch, so `git "
+    "switch -c task/x && git commit` blocks even though the switch comes "
+    "first.\n"
     "If this task is finished and you are integrating, use git merge "
     "(allowed on main) - see company/GIT.md."
 )
@@ -48,8 +54,21 @@ def segments(command):
     return [p.strip() for p in parts if p.strip()]
 
 
+# FR-HP-10: global options that carry a SEPARATED argument. Skipping one
+# token each leaves the argument to be read as the subcommand, so
+# `git -C sub commit` parses as subcommand "sub" and the whole segment goes
+# unseen by every Bash-gated check. Attached forms (-Cdir, --git-dir=x) carry
+# their argument in the same token and consume one token only.
+ARG_OPTS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace",
+            "--exec-path")
+
+
 def git_subcmd(segment):
-    """Return (subcommand, args) for a `git ...` segment, else (None, [])."""
+    """Return (subcommand, args) for a `git ...` segment, else (None, []).
+
+    Only tokens BEFORE the subcommand are scanned: `git commit -C HEAD~1` is
+    --reuse-message, where HEAD~1 is a commit ref and not a path.
+    """
     try:
         toks = shlex.split(segment)
     except Exception:
@@ -58,7 +77,7 @@ def git_subcmd(segment):
         return None, []
     i = 1
     while i < len(toks) and toks[i].startswith("-"):
-        i += 1
+        i += 2 if toks[i] in ARG_OPTS else 1
     if i >= len(toks):
         return None, []
     return toks[i], toks[i + 1:]
@@ -81,6 +100,46 @@ def git_cwd(payload, root):
             if out is not None and out.strip() == "true":
                 return cwd
     return root
+
+
+def seg_git_dir(seg, payload, root):
+    """The directory whose branch a single git SEGMENT must be judged by.
+
+    FR-HP-11: now that FR-HP-10 makes `git -C <path> commit` visible to this
+    gate, it must also be judged by the tree that -C names. A session sitting
+    in the main checkout that runs `git -C .claude/worktrees/<slug> commit`
+    lands the commit on the worktree's task branch, so judging it by the main
+    checkout's branch (main) would be a false block.
+
+    Only tokens BEFORE the subcommand are scanned, for the same reason as
+    git_subcmd: `git commit -C HEAD~1` is --reuse-message, not a path. The
+    LAST -C wins, which is git's own semantics. A relative path resolves
+    against the payload cwd when present, else root.
+    """
+    try:
+        toks = shlex.split(seg)
+    except Exception:
+        toks = seg.split()
+    path = None
+    i = 1
+    while i < len(toks) and toks[i].startswith("-"):
+        if toks[i] == "-C" and i + 1 < len(toks):
+            path = toks[i + 1]
+        elif toks[i].startswith("-C") and len(toks[i]) > 2:
+            path = toks[i][2:]
+        i += 2 if toks[i] in ARG_OPTS else 1
+    if path:
+        base = payload.get("cwd") if isinstance(payload, dict) else None
+        base = base or root
+        cand = path if os.path.isabs(path) else os.path.join(base, path)
+        # OQ-HP-12 assumption: accept the candidate only when git itself
+        # answers `true` there. Any other answer (missing directory, not a
+        # repo, git error) falls through to git_cwd, which falls back to
+        # root. Fail open, never fail hard.
+        out = c._git(cand, ["rev-parse", "--is-inside-work-tree"])
+        if out is not None and out.strip() == "true":
+            return cand
+    return git_cwd(payload, root)
 
 
 def push_targets_protected(branch_dir, args):
@@ -149,14 +208,15 @@ def main():
     if not command:
         sys.exit(0)
 
-    # #26: branch checks must reflect the tree the git command runs in.
-    branch_dir = git_cwd(payload, root)
-
     try:
         for seg in segments(command):
             sub, args = git_subcmd(seg)
             if sub is None:
                 continue
+            # #26 + FR-HP-11: branch checks must reflect the tree THIS segment
+            # runs in, resolved per segment so a -C in one segment cannot
+            # mis-judge the others.
+            branch_dir = seg_git_dir(seg, payload, root)
 
             if sub == "push":
                 if push_targets_protected(branch_dir, args):

@@ -47,6 +47,7 @@ and names the responsible entries only at N > 1.
 
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -574,6 +575,98 @@ def staleness_reason(root, ledger):
 
 # --- payload readers ------------------------------------------------------
 
+# FR-HP-14: the verdict vocabulary, LONGEST token first. That order is load
+# bearing twice - in the alternation and in the scrub below - so the SHIP
+# inside DO-NOT-SHIP and inside SHIP-WITH-FIXES is never counted as a bare
+# SHIP. HALT records the SAME stored value as DO-NOT-SHIP: the stored values
+# cannot change, because old ledgers keep working and fresh_audit compares
+# against the literal "do-not-ship".
+_VERDICT_TOKENS = (
+    ("DO-NOT-SHIP", "do-not-ship"),
+    ("SHIP-WITH-FIXES", "ship-with-fixes"),
+    ("HALT", "do-not-ship"),
+    ("SHIP", "ship"),
+)
+
+
+def audit_verdict(text):
+    """The verdict an auditor report states, as a stored ledger value.
+
+    A LABELED verdict line ("Verdict: SHIP", "**Final verdict:** HALT") is
+    authoritative; it is anchored at line start and never crosses a newline.
+    Disagreeing labeled lines fail CLOSED to the most negative one. With no
+    labeled line a token counts only when it is the SOLE verdict token in the
+    whole text: an auditor that merely NAMES its vocabulary ("returns SHIP /
+    SHIP-WITH-FIXES / DO-NOT-SHIP") must not be recorded as a rejection - the
+    substring test this replaces recorded exactly that and cost four blocked
+    commits against four PASSING audits.
+
+    Returns "do-not-ship", "ship-with-fixes", "ship" or "unknown", and never
+    raises on any input.
+    """
+    try:
+        if not isinstance(text, str):
+            text = "" if text is None else str(text)
+        alternation = "|".join(tok for tok, _v in _VERDICT_TOKENS)
+        # The boundaries reject an adjacent letter or hyphen on either side,
+        # so SHIPPING and RESHIP are not the SHIP token.
+        labeled = re.findall(
+            r"(?im)^\W*(?:final\s+)?verdict\b[^\n]*?"
+            r"(?<![A-Z-])(" + alternation + r")(?![A-Z-])",
+            text,
+        )
+        if labeled:
+            found = set()
+            for hit in labeled:
+                for tok, value in _VERDICT_TOKENS:
+                    if hit.upper() == tok:
+                        found.add(value)
+            for value in ("do-not-ship", "ship-with-fixes", "ship"):
+                if value in found:
+                    return value
+        present = []
+        scrub = text
+        for tok, value in _VERDICT_TOKENS:
+            pattern = r"(?<![A-Z-])" + re.escape(tok) + r"(?![A-Z-])"
+            if re.search(pattern, scrub):
+                present.append(value)
+                scrub = re.sub(pattern, " ", scrub)
+        if len(present) == 1:
+            return present[0]
+    except Exception:
+        return "unknown"
+    # OQ-HP-09 assumption: an ambiguous audit is NOT a rejection. fresh_audit
+    # already treats every verdict other than "do-not-ship" as passing, and
+    # recording a guess as a rejection is how the deadlock happened.
+    return "unknown"
+
+
+def response_text(resp):
+    """A Task tool_response flattened into real text.
+
+    FR-HP-15: a response arrives as a list of content blocks, and str() on
+    that container renders a newline as the two characters backslash and n,
+    which destroys the line anchor audit_verdict depends on. Never raises.
+    """
+    try:
+        if isinstance(resp, str):
+            return resp
+        if isinstance(resp, dict):
+            keys = [
+                k for k in ("text", "content", "result", "output") if k in resp
+            ]
+            if not keys:
+                return str(resp)
+            return "\n".join(
+                p for p in (response_text(resp[k]) for k in keys) if p
+            )
+        if isinstance(resp, (list, tuple)):
+            return "\n".join(p for p in (response_text(x) for x in resp) if p)
+        return "" if resp is None else str(resp)
+    except Exception:
+        return ""
+
+
 def role_of(tool_input):
     for field in guard_models.SPAWN_TYPE_FIELDS:
         val = (tool_input or {}).get(field)
@@ -776,7 +869,7 @@ def mode_b_post(root, ti, payload):
             resp = payload.get("tool_response")
             if resp is None:
                 resp = payload.get("tool_result")  # OQ-DE-02 assumption
-            verdict = "do-not-ship" if "DO-NOT-SHIP" in str(resp) else "unknown"
+            verdict = audit_verdict(response_text(resp))
         except Exception:
             verdict = "unknown"
         ledger = read_ledger(root)
@@ -894,6 +987,26 @@ def mode_d(root, payload):
             "(Task tool, subagent_type: auditor) and commit the audited work, "
             "or move it to a worktree task branch, before finishing."
         ).format(slug)
+        # FR-HP-16: name the paths that armed the gate. self_authored is a
+        # property of the TREE, so the offending work may predate this
+        # session, and an unnamed block reads as an accusation the agent
+        # being blocked cannot check. Display only - it reaches no decision.
+        self_dirty = sorted(
+            {
+                e.get("path")
+                for e in (ledger.get("self_authored") or [])
+                if isinstance(e, dict)
+            }.intersection(dp)
+        )
+        if self_dirty:
+            shown = ", ".join(self_dirty[:5])
+            more = len(self_dirty) - 5
+            if more > 0:
+                shown += " (+{} more)".format(more)
+            reason += (
+                " Self-authored dirty paths (possibly from an earlier "
+                "session): {}.".format(shown)
+            )
         print(json.dumps({"decision": "block", "reason": reason}))
     sys.exit(0)
 

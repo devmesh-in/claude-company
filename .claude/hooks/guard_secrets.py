@@ -28,11 +28,11 @@ scanner bug must never brick a session.
 import json
 import os
 import re
-import shlex
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
+import guard_commit  # noqa: E402
 
 HOOK = "guard_secrets"
 
@@ -74,25 +74,18 @@ def segments(command):
     return [p.strip() for p in parts if p.strip()]
 
 
-def git_subcmd(segment):
-    """Return (subcommand, args) for a `git ...` segment, else (None, [])."""
-    try:
-        toks = shlex.split(segment)
-    except Exception:
-        toks = segment.split()
-    if not toks or toks[0] != "git":
-        return None, []
-    i = 1
-    while i < len(toks) and toks[i].startswith("-"):
-        i += 1
-    if i >= len(toks):
-        return None, []
-    return toks[i], toks[i + 1:]
-
-
 def has_commit(command):
+    """True when any segment of `command` is a `git commit`.
+
+    FR-HP-12: the subcommand parser lives in guard_commit and is looked up on
+    that module at call time. A byte-identical copy here is what let `git -C
+    sub commit` escape this scan after guard_commit was fixed - one parser,
+    one behavior. Delegating changes WHICH commands are scanned and nothing
+    else: this guard still never reads active-task.json, never honors hotfix
+    mode, and never yields.
+    """
     for seg in segments(command):
-        sub, _ = git_subcmd(seg)
+        sub, _ = guard_commit.git_subcmd(seg)
         if sub == "commit":
             return True
     return False
