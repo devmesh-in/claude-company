@@ -46,7 +46,13 @@ def is_source(rel, base):
     if base.startswith("."):
         return False
     segs = rel.split("/")
-    if any(s in EXEMPT_DIRS for s in segs[:-1]):
+    # FR-HP-13: the exempt names are the MACHINERY directories at the
+    # REPOSITORY ROOT, so the test anchors at segment zero. Matching any
+    # segment exempted product code the moment a directory happened to be
+    # called company/ or docs/ - app/company/billing.py needed no brief, no
+    # execution decision, and never counted as dirty source for the audit
+    # demand. Anchoring here is what makes that code gated again.
+    if segs and segs[0] in EXEMPT_DIRS:
         return False
     ext = os.path.splitext(base)[1].lower()
     if ext in NON_SOURCE_EXT:
