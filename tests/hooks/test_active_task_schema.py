@@ -121,8 +121,8 @@ class NormalizationTable(FixtureBase):
         self.assertEqual(self.tasks(), [obj])
 
     def test_empty_object_is_one_task(self):
-        # "A task exists" - this is what preserves guard_commit / stop_gate
-        # behavior on a bare {}.
+        # "A task exists" - this is what preserves guard_commit behavior
+        # on a bare {}.
         self.write_json({})
         self.assertEqual(self.tasks(), [{}])
 
@@ -186,13 +186,6 @@ class Indistinguishability(FixtureBase):
         }
         seen = self.observe("guard_spec.py", payload)
         self.assertEqual(seen[0][0], 2, "expected the no-brief block")
-        for other in seen[1:]:
-            self.assertEqual(seen[0], other)
-
-    def test_stop_gate_reacts_identically(self):
-        payload = {"hook_event_name": "Stop", "cwd": self.root}
-        seen = self.observe("stop_gate.py", payload)
-        self.assertEqual(seen[0], (0, "", ""))
         for other in seen[1:]:
             self.assertEqual(seen[0], other)
 

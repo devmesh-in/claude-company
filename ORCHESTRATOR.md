@@ -187,13 +187,12 @@ This file is yours alone. Subagents do not read it; they read the project's
    `--delete-branch` handles the remote side), remove ONLY your task's entry
    from `active-task.json` with a targeted Edit, archive the brief/spec to
    `shipped/`.
-   **Pruning the entry is load-bearing, not tidiness.** `stop_gate` decides
-   whether an entry could have dirtied THIS tree by asking git where that
-   entry's worktree is. Once you remove the worktree, a surviving entry counts
-   as in-tree - correctly, since its code is now merged here - so a merged
-   entry left behind keeps arming the Stop gate on behalf of work that is
-   already done, and can hold the gate at a warning when it should be
-   blocking. Remove the worktree and the entry in the same pass.
+   **Pruning the entry is load-bearing, not tidiness.** Every gate that reads
+   `active-task.json` - the commit gate, the spec gate, the close gate, the
+   session digest - treats a surviving entry as work in flight. A merged entry
+   left behind therefore arms gates on behalf of work that is already done,
+   and points their recipes at a lane that no longer exists. Remove the
+   worktree and the entry in the same pass.
 8. **Record, report, and get acceptance.** Update STATUS.md (red stays red
    until proven green), RESUME.md (done / running / next + spawn facts),
    WORRIES.md (add rows the moment you notice something; graduate rows that got

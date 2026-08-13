@@ -8,18 +8,18 @@ rewrite that keeps the rule keeps these green; a rewrite that drops the rule
 turns them red - which is the point, because canon drifted from the code three
 separate times and nothing mechanical noticed.
 
-These assertions previously lived in tests/hooks/test_stop_gate_scope.py, whose
-name described only its other half. They were moved here whole when stop_gate
-was deleted (DECISIONS #20), because a file named after a deleted hook is the
-obvious thing to delete and these have nothing to do with that hook.
+These assertions previously lived in a test file named after the Stop-time gate
+DECISIONS #20 deleted, whose name described only its other half. They were
+moved here whole ahead of that deletion, because a file named after a deleted
+hook is the obvious thing to delete and these have nothing to do with it.
 
 Three families live here:
 
   * CeremonyDoctrineMatchesTheGuard - runs guard_spec for real and compares its
     behavior against what METHOD.md and ORCHESTRATOR.md claim.
   * EveryHookIsLoadable - every hook parses on the documented Python floor.
-  * DoctrineClauses - FR-HP-51 to FR-HP-65 plus the items authorized by
-    DECISIONS #19, one required clause at a time.
+  * DoctrineClauses - FR-HP-51 to FR-HP-65, the items authorized by
+    DECISIONS #19, and the wiring table, one required clause at a time.
 """
 
 import ast
@@ -419,21 +419,44 @@ class DoctrineClauses(unittest.TestCase):
 
     # -- wiring ------------------------------------------------------------
 
-    def test_stop_gate_is_still_wired_into_settings(self):
-        """FR-HP-50 AC: scoping is not un-wiring. A downstream fork removed the
-        Stop binding entirely; DECISIONS #18 refused that, because stop_gate is
-        the only check on three paths guard_commit cannot see.
+    def test_every_expected_binding_names_a_hook_that_exists(self):
+        """The wiring table is canon about the settings file, so it drifts the
+        same way prose does - and DECISIONS #20 is the proof: deleting a hook
+        while its row survived would have turned `--check` red against a
+        perfectly correct install, and deleting the row while the file survived
+        would have turned it red the other way. This is the half no settings
+        edit can catch, and it replaces the stop-gate-specific binding
+        assertion that died with the hook.
         """
-        settings = doc(".claude/settings.json")
-        self.assertIn("stop_gate.py", settings)
-        data = json.loads(settings)
-        stop = data["hooks"]["Stop"]
-        commands = [h.get("command", "")
-                    for group in stop for h in group.get("hooks", [])]
-        self.assertTrue(
-            any("stop_gate.py" in cmd for cmd in commands),
-            "stop_gate.py must stay bound to the Stop event: {}".format(
-                commands))
+        sys.path.insert(0, REPO_HOOKS)
+        import guard_models  # noqa: E402
+
+        missing = sorted({
+            hook for _, _, hook in guard_models.EXPECTED_WIRING
+            if not os.path.exists(os.path.join(REPO_HOOKS, hook))
+        })
+        self.assertEqual(
+            missing, [],
+            "EXPECTED_WIRING requires hooks that are not on disk, so --check "
+            "fails against a correct install: " + ", ".join(missing))
+
+    def test_the_shipped_settings_bind_every_expected_hook(self):
+        """The other direction, read off what actually ships. guard_models
+        --check proves this against a copied fixture; this proves the fixture
+        is not the only place it holds.
+        """
+        sys.path.insert(0, REPO_HOOKS)
+        import guard_models  # noqa: E402
+
+        data = json.loads(doc(".claude/settings.json"))
+        for event, _, hook in guard_models.EXPECTED_WIRING:
+            commands = [h.get("command", "")
+                        for group in data["hooks"].get(event, [])
+                        for h in group.get("hooks", [])]
+            self.assertTrue(
+                any(hook in cmd for cmd in commands),
+                "{} is not bound to {} in the shipped settings: {}".format(
+                    hook, event, commands))
 
 
 if __name__ == "__main__":

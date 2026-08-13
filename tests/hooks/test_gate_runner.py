@@ -673,17 +673,20 @@ class WiringGate(unittest.TestCase):
         r = self.check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_unwiring_stop_gate_fails_naming_event_and_hook(self):
+    def test_unwiring_a_stop_hook_fails_naming_event_and_hook(self):
+        # The example used to be the standalone Stop-time gate DECISIONS #20
+        # deleted. guard_provenance's Stop binding is the Mode D close gate,
+        # and it is the one whose absence this assertion now protects.
         s = self.settings()
         s["hooks"]["Stop"][0]["hooks"] = [
             h for h in s["hooks"]["Stop"][0]["hooks"]
-            if "stop_gate.py" not in h.get("command", "")
+            if "guard_provenance.py" not in h.get("command", "")
         ]
         self.save(s)
         r = self.check()
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("Stop", r.stdout)
-        self.assertIn("stop_gate.py", r.stdout)
+        self.assertIn("guard_provenance.py", r.stdout)
 
     def test_removing_the_bash_group_names_all_its_hooks(self):
         s = self.settings()
@@ -730,7 +733,7 @@ class WiringGate(unittest.TestCase):
         stripped = json.loads(json.dumps(s))
         stripped["hooks"]["Stop"][0]["hooks"] = [
             h for h in stripped["hooks"]["Stop"][0]["hooks"]
-            if "stop_gate.py" not in h.get("command", "")
+            if "guard_provenance.py" not in h.get("command", "")
         ]
         self.save(stripped)
         with open(os.path.join(self.root, ".claude",

@@ -940,43 +940,6 @@ class TestGateStampAndCommit(Base):
         self.assertIn("checksum", r.stdout.lower())
 
 
-class TestStopGate(Base):
-    def test_loop_protection(self):
-        self.set_task({"task": "x", "type": "feature"})
-        payload = {"hook_event_name": "Stop", "stop_hook_active": True,
-                   "cwd": self.root}
-        r = run_hook("stop_gate.py", payload, self.root)
-        self.assertEqual(r.returncode, 0)
-        self.assertEqual(r.stdout.strip(), "")
-
-    def test_blocks_on_stale_gates(self):
-        self.init_git()
-        self.set_task({"task": "feat-x", "type": "feature"})
-        payload = {"hook_event_name": "Stop", "stop_hook_active": False,
-                   "cwd": self.root}
-        r = run_hook("stop_gate.py", payload, self.root)
-        self.assertEqual(r.returncode, 0)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feat-x", decision["reason"])
-
-    def test_quick_task_not_blocked(self):
-        self.set_task({"task": "q", "type": "quick"})
-        payload = {"hook_event_name": "Stop", "stop_hook_active": False,
-                   "cwd": self.root}
-        r = run_hook("stop_gate.py", payload, self.root)
-        self.assertEqual(r.stdout.strip(), "")
-
-    def test_green_gates_not_blocked(self):
-        self.init_git()
-        self.set_task({"task": "x", "type": "feature"})
-        self.stamp({"gates": [{"name": "tests", "ok": True}]})
-        payload = {"hook_event_name": "Stop", "stop_hook_active": False,
-                   "cwd": self.root}
-        r = run_hook("stop_gate.py", payload, self.root)
-        self.assertEqual(r.stdout.strip(), "")
-
-
 class TestSessionStart(Base):
     def test_digest_emitted(self):
         self.write("company/state/RESUME.md", "resume line one\nline two")

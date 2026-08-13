@@ -66,7 +66,6 @@ EXPECTED_WIRING = [
     ("PostToolUse", EDIT_TOOLS, "guard_provenance.py"),
     ("PostToolUse", SPAWN_TOOLS, "guard_provenance.py"),
     ("UserPromptSubmit", None, "context_pin.py"),
-    ("Stop", None, "stop_gate.py"),
     ("Stop", None, "guard_provenance.py"),
     ("Stop", None, "cost_capture.py"),
     ("SubagentStop", None, "cost_capture.py"),

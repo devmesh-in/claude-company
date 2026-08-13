@@ -298,17 +298,6 @@ class TestConsumerHookParity(ParityBase):
                     entry={"task": "hf", "type": "hotfix"},
                     expect=logs("BYPASS"))
 
-    def test_stop_gate_block(self):
-        self.parity("stop_gate.py",
-                    {"hook_event_name": "Stop", "cwd": self.root},
-                    expect=prints)
-
-    def test_stop_gate_quick_exempt(self):
-        v = self.parity("stop_gate.py",
-                        {"hook_event_name": "Stop", "cwd": self.root},
-                        entry={"task": "q", "type": "quick"})
-        self.assertEqual(v["stdout"].strip(), "")
-
     def test_context_pin(self):
         self.parity("context_pin.py",
                     {"hook_event_name": "UserPromptSubmit", "cwd": self.root},
@@ -440,11 +429,6 @@ class TestEmptyStateIndistinguishable(ParityBase):
         self.assertNotIn("work belongs on a task branch", first["stderr"])
         self.assertNotIn("commit on protected branch", first["adherence"])
         self.assertIn("requires green, fresh gates", first["stderr"])
-
-    def test_stop_gate_silent_in_every_empty_state(self):
-        first = self.run_all("stop_gate.py",
-                             {"hook_event_name": "Stop", "cwd": self.root})
-        self.assertEqual(first["stdout"].strip(), "")
 
     def test_mode_e_allows_in_every_empty_state(self):
         first = self.run_all("guard_provenance.py",

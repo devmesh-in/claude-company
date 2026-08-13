@@ -61,10 +61,6 @@ class MultiBase(Base):
         return {"hook_event_name": "PreToolUse", "tool_name": "Task",
                 "tool_input": dict(fields), "cwd": self.root}
 
-    def stop_payload(self):
-        return {"hook_event_name": "Stop", "stop_hook_active": False,
-                "cwd": self.root}
-
 
 # --------------------------------------------------------------------------
 # guard_spec - ALL over the non-hotfix entries, empty check FIRST
@@ -232,52 +228,6 @@ class GuardCommitMultiEntry(MultiBase):
         r = run_hook("guard_commit.py", self.commit_payload(), self.root)
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertIn("green, fresh gates", r.stderr)
-
-
-# --------------------------------------------------------------------------
-# stop_gate - per-entry exempt types, ANY gating entry blocks
-# --------------------------------------------------------------------------
-class StopGateMultiEntry(MultiBase):
-    def setUp(self):
-        Base.setUp(self)
-        self.init_git()
-
-    def test_quick_plus_feature_blocks_and_names_the_feature(self):
-        """The exemption belongs to the quick entry, not to the tree: real
-        work is in flight on a red tree, so the gate stays armed.
-        """
-        self.set_tasks(
-            {"task": "q", "type": "quick"},
-            {"task": "feat-x", "type": "feature"},
-        )
-        r = run_hook("stop_gate.py", self.stop_payload(), self.root)
-        self.assertEqual(r.returncode, 0)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feat-x", decision["reason"])
-        self.assertNotIn("'q'", decision["reason"])
-
-    def test_quick_plus_hotfix_exits_zero_silently(self):
-        self.set_tasks(
-            {"task": "q", "type": "quick"},
-            {"task": "hf", "type": "hotfix"},
-        )
-        r = run_hook("stop_gate.py", self.stop_payload(), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "")
-
-    # The multi-entry block this class used to assert
-    # (test_two_gating_entries_are_both_named) was DELETED with the behavior
-    # it proved: FR-HP-50 replaced that block with a WARN line, because one
-    # session's stale tree was blocking every other session. The N > 1 cases
-    # live in tests/hooks/test_stop_gate_scope.py; duplicating them here would
-    # be padding.
-
-    def test_slugless_gating_entry_still_renders_unknown(self):
-        self.set_tasks({})
-        r = run_hook("stop_gate.py", self.stop_payload(), self.root)
-        decision = json.loads(r.stdout)
-        self.assertIn("(unknown)", decision["reason"])
 
 
 # --------------------------------------------------------------------------
@@ -524,34 +474,6 @@ class SingleEntryParity(MultiBase):
             ["guard_commit | BYPASS | git commit | "
              "hotfix commit on protected branch"],
         )
-
-    def test_stop_gate_block_parity(self):
-        self.init_git()
-        got = self.parity(
-            "stop_gate.py", self.stop_payload(),
-            {"task": "feat-x", "type": "feature"},
-        )
-        self.assertEqual(got[0], 0)
-        self.assertEqual(json.loads(got[1])["decision"], "block")
-        self.assertIn("feat-x", json.loads(got[1])["reason"])
-        self.assertEqual(len(got[3]), 1)
-        self.assertTrue(got[3][0].startswith("stop_gate | BLOCK | feat-x | "))
-
-    def test_stop_gate_quick_exempt_parity(self):
-        self.init_git()
-        got = self.parity(
-            "stop_gate.py", self.stop_payload(), {"task": "q", "type": "quick"}
-        )
-        self.assertEqual(got, (0, "", "", []))
-
-    def test_stop_gate_slugless_entry_parity(self):
-        # The two-argument .get("task", "(unknown)") must survive: a bare {}
-        # still renders (unknown) rather than a slug placeholder.
-        self.init_git()
-        got = self.parity("stop_gate.py", self.stop_payload(), {})
-        self.assertIn("(unknown)", json.loads(got[1])["reason"])
-        self.assertEqual(len(got[3]), 1)
-        self.assertTrue(got[3][0].startswith("stop_gate | BLOCK | (unknown) |"))
 
 
 if __name__ == "__main__":
