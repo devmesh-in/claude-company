@@ -164,3 +164,127 @@ jobs:
             echo "writing gate: banned punctuation found (see SLOP: lines above); use ASCII punctuation"
           fi
           exit "$rc"
+
+  canon:
+    name: canon names every CI suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # CLAUDE.md claimed two suites gated this repo while CI ran five. The
+      # wrong count propagated into three sealed briefs, and a lane shipped a
+      # red branch because nobody ran the suite that would have caught it.
+      # That is the third time canon and CI have disagreed about this repo, so
+      # the disagreement is a red gate from here on.
+      - name: Every suite CI runs is named in CLAUDE.md
+        run: |
+          set -euo pipefail
+          # Overridable so the check can be demonstrated against a doctored
+          # copy of the canon without editing the repo's own canon.
+          CANON_FILE="${CANON_FILE:-CLAUDE.md}"
+          export CANON_FILE
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          WORKFLOW = ".github/workflows/ci.yml"
+          CANON = os.environ["CANON_FILE"]
+
+          # The suite list is derived from this workflow, never from a hand
+          # kept list: a second list would just be one more copy of canon that
+          # can drift. A suite invocation is a command whose first word is an
+          # interpreter and whose arguments carry a tests/ path. That shape is
+          # what keeps the tests/ strings living inside grep patterns and for
+          # loops (the slop and pack jobs) out of the list.
+          INTERPRETERS = ("bash", "sh", "zsh", "python", "python3", "node")
+
+          def clean(tok):
+              return tok.strip("\"'`;,()[]")
+
+          suites = []
+          step_of = {}
+          step = "(unnamed step)"
+          with open(WORKFLOW, encoding="utf-8") as fh:
+              for raw in fh:
+                  line = raw.strip()
+                  named = re.match(r"^(?:-\s+)?name:\s*(.+)$", line)
+                  if named:
+                      step = named.group(1).strip()
+                  if line.endswith("\\"):
+                      line = line[:-1].strip()
+                  match = re.match(r"^(?:-\s+)?run:\s*(.*)$", line)
+                  cmd = match.group(1) if match else line
+                  toks = [clean(t) for t in cmd.split()]
+                  if not toks or toks[0] not in INTERPRETERS:
+                      continue
+                  for tok in toks[1:]:
+                      if tok.startswith("tests/") and tok not in suites:
+                          suites.append(tok)
+                          step_of[tok] = step
+
+          if not suites:
+              print("canon check: found no suite invocations in %s" % WORKFLOW)
+              print("the parser no longer matches how this workflow runs its suites; fix the parser")
+              sys.exit(1)
+
+          # Gate documentation means the fenced code blocks of the canon file,
+          # not the whole file. The Layout table already mentions tests/cli and
+          # tests/install in passing, so a whole file scan would accept a canon
+          # that documents no gates at all.
+          gate = []
+          inside = False
+          with open(CANON, encoding="utf-8") as fh:
+              for raw in fh:
+                  if raw.lstrip().startswith("```"):
+                      inside = not inside
+                      continue
+                  if inside:
+                      gate.append(raw)
+          gate_text = "".join(gate)
+
+          def directory_of(path):
+              return path.rsplit("/", 1)[0] if "/" in path else path
+
+          per_dir = {}
+          for suite in suites:
+              key = directory_of(suite)
+              per_dir[key] = per_dir.get(key, 0) + 1
+
+          # Matching rule, narrowest that still accepts a correct canon:
+          # a suite counts as named when the gate block mentions its exact test
+          # path, OR mentions its test directory AND that directory holds only
+          # one of the suites CI runs. The directory arm is what accepts the
+          # hook suite, which canon names as an equivalent command
+          # (python3 -m unittest discover -s tests/hooks -q) rather than as
+          # bash tests/hooks/run_tests.sh. It is capped at one suite per
+          # directory on purpose: tests/install holds three, so a bare
+          # tests/install mention would hide two dropped suites.
+          missing = []
+          for suite in suites:
+              key = directory_of(suite)
+              if suite in gate_text:
+                  continue
+              if per_dir[key] == 1 and key in gate_text:
+                  continue
+              missing.append(suite)
+
+          print("canon check: %s vs %s" % (WORKFLOW, CANON))
+          for suite in suites:
+              print("  %-30s %s" % (suite, "UNNAMED" if suite in missing else "named"))
+
+          if missing:
+              print("")
+              print("FAIL: %d of %d suites CI runs are not named in the gate block of %s"
+                    % (len(missing), len(suites), CANON))
+              for suite in missing:
+                  print("")
+                  print("  unnamed suite : %s" % suite)
+                  print("  run by        : %s, step '%s'" % (WORKFLOW, step_of[suite]))
+                  print("  to fix        : add a line naming %s to the fenced gate block in %s"
+                        % (suite, CANON))
+                  print("                  (the exact path, or an equivalent command that contains it)")
+              sys.exit(1)
+
+          print("")
+          print("ok: all %d suites CI runs are named in the gate block of %s" % (len(suites), CANON))
+          PY
