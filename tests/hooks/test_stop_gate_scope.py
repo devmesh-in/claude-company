@@ -20,6 +20,7 @@ The scoped rule under test here:
 Every decision is driven through a real hook subprocess.
 """
 
+import ast
 import json
 import os
 import shutil
@@ -499,6 +500,41 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(
 def doc(rel):
     with open(os.path.join(REPO, rel), encoding="utf-8") as f:
         return f.read()
+
+
+class EveryHookIsLoadable(unittest.TestCase):
+    """A hook with a syntax error does not fail loudly - it fails ABSENT.
+
+    Hooks fail open by design, but a SyntaxError never reaches that design:
+    python exits 1, and only exit 2 blocks, so the guarded action proceeds
+    with nothing in the session saying enforcement stopped existing. The CI
+    job `hooks` is the real gate (it survives a test suite this defect would
+    also break); this is the same assertion where a developer meets it first,
+    seconds after the edit instead of minutes after the push.
+    """
+
+    def test_every_hook_parses_on_the_documented_python_floor(self):
+        """ast.parse, never import: importing runs module-level code and
+        several hooks read stdin. feature_version pins the 3.8 floor CLAUDE.md
+        documents, so syntax newer than the floor fails here rather than on
+        the machine of whoever installed this.
+        """
+        names = sorted(n for n in os.listdir(REPO_HOOKS) if n.endswith(".py"))
+        self.assertTrue(names, "no hooks found under " + REPO_HOOKS)
+        failures = []
+        for name in names:
+            path = os.path.join(REPO_HOOKS, name)
+            with open(path, "rb") as fh:
+                source = fh.read()
+            try:
+                ast.parse(source, filename=path, feature_version=(3, 8))
+            except SyntaxError as exc:
+                failures.append("{} line {}: {}".format(name, exc.lineno,
+                                                        exc.msg))
+        self.assertEqual(
+            failures, [],
+            "these hooks do not parse, so they enforce nothing and say so to "
+            "nobody: " + "; ".join(failures))
 
 
 class DoctrineClauses(unittest.TestCase):
