@@ -48,15 +48,6 @@
       "added_at": "2026-07-09T20:34:59Z"
     },
     {
-      "id": "W-006",
-      "task": "wave2-enforce",
-      "file": ".claude/hooks/guard_commit.py",
-      "must_contain": "git_cwd(payload, root)",
-      "regex": false,
-      "why": "branch-from-cwd fix for issue 26; regressing it re-blocks worktree commits",
-      "added_at": "2026-07-09T20:35:00Z"
-    },
-    {
       "id": "W-007",
       "task": "wave3-sdlc",
       "file": "company/RELEASE.md",
@@ -325,7 +316,16 @@
       "regex": false,
       "why": "Root resolved from the runner own location. Revert it and a worktree ladder silently gates and stamps the main checkout again, producing a green stamp for code it never saw.",
       "added_at": "2026-08-13T08:16:25Z"
+    },
+    {
+      "id": "W-038",
+      "task": "acting-tree",
+      "file": ".claude/hooks/guard_commit.py",
+      "must_contain": "c.acting_tree(seg, payload, root)",
+      "regex": false,
+      "why": "Succeeds W-006. The branch and stamp checks must be judged against the tree the commit actually targets, not the project root. Reverting it re-blocks every worktree commit as a protected-branch violation (issue 26) AND lets a lane be gated on a stamp describing somebody else's tree (CR-HP-2, filed independently by three lanes).",
+      "added_at": "2026-08-13T13:12:45Z"
     }
   ],
-  "checksum": "b8ca2c5e23b60fe3801eb951945097e5c18f870a5599445932e309fb98f27c5a"
+  "checksum": "f0b3ecc3684350e1160415c71580d729bc831cbc241062f4222ca52d829c2c4c"
 }

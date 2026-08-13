@@ -1,6 +1,19 @@
 __pycache__/
 *.pyc
 .claude/worktrees/
+# Per-agent scratch notes. Local state, never product - and untracked files
+# that are NOT ignored land in the content work_hash, so every agent that
+# jotted a note stale the gate stamp for every session in the tree.
+.claude/agent-memory/
+
+# Machine-written runtime state. company/state is hash-excluded so these do not
+# stale a stamp, but they are still never committable. Supersedes PR #73, which
+# proposed the same set on 2026-07-15 and went stale before it merged.
+company/state/costs.log
+company/state/.cost-cursor.json
+company/state/provenance-ledger.json
+company/state/active-task.json
+company/state/.update-backups/
 company/state/adherence.log
 company/state/gates.status
 company/state/gates.log
