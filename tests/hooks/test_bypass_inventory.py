@@ -8,20 +8,22 @@ easy to erode one hook at a time. Two DIFFERENT things share the word
 
   EXEMPTION types are PER-ENTRY. A gate that skips because the single task's
   type is exempt now evaluates the NON-EXEMPT entries and blocks if any fails.
-  Sites: guard_spec, Mode D, and the FR-DE-15 tracking gate in Mode B-pre.
-  (guard_tests never honored hotfix at all, and still does not. A fourth
-  site, the standalone Stop-time gate, went away with DECISIONS #20.)
+  Sites: guard_spec and the FR-DE-15 tracking gate in Mode B-pre.
+  (guard_tests never honored hotfix at all, and still does not. Two further
+  sites are gone: the standalone Stop-time gate with DECISIONS #20, and the
+  Mode D close gate with the provenance salvage.)
 
   WAIVER bypasses are ANY, and exist ONLY where blocking a declared production
   emergency behind an UNRELATED entry is the worse failure.
-  Sites: guard_models, guard_commit, Mode C, Mode E. This is RISK-MST-01, an
-  ACCEPTED weakening: with [feature-a, hotfix-b] these four are waived where
+  Sites: guard_models, guard_commit, Mode C. This is RISK-MST-01, an ACCEPTED
+  weakening: with [feature-a, hotfix-b] these three are waived where
   [feature-a] alone would arm them, so unrelated feature work rides the
   emergency waiver. Every one of them logs a BYPASS naming the responsible
-  hotfix entry, which is the mitigation.
+  hotfix entry, which is the mitigation. The fourth site was Mode E, and it
+  went with the execution gate.
 
-This file is the inventory. It asserts the ANY set is EXACTLY those four and
-that the other three still block, so that widening a fifth gate has to be a
+This file is the inventory. It asserts the ANY set is EXACTLY those three and
+that the other two still block, so that widening a fourth gate has to be a
 conscious edit against a red test rather than silent drift. The tests here
 deliberately assert that the accepted weakenings DO happen - do not "fix" them
 into blocks.
@@ -58,7 +60,7 @@ class InventoryBase(ParityBase):
 
 
 # --------------------------------------------------------------------------
-# The four ANY-bypass (waiver) sites. RISK-MST-01 - assert it DOES bypass.
+# The three ANY-bypass (waiver) sites. RISK-MST-01 - assert it DOES bypass.
 # --------------------------------------------------------------------------
 class TestAnyBypassSites(InventoryBase):
     def test_guard_models_is_an_any_site(self):
@@ -105,23 +107,9 @@ class TestAnyBypassSites(InventoryBase):
         self.assertEqual(got["rc"], 0, "RISK-MST-01: ANY hotfix waives")
         self.assertIn("hotfix-b", got["adherence"])
 
-    def test_mode_e_is_an_any_site(self):
-        payload = self.edit_payload("src/app.py")
-
-        self.reset_state()
-        self.alone(self.feature())
-        self.assertEqual(
-            self.capture("guard_provenance.py", payload)["rc"], 2)
-
-        self.reset_state()
-        self.arm(self.feature())
-        got = self.capture("guard_provenance.py", payload)
-        self.assertEqual(got["rc"], 0, "RISK-MST-01: ANY hotfix waives")
-        self.assertIn("hotfix-b", got["adherence"])
-
 
 # --------------------------------------------------------------------------
-# The three per-entry-exemption sites. A hotfix entry exempts ITSELF and
+# The two per-entry-exemption sites. A hotfix entry exempts ITSELF and
 # nothing else - the non-exempt entry is still evaluated and still blocks.
 # --------------------------------------------------------------------------
 class TestPerEntryExemptionSites(InventoryBase):
@@ -142,16 +130,6 @@ class TestPerEntryExemptionSites(InventoryBase):
                            self.edit_payload("tests/test_x.py"))
         self.assertEqual(got["rc"], 2,
                          "guard_tests never reads hotfix and must still block")
-
-    def test_mode_d_is_not_an_any_site(self):
-        self.reset_state()
-        self.arm(self.feature(execution="self", execution_why="glue"))
-        got = self.capture("guard_provenance.py",
-                           {"hook_event_name": "Stop", "cwd": self.root})
-        decision = json.loads(got["stdout"])
-        self.assertEqual(decision["decision"], "block",
-                         "Mode D uses per-entry exemption, not an ANY waiver")
-        self.assertIn("feat-a", decision["reason"])
 
     def test_mode_b_pre_tracking_is_not_an_any_site(self):
         """FR-DE-15 at the spawn: a hotfix entry does not start an unrelated

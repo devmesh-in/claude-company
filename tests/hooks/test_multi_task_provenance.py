@@ -2,16 +2,21 @@
 """Multi-entry (N > 1) semantics for guard_provenance.py.
 
 active-task.json holds N entries because the owner runs several Claude Code
-sessions from one checkout. These tests pin the four things that band could
+sessions from one checkout. These tests pin the three things that band could
 get wrong:
 
   - attribution: a dispatch counts for the entries the spawn prompt NAMES,
     and for nobody else (FR-MST-18)
-  - the hotfix split (FR-MST-23): Mode C and Mode E take an ANY-hotfix waiver
-    (RISK-MST-01, accepted); Mode D takes a PER-ENTRY exemption and still
-    blocks while a non-exempt entry is in flight
-  - ALL semantics in Mode E: a second entry can only make the gate block MORE
+  - the hotfix split (FR-MST-23): Mode C takes an ANY-hotfix waiver
+    (RISK-MST-01, accepted), and it is the only waiver site left in this hook
   - BR-MST-02: at N == 1 every mode is byte-identical to the single-task hook
+
+Attribution used to be observed through the execution gate, which blocked a
+delegated entry with no dispatch of its own. That gate is gone, and the Mode A
+drift nudge is the surviving observable of the same per-slug count: it fires
+only for a self-execution entry whose OWN dispatch list is empty, so a
+regression to whole-ledger matching silences it. The entries here are
+self-execution for that reason.
 
 Ledger state is only ever seeded by driving REAL Mode B payloads, never by
 hand-writing the ledger, so the machinery under test is the machinery that
@@ -20,10 +25,11 @@ produced the state.
 
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_hooks import HOOKS_DIR, git, run_hook  # noqa: E402
+from test_hooks import HOOKS_DIR, run_hook  # noqa: E402
 from test_guard_provenance import HOOK, ProvBase  # noqa: E402
 
 sys.path.insert(0, HOOKS_DIR)
@@ -49,9 +55,6 @@ class MultiBase(ProvBase):
     def hotfix(self, slug):
         return {"task": slug, "type": "hotfix"}
 
-    def quick(self, slug):
-        return {"task": slug, "type": "quick"}
-
     # --- drivers ----------------------------------------------------------
     def spawn_payload(self, prompt, role="tech-lead", description=None):
         ti = {"subagent_type": role, "prompt": prompt}
@@ -66,20 +69,23 @@ class MultiBase(ProvBase):
         self.assertEqual(r.returncode, 0, r.stderr)
         return r
 
-    def source_edit(self):
-        return run_hook(
-            HOOK, self.edit_payload("Write", "src/app.py", "x = 1"), self.root
-        )
-
     def post_edit(self):
         return run_hook(HOOK, self.postedit_payload("src/app.py"), self.root)
+
+    def nudged(self, result):
+        """The slug a Mode A invocation nudged, or None when it was silent."""
+        self.assertEqual(result.returncode, 0, result.stderr)
+        if not result.stdout.strip():
+            return None
+        ctx = json.loads(
+            result.stdout)["hookSpecificOutput"]["additionalContext"]
+        match = re.search(r"entry '([^']*)'", ctx)
+        self.assertIsNotNone(match, ctx)
+        return match.group(1)
 
     def commit(self):
         return run_hook(HOOK, self.bash_payload("git commit -m wip"),
                         self.root)
-
-    def stop(self):
-        return run_hook(HOOK, self.stop_payload(), self.root)
 
     # --- adherence --------------------------------------------------------
     def adherence_lines(self, action):
@@ -93,58 +99,57 @@ class MultiBase(ProvBase):
 
 
 # --------------------------------------------------------------------------
-# FR-MST-18 / FR-MST-22 step 7 - per-slug dispatch attribution
+# FR-MST-18 - per-slug dispatch attribution
+#
+# dispatches_for's own docstring says a regression to whole-ledger matching
+# must fail a witness. These are that witness. The observable is the Mode A
+# drift nudge, which fires only for a self-execution entry with ZERO
+# dispatches OF ITS OWN, so crediting one entry's dispatch to another shows up
+# here as a nudge that stops firing or names the wrong slug.
 # --------------------------------------------------------------------------
 class TestPerSlugAttribution(MultiBase):
-    def test_a_dispatch_naming_only_b_leaves_a_blocked(self):
+    def test_a_dispatch_naming_only_b_leaves_a_uncredited(self):
         """The proof that attribution is per slug.
 
-        Two delegated entries, ONE dispatch whose spawn prompt names only
-        task/feat-b. A main-checkout source edit must still block, and the
-        block must name feat-a - the entry that has no dispatch of its own.
-        A whole-ledger dispatch count would allow this edit, which is the
-        exact regression this test exists to catch.
+        Two self-execution entries, ONE dispatch whose spawn prompt names only
+        task/feat-b. feat-a is still idle, so the nudge fires and names
+        feat-a; a whole-ledger dispatch count would credit feat-a with feat-b's
+        dispatch and nothing would fire at all.
         """
         self.init_git()
         self.set_manifest()
-        self.set_tasks(self.delegated("feat-a"), self.delegated("feat-b"))
+        self.set_tasks(self.selfbuilt("feat-a"), self.selfbuilt("feat-b"))
         self.dispatch("take task/feat-b into a worktree and build it")
 
         ledger = gp.read_ledger(self.root)
         self.assertEqual(len(gp.dispatches_for(ledger, "feat-b")), 1)
         self.assertEqual(gp.dispatches_for(ledger, "feat-a"), [])
 
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("feat-a", r.stderr)
-        self.assertNotIn("feat-b", r.stderr)
-        line = self.last_line("BLOCK")
+        self.assertEqual(self.nudged(self.post_edit()), "feat-a")
+        line = self.last_line("NUDGE")
         self.assertIn("feat-a", line)
         self.assertNotIn("feat-b", line)
 
-        # A gets a dispatch of its own and the same edit flows.
+        # A gets a dispatch of its own and the team is no longer idle for
+        # either entry, so the next edit is silent.
         self.dispatch("take task/feat-a into a worktree and build it")
         self.assertEqual(len(gp.dispatches_for(gp.read_ledger(self.root),
                                                "feat-a")), 1)
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIsNone(self.nudged(self.post_edit()))
 
-    def test_second_delegated_entry_without_a_dispatch_blocks(self):
-        # Mode E step 7 is per entry: feat-a is satisfied, feat-b is not, and
-        # one unsatisfied entry blocks the tree.
+    def test_a_second_entry_without_a_dispatch_of_its_own_is_still_idle(self):
+        # The nudge condition is evaluated per entry: feat-a is satisfied and
+        # silent, feat-b has no dispatch of its own and is not.
         self.init_git()
         self.set_manifest()
-        self.set_tasks(self.delegated("feat-a"), self.delegated("feat-b"))
+        self.set_tasks(self.selfbuilt("feat-a"), self.selfbuilt("feat-b"))
         self.dispatch("build task/feat-a")
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("feat-b", r.stderr)
-        self.assertNotIn("feat-a", r.stderr)
+        self.assertEqual(self.nudged(self.post_edit()), "feat-b")
 
     def test_a_dispatch_naming_no_active_slug_credits_nobody(self):
         self.init_git()
         self.set_manifest()
-        self.set_tasks(self.delegated("feat-a"), self.delegated("feat-b"))
+        self.set_tasks(self.selfbuilt("feat-a"), self.selfbuilt("feat-b"))
         self.dispatch("go and do the needful")
 
         raw = self.read_ledger_raw()
@@ -153,47 +158,67 @@ class TestPerSlugAttribution(MultiBase):
         self.assertEqual(raw["tasks"]["feat-b"]["dispatches"], [])
         # the false negative is diagnosable from the log ...
         self.assertIn("no active task", self.last_line("DISPATCH"))
-        # ... and it satisfies neither entry
-        self.assertEqual(self.source_edit().returncode, 2)
+        # ... and it leaves both entries idle, so the nudge still fires
+        self.assertEqual(self.nudged(self.post_edit()), "feat-a")
 
     def test_description_field_also_attributes(self):
         self.init_git()
         self.set_manifest()
-        self.set_tasks(self.delegated("feat-a"), self.delegated("feat-b"))
+        self.set_tasks(self.selfbuilt("feat-a"), self.selfbuilt("feat-b"))
         self.dispatch("build it", description="task/feat-a and task/feat-b")
         ledger = gp.read_ledger(self.root)
         self.assertEqual(len(gp.dispatches_for(ledger, "feat-a")), 1)
         self.assertEqual(len(gp.dispatches_for(ledger, "feat-b")), 1)
-        self.assertEqual(self.source_edit().returncode, 0)
+        self.assertIsNone(self.nudged(self.post_edit()))
 
     def test_single_entry_attributes_unconditionally(self):
         """N == 1 does no prompt matching at all - today's behaviour."""
         self.init_git()
         self.set_manifest()
-        self.set_task(self.delegated("feat-a"))
+        self.set_task(self.selfbuilt("feat-a"))
         self.dispatch("go and do the needful")  # names nothing
         self.assertEqual(len(self.record("feat-a")["dispatches"]), 1)
         self.assertEqual(self.read_ledger_raw()["unattributed_dispatches"], [])
-        self.assertEqual(self.source_edit().returncode, 0)
+        self.assertIsNone(self.nudged(self.post_edit()))
 
-    def test_slugless_delegated_entry_blocks_at_n_over_one(self):
-        """OQ-MST-03, fail-closed: attribution needs a slug in the spawn
-        prompt, so a slugless delegated entry can never be credited a dispatch
-        and keeps blocking until it is given a slug.
+    def test_a_slugless_entry_is_never_credited_a_dispatch_at_n_over_one(self):
+        """OQ-MST-03, fail-closed: attribution needs a slug in the spawn text,
+        so a slugless entry can never be credited a dispatch once a second
+        entry exists.
+
+        The gate that used to observe this was the execution gate. What
+        carries it now is credited_dispatches itself, driven off a ledger this
+        hook really wrote: the SAME dispatch that counts for the slugless
+        entry alone stops counting the moment it is one of two, even though
+        the dispatch is still sitting under its own ledger key.
         """
         self.init_git()
         self.set_manifest()
         slugless = {"type": "feature", "brief": "company/briefs/b.md",
-                    "execution": "delegated", "execution_why": "lead owns"}
-        self.set_tasks(self.delegated("feat-a"), slugless)
-        self.dispatch("build task/feat-a")
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("<task-slug>", r.stderr)
+                    "execution": "self", "execution_why": "glue only"}
+        self.set_task(slugless)
+        self.dispatch("build it")  # N == 1: credited unconditionally
+
+        ledger = gp.read_ledger(self.root)
+        self.assertEqual(len(gp.dispatches_for(ledger, "")), 1)
+        self.assertEqual(
+            len(gp.credited_dispatches(ledger, slugless, [slugless])), 1
+        )
+
+        other = self.selfbuilt("feat-a")
+        self.assertEqual(
+            gp.credited_dispatches(ledger, slugless, [slugless, other]), [],
+            "a slugless entry must not be credited a dispatch at N > 1",
+        )
+        # feat-a is not credited it either - the dispatch named no slug.
+        self.assertEqual(
+            gp.credited_dispatches(ledger, other, [slugless, other]), []
+        )
 
 
 # --------------------------------------------------------------------------
-# RISK-MST-01 - the ANY-hotfix waiver, accepted at Mode C and Mode E ONLY
+# RISK-MST-01 - the ANY-hotfix waiver, accepted at Mode C and nowhere else in
+# this hook now that the execution gate is gone
 # --------------------------------------------------------------------------
 class TestHotfixWaiver(MultiBase):
     def test_mode_c_any_hotfix_bypasses_the_commit_gate(self):
@@ -216,96 +241,6 @@ class TestHotfixWaiver(MultiBase):
         self.set_tasks(self.selfbuilt("feature-a"))
         self.stage_source()
         self.assertEqual(self.commit().returncode, 2)
-
-    def test_mode_e_any_hotfix_bypasses_the_execution_gate(self):
-        self.init_git()
-        self.set_manifest()
-        # feature-a has no execution decision, so it would block on its own
-        self.set_tasks(self.entry("feature-a"), self.hotfix("hotfix-b"))
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("hotfix-b", self.last_line("BYPASS"))
-
-    def test_mode_e_without_the_hotfix_entry_blocks(self):
-        self.init_git()
-        self.set_manifest()
-        self.set_tasks(self.entry("feature-a"))
-        self.assertEqual(self.source_edit().returncode, 2)
-
-
-# --------------------------------------------------------------------------
-# FR-MST-21 - Mode D exempts per ENTRY and is NOT an ANY-hotfix site
-# --------------------------------------------------------------------------
-class TestCloseGatePerEntryExemption(MultiBase):
-    def test_quick_beside_a_feature_still_blocks(self):
-        """The exemption belongs to the quick entry, not to the tree."""
-        self.init_git()
-        self.set_manifest()
-        self.set_tasks(self.quick("quick-a"), self.selfbuilt("feature-b"))
-        self.stage_source()
-        r = self.stop()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feature-b", decision["reason"])
-        self.assertNotIn("quick-a", decision["reason"])
-        self.assertIn("feature-b", self.last_line("BLOCK"))
-
-    def test_hotfix_beside_a_feature_still_blocks(self):
-        # Mode D takes no ANY-hotfix waiver: a hotfix entry does not close a
-        # feature entry's audit debt.
-        self.init_git()
-        self.set_manifest()
-        self.set_tasks(self.hotfix("hotfix-a"), self.selfbuilt("feature-b"))
-        self.stage_source()
-        decision = json.loads(self.stop().stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feature-b", decision["reason"])
-
-    def test_all_entries_exempt_is_silent(self):
-        self.init_git()
-        self.set_manifest()
-        self.set_tasks(self.quick("quick-a"), self.hotfix("hotfix-b"))
-        self.stage_source()
-        r = self.stop()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "")
-
-
-# --------------------------------------------------------------------------
-# FR-MST-22 - Mode E is ALL where it gates: more entries can only block MORE
-# --------------------------------------------------------------------------
-class TestExecutionGateIsAll(MultiBase):
-    def test_a_second_undecided_entry_blocks_what_the_first_allowed(self):
-        self.init_git()
-        self.set_manifest()
-        ok = self.selfbuilt("feature-ok")
-        undecided = self.entry("feature-undecided")
-
-        self.set_tasks(ok)
-        self.assertEqual(self.source_edit().returncode, 0)
-
-        self.set_tasks(ok, undecided)
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("no execution decision", r.stderr)
-        self.assertIn("feature-undecided", r.stderr)
-        self.assertNotIn("feature-ok", r.stderr)
-
-    def test_tracking_gate_fires_before_the_execution_decision(self):
-        # ALL-tracking (step 5) outranks ALL-execution (step 6): an entry
-        # missing BOTH is told to track first.
-        self.init_git()
-        self.set_manifest()
-        # PR mode: the tracking gate is only live with an origin remote.
-        git(self.root, "remote", "add", "origin", "https://example.com/x.git")
-        self.set_tasks(self.selfbuilt("feature-a", issues=[7]),
-                       self.entry("feature-b"))
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("gh issue create", r.stderr)
-        self.assertIn("feature-b", r.stderr)
-        self.assertNotIn("feature-a", r.stderr)
 
 
 # --------------------------------------------------------------------------
@@ -354,7 +289,7 @@ class TestPerEntryNudge(MultiBase):
 
 
 # --------------------------------------------------------------------------
-# BR-MST-02 - the N == 1 identity rule, across all six modes
+# BR-MST-02 - the N == 1 identity rule, across all four surviving modes
 # --------------------------------------------------------------------------
 class TestSingleEntryParity(MultiBase):
     """One entry written as the bare object and as the one-element list must
@@ -378,7 +313,7 @@ class TestSingleEntryParity(MultiBase):
         parts = line.split(" | ")
         return " | ".join(parts[1:]) if len(parts) > 1 else line
 
-    def both_ways(self, obj, drive, seed=None):
+    def both_ways(self, obj, drive):
         seen = []
         for as_list in (False, True):
             self.reset_state()
@@ -386,8 +321,6 @@ class TestSingleEntryParity(MultiBase):
                 self.set_tasks(obj)
             else:
                 self.set_task(obj)
-            if seed is not None:
-                seed()
             r = drive()
             seen.append((
                 r.returncode, r.stdout, r.stderr,
@@ -438,63 +371,6 @@ class TestSingleEntryParity(MultiBase):
         self.assertEqual(rc, 0)
         self.assertIn(
             "guard_provenance | BYPASS | git commit | hotfix mode", log
-        )
-
-    def test_mode_d_parity(self):
-        rc, stdout, _, log = self.both_ways(
-            self.selfbuilt("feat-x"), self.stop
-        )
-        self.assertEqual(rc, 0)
-        self.assertEqual(json.loads(stdout)["decision"], "block")
-        self.assertIn(
-            "guard_provenance | BLOCK | feat-x | "
-            "self-authored, no fresh audit", log
-        )
-
-    def test_mode_d_unknown_slug_parity(self):
-        # the two-argument .get is kept verbatim, so {} still renders (unknown)
-        rc, stdout, _, log = self.both_ways({}, self.stop)
-        self.assertEqual(rc, 0)
-        self.assertIn("(unknown)", json.loads(stdout)["reason"])
-        self.assertIn(
-            "guard_provenance | BLOCK | (unknown) | "
-            "self-authored, no fresh audit", log
-        )
-
-    def test_mode_e_parity(self):
-        rc, _, stderr, log = self.both_ways(
-            self.entry("feat-x"), self.source_edit
-        )
-        self.assertEqual(rc, 2)
-        self.assertIn("feat-x", stderr)
-        self.assertIn(
-            "guard_provenance | BLOCK | src/app.py | no execution decision",
-            log,
-        )
-
-    def test_mode_e_delegated_parity(self):
-        rc, _, stderr, log = self.both_ways(
-            self.delegated("feat-x"), self.source_edit
-        )
-        self.assertEqual(rc, 2)
-        self.assertIn("feat-x", stderr)
-        self.assertIn(
-            "guard_provenance | BLOCK | src/app.py | "
-            "delegated but no dispatch", log
-        )
-
-    def test_mode_e_hotfix_bypass_parity(self):
-        rc, _, _, log = self.both_ways(self.hotfix("hf"), self.source_edit)
-        self.assertEqual(rc, 0)
-        self.assertIn(
-            "guard_provenance | BYPASS | src/app.py | hotfix mode", log
-        )
-
-    def test_mode_e_after_dispatch_parity(self):
-        self.both_ways(
-            self.delegated("feat-x"),
-            self.source_edit,
-            seed=lambda: self.dispatch("build it"),
         )
 
 

@@ -519,16 +519,34 @@ nott "no active-task.json backed up"  bash -c "find '$T19/company/state/.update-
 [ "$LEDGER_BEFORE" = "$(hashf "$T19/company/state/provenance-ledger.json")" ] \
   && pass "v1 provenance ledger byte-unchanged by update" || fail "v1 provenance ledger byte-unchanged by update"
 
-# 13b. neither guard spuriously blocks a source edit on the legacy shapes.
-# guard_spec allows only because it read the single object as one entry AND
+# 13b. guard_spec does not spuriously block a source edit on the legacy
+# shapes: it allows only because it read the single object as one entry AND
 # resolved that entry's brief; the empty case blocks (see the control below).
-# guard_provenance Mode E allows only because migrate_v1 credited the v1
-# ledger's dispatch to the legacy slug.
 LEGACY_EDIT="$T19/src/app.py"
 run_hook "$T19" guard_spec.py "$LEGACY_EDIT"; RC=$?
 [ "$RC" -eq 0 ] && pass "guard_spec allows a source edit on a legacy install" || fail "guard_spec allows a source edit on a legacy install (rc=$RC)"
-run_hook "$T19" guard_provenance.py "$LEGACY_EDIT"; RC=$?
-[ "$RC" -eq 0 ] && pass "guard_provenance Mode E allows on a legacy install" || fail "guard_provenance Mode E allows on a legacy install (rc=$RC)"
+# The guard_provenance leg here used to drive Mode E, the PreToolUse Edit
+# execution gate. That gate was deleted unfired (issue #120), so a Write
+# payload can no longer return anything but 0 and an rc assertion on it would
+# pass vacuously forever. The SUBJECT it was really testing survives and is
+# worth keeping: that this INSTALLED tree, after update.sh ran over it, still
+# reads its own sealed v1 ledger through migrate_v1. That is an install
+# integration fact the hooks suite cannot reach - the hooks suite proves
+# migrate_v1 in isolation, this proves the updated install did not break it.
+# So the observable moves from an exit code to the migrated ledger itself.
+legacy_dispatches() { # <target> -> dispatches migrate_v1 credits to legacy-x
+  python3 - "$1" <<'PY'
+import os, sys
+t = sys.argv[1]
+sys.path.insert(0, os.path.join(t, ".claude", "hooks"))
+os.environ["CLAUDE_PROJECT_DIR"] = t
+import guard_provenance as gp
+print(len(gp.dispatches_for(gp.read_ledger(t), "legacy-x")))
+PY
+}
+[ "$(legacy_dispatches "$T19")" = "1" ] \
+  && pass "migrate_v1 credits the sealed v1 ledger's dispatch after update" \
+  || fail "migrate_v1 credits the sealed v1 ledger's dispatch after update (got $(legacy_dispatches "$T19"))"
 
 # 13c. controls - both allows above are real decisions, not silent fail-opens.
 mv "$AT" "$WORK/legacy-active-task.hidden"
@@ -540,8 +558,9 @@ import json, sys
 p = sys.argv[1]; d = json.load(open(p)); d["checksum"] = "0" * 64
 json.dump(d, open(p, "w"))
 PY
-run_hook "$T19" guard_provenance.py "$LEGACY_EDIT"; RC=$?
-[ "$RC" -eq 2 ] && pass "control: an unsealed v1 ledger blocks, so the sealed one was read" || fail "control: an unsealed v1 ledger blocks, so the sealed one was read (rc=$RC)"
+[ "$(legacy_dispatches "$T19")" = "0" ] \
+  && pass "control: an unsealed v1 ledger credits nothing, so the sealed one was read" \
+  || fail "control: an unsealed v1 ledger credits nothing, so the sealed one was read (got $(legacy_dispatches "$T19"))"
 
 # 13d. BR-MST-11: active-task.json is untracked and unscaffolded. Neither
 # install nor update ever brings one into existence.

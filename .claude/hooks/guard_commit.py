@@ -15,9 +15,8 @@
     placeholders (a fresh project with nothing to gate yet), ALLOW + log
     BYPASS - unconfigured gates must not deadlock founding commits, and the
     bypass stays visible in the adherence log. Placeholders still fail loudly
-    in run-gates.sh and still block task completion via stop_gate; only the
-    commit path treats them as not-yet-configured. If the active task is a
-    hotfix, ALLOW + log BYPASS.
+    in run-gates.sh; only the commit path treats them as not-yet-configured.
+    If the active task is a hotfix, ALLOW + log BYPASS.
   - everything else: allow.
 
 Fails open on any internal error.

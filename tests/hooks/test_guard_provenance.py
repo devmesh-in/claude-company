@@ -78,9 +78,23 @@ class ProvBase(Base):
         self.write(rel, content)
         git(self.root, "add", rel)
 
-    def stop_payload(self, active=False):
-        return {"hook_event_name": "Stop", "stop_hook_active": active,
-                "cwd": self.root}
+    def worktree(self, name="wt"):
+        """A worktree checkout marked the way git actually marks one.
+
+        in_worktree_or_out_of_tree derives the answer from the `.git` marker
+        that DEFINES a working-tree root, not from the literal
+        `.claude/worktrees/` path, so a fixture that fakes a worktree by
+        making the directory alone is plain main-checkout source and is
+        correctly NOT exempt. A linked worktree carries a `.git` FILE holding
+        `gitdir: <path>`, so that is what these fixtures write.
+        """
+        self.write(
+            ".claude/worktrees/{}/.git".format(name),
+            "gitdir: {}\n".format(
+                os.path.join(self.root, ".git", "worktrees", name)
+            ),
+        )
+        return os.path.join(self.root, ".claude", "worktrees", name)
 
     def ledger_file(self):
         return os.path.join(self.root, "company", "state",
@@ -145,120 +159,49 @@ class ProvBase(Base):
 
 
 # --------------------------------------------------------------------------
-# Mode E - the execution gate (PreToolUse Edit|Write|MultiEdit)
-# --------------------------------------------------------------------------
-class TestExecutionGate(ProvBase):
-    def test_no_decision_blocks_with_roster(self):
-        self.set_manifest()
-        self.feature_task()
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("execution", r.stderr)
-        # roster is drawn from the manifest roles at minimum
-        self.assertIn("tech-lead", r.stderr)
-
-    def test_self_with_why_allows(self):
-        self.set_manifest()
-        self.feature_task(execution="self", execution_why="glue only")
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_self_without_why_blocks(self):
-        self.set_manifest()
-        self.feature_task(execution="self")
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("execution", r.stderr)
-
-    def test_delegated_no_dispatch_blocks(self):
-        self.set_manifest()
-        self.feature_task(execution="delegated", execution_why="tech-lead owns")
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("contradicts", r.stderr)
-
-    def test_delegated_after_dispatch_allows(self):
-        self.set_manifest()
-        self.feature_task(execution="delegated", execution_why="tech-lead owns")
-        self.seed_dispatch("tech-lead")
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_worktree_file_path_allows(self):
-        self.set_manifest()
-        self.feature_task()  # undecided would block in the main checkout
-        r = run_hook(
-            HOOK,
-            self.edit_payload("Write", ".claude/worktrees/wt/src/app.py", "x"),
-            self.root,
-        )
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_worktree_cwd_allows(self):
-        # A subagent editing inside its own worktree: file_path is under the
-        # worktree checkout and the payload cwd is that worktree.
-        self.set_manifest()
-        self.feature_task()
-        wt = os.path.join(self.root, ".claude", "worktrees", "wt")
-        payload = {"hook_event_name": "PreToolUse", "tool_name": "Write",
-                   "tool_input": {"file_path": os.path.join(wt, "src/app.py"),
-                                  "content": "x"},
-                   "cwd": wt}
-        r = run_hook(HOOK, payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_quick_task_allows(self):
-        self.set_manifest()
-        self.set_task({"task": "q", "type": "quick"})
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_hotfix_allows_and_logs_bypass(self):
-        self.set_manifest()
-        self.set_task({"task": "hf", "type": "hotfix"})
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("BYPASS", self.adherence())
-
-    def test_markdown_target_allows(self):
-        self.set_manifest()
-        self.feature_task()  # undecided; a .md is never source
-        r = run_hook(HOOK, self.edit_payload("Write", "src/README.md", "# hi"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_missing_manifest_allows(self):
-        self.feature_task()  # undecided but no manifest -> rollout off
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_no_active_task_allows(self):
-        self.set_manifest()
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-    def test_garbage_stdin_allows(self):
-        self.set_manifest()
-        self.feature_task()
-        r = run_hook(HOOK, None, self.root, raw_stdin="not json")
-        self.assertEqual(r.returncode, 0, r.stderr)
-
-
-# --------------------------------------------------------------------------
 # Mode C - the commit gate (PreToolUse Bash)
 # --------------------------------------------------------------------------
 class TestCommitGate(ProvBase):
+    # The block a single dirty source path earns with no audit on record,
+    # byte for byte as the hook printed it before dirty_source_paths grew its
+    # `answered` flag. dirty_source_paths now returns (answered, paths) and
+    # arms the gate when git never answered, but the ANSWERED path is a
+    # subtraction of nothing: same message, same adherence line. Pinning the
+    # literal here (rather than rendering MODE_C_MSG, which would pass
+    # whatever the constant said) is what makes that a claim and not a hope.
+    ANSWERED_BLOCK = (
+        "BLOCKED: git commit contains self-authored work with no independent "
+        "verification.\n"
+        "Task 'feat-x' has source changes produced in the main checkout, and "
+        "no audit\n"
+        "covers the current tree (no audit recorded).\n"
+        "Self-authored paths: src/app.py\n"
+        "Nothing integrates on the authority of the context that produced it\n"
+        "(company/METHOD.md, mechanism 5). Fix, in order:\n"
+        "1) Run `bash company/run-gates.sh` until green.\n"
+        "2) Dispatch the read-only auditor over your diff (Task tool,\n"
+        "   subagent_type: auditor). Its completion is recorded "
+        "automatically.\n"
+        "3) Retry the commit WITHOUT editing source in between - any edit "
+        "stales the\n"
+        "   audit, which is correct.\n"
+        "Cheaper alternative for anything beyond glue: move the work to a "
+        "worktree\n"
+        "task branch and give it to a developer - delegated work is verified "
+        "inside\n"
+        "the hierarchy and needs no extra audit.\n"
+        "Production emergency: set \"type\": \"hotfix\" on YOUR entry in\n"
+        "company/state/active-task.json - targeted Edit, never a whole-file "
+        "rewrite\n"
+        "(logged, never silent).\n"
+    )
+
+    ANSWERED_ADHERENCE = (
+        "guard_provenance | BLOCK | git commit | self-authored, no fresh audit"
+    )
+
     def dirty_source(self, rel="src/app.py", content="x = 1", stage=True):
-        # Stage the file: at a real commit/close gate source is `git add`ed,
+        # Stage the file: at a real commit gate source is `git add`ed,
         # so porcelain reports it file-by-file (a wholly-untracked new
         # directory would otherwise collapse to just the directory name under
         # the sealed `git status --porcelain` command).
@@ -279,6 +222,32 @@ class TestCommitGate(ProvBase):
         self.assertEqual(r.returncode, 2, r.stderr)
         self.assertIn("auditor", r.stderr)
         self.assertIn("src/app.py", r.stderr)
+
+    def test_answered_git_block_is_byte_identical(self):
+        """The parity that keeps the (answered, paths) change a subtraction.
+
+        git ran and named a dirty source path, which is the only case that
+        existed before the silent branch was added. Message and adherence line
+        must be unchanged, to the byte.
+        """
+        self.init_git()
+        self.set_manifest()
+        self.feature_task()
+        self.dirty_source()
+        r = self.commit()
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertEqual(r.stderr, self.ANSWERED_BLOCK)
+        lines = [ln for ln in self.adherence().splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(lines[0].endswith(self.ANSWERED_ADHERENCE), lines[0])
+
+    def test_garbage_stdin_allows(self):
+        # Not a Mode C case: the hook-wide fail-open contract, which is why it
+        # outlived the execution gate it used to be filed under.
+        self.set_manifest()
+        self.feature_task()
+        r = run_hook(HOOK, None, self.root, raw_stdin="not json")
+        self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_fresh_audit_allows(self):
         self.init_git()
@@ -344,11 +313,39 @@ class TestCommitGate(ProvBase):
         self.set_manifest()
         self.feature_task()
         self.dirty_source()
-        wt = os.path.join(self.root, ".claude", "worktrees", "wt")
+        wt = self.worktree()
         payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                    "tool_input": {"command": "git commit -m wip"}, "cwd": wt}
         r = run_hook(HOOK, payload, self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_worktree_dir_without_a_git_marker_is_not_exempt(self):
+        """The tightening, and it deserves its own witness.
+
+        The exemption used to be the literal string `/.claude/worktrees/` in
+        the path, so ANY directory sitting at that name was waved through -
+        including one that is not a checkout at all, which is the shape every
+        fixture in this file used to fake. The answer now comes from the
+        `.git` marker that defines a working-tree root, so this directory is
+        what it actually is: main-checkout source, still owing an audit.
+
+        The pair matters more than either half. Compare with
+        test_worktree_cwd_allows_despite_dirty_main directly above, which is
+        the SAME path with a real `.git` marker written into it and does still
+        allow.
+        """
+        self.init_git()
+        self.set_manifest()
+        self.feature_task()
+        self.dirty_source()
+        not_a_checkout = os.path.join(self.root, ".claude", "worktrees", "wt")
+        os.makedirs(not_a_checkout, exist_ok=True)
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": "git commit -m wip"},
+                   "cwd": not_a_checkout}
+        r = run_hook(HOOK, payload, self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("auditor", r.stderr)
 
     def test_merge_head_allows(self):
         self.init_git()
@@ -382,7 +379,7 @@ class TestCommitGate(ProvBase):
         self.init_git()
         self.set_manifest()
         self.feature_task()
-        wt = os.path.join(self.root, ".claude", "worktrees", "x")
+        wt = self.worktree("x")
         r = run_hook(HOOK, self.audit_payload(cwd=wt), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         p = os.path.join(self.root, "company", "state",
@@ -416,50 +413,6 @@ class TestCommitGate(ProvBase):
         self.feature_task(slug="feat-b")
         r = self.commit()
         self.assertEqual(r.returncode, 2, r.stderr)
-
-
-# --------------------------------------------------------------------------
-# Mode D - the close gate (Stop)
-# --------------------------------------------------------------------------
-class TestStopGate(ProvBase):
-    def test_dirty_no_audit_emits_block(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task(slug="feat-x")
-        self.stage_source()
-        r = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feat-x", decision["reason"])
-        self.assertIn("auditor", decision["reason"])
-
-    def test_fresh_audit_silent(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        self.write("src/app.py", "x = 1")
-        self.seed_audit()
-        r = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "")
-
-    def test_quick_task_silent(self):
-        self.init_git()
-        self.set_manifest()
-        self.set_task({"task": "q", "type": "quick"})
-        self.stage_source()
-        r = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(r.stdout.strip(), "")
-
-    def test_loop_protection_silent(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        self.stage_source()
-        r = run_hook(HOOK, self.stop_payload(active=True), self.root)
-        self.assertEqual(r.returncode, 0)
-        self.assertEqual(r.stdout.strip(), "")
 
 
 # --------------------------------------------------------------------------
@@ -518,6 +471,7 @@ class TestDriftNudge(ProvBase):
     def test_worktree_edit_silent(self):
         self.set_manifest()
         self.self_task()
+        self.worktree()
         r = run_hook(
             HOOK,
             self.postedit_payload(".claude/worktrees/wt/src/app.py"),
@@ -525,6 +479,10 @@ class TestDriftNudge(ProvBase):
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), "")
+        # Silence alone is weak evidence - a nudge that fired once already is
+        # silent too. The exemption is what stops Mode A recording the path,
+        # so the ledger must not exist at all.
+        self.assertFalse(os.path.exists(self.ledger_file()))
 
     def test_delegated_task_silent(self):
         self.set_manifest()
@@ -542,7 +500,7 @@ class TestDriftNudge(ProvBase):
 
 
 # --------------------------------------------------------------------------
-# FR-DE-15 - the tracking gate (Mode B-pre spawn + Mode E first edit)
+# FR-DE-15 - the tracking gate (Mode B-pre spawn)
 # --------------------------------------------------------------------------
 class TestTrackingGate(ProvBase):
     def add_origin(self):
@@ -597,16 +555,6 @@ class TestTrackingGate(ProvBase):
         r = self.builder_spawn("developer")
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_mode_e_tracking_fires_before_execution_decision(self):
-        # Missing BOTH tracking and an execution decision -> tracking first.
-        self.pr_mode()
-        self.feature_task()
-        r = run_hook(HOOK, self.edit_payload("Write", "src/app.py", "x = 1"),
-                     self.root)
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("gh issue create", r.stderr)
-        self.assertNotIn("execution decision", r.stderr)
-
     def test_hotfix_builder_spawn_allows_and_logs_bypass(self):
         self.pr_mode()
         self.set_task({"task": "hf", "type": "hotfix"})
@@ -648,7 +596,7 @@ class TestUntrackedNewDirBackstop(ProvBase):
         return run_hook(HOOK, self.bash_payload("git commit -m wip"),
                         self.root)
 
-    def test_new_dir_source_blocks_commit_and_close(self):
+    def test_new_dir_source_blocks_commit(self):
         self.init_git()
         self.set_manifest()
         self.feature_task(slug="feat-x")
@@ -658,22 +606,14 @@ class TestUntrackedNewDirBackstop(ProvBase):
         self.assertEqual(rc.returncode, 2, rc.stderr)
         self.assertIn("auditor", rc.stderr)
         self.assertIn(self.NEWSRC, rc.stderr)
-        rs = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(rs.returncode, 0, rs.stderr)
-        decision = json.loads(rs.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feat-x", decision["reason"])
 
-    def test_new_dir_source_after_audit_allows_both(self):
+    def test_new_dir_source_after_audit_allows_the_commit(self):
         self.init_git()
         self.set_manifest()
         self.feature_task()
         self.write(self.NEWSRC, "x = 1")
         self.seed_audit()
         self.assertEqual(self.commit().returncode, 0)
-        rs = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(rs.returncode, 0, rs.stderr)
-        self.assertEqual(rs.stdout.strip(), "")
 
     def test_untracked_non_source_new_dir_stays_exempt(self):
         self.init_git()
@@ -682,9 +622,6 @@ class TestUntrackedNewDirBackstop(ProvBase):
         # new directory, but a doc file - never gated
         self.write("docs/new/x.md", "notes")
         self.assertEqual(self.commit().returncode, 0)
-        rs = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(rs.returncode, 0, rs.stderr)
-        self.assertEqual(rs.stdout.strip(), "")
 
 
 # --------------------------------------------------------------------------
@@ -704,29 +641,23 @@ class TestLedgerV2(ProvBase):
         return run_hook(HOOK, self.bash_payload("git commit -m wip"),
                         self.root)
 
-    def stop(self):
-        return run_hook(HOOK, self.stop_payload(), self.root)
-
-    def source_edit(self):
-        return run_hook(HOOK, self.edit_payload("Write", "src/app.py",
-                                                "x = 1"), self.root)
+    def post_edit(self):
+        return run_hook(HOOK, self.postedit_payload("src/app.py"), self.root)
 
     def ledger(self):
         return gp.read_ledger(self.root)
 
     def assert_a_is_whole(self, when):
-        """A's two dispatches, the audit, and all three gates allowing."""
+        """A's two dispatches, its audit, and the commit gate allowing."""
         ledger = self.ledger()
         self.assertEqual(len(gp.dispatches_for(ledger, "feat-a")), 2, when)
         self.assertEqual(len(ledger["audits"]), 1, when)
         self.assertEqual(self.commit().returncode, 0, when)
-        self.assertEqual(self.stop().stdout.strip(), "", when)
-        self.assertEqual(self.source_edit().returncode, 0, when)
 
     def test_a_second_session_entry_does_not_erase_the_first(self):
         """FR-MST-15, the reported bug: session B writing its task must not
         wipe session A's recorded dispatches and audit, which used to leave A
-        spuriously blocked at commit, at Stop, and at its next source edit.
+        spuriously blocked at commit.
         """
         self.init_git()
         self.set_manifest()
@@ -740,10 +671,6 @@ class TestLedgerV2(ProvBase):
 
         b = self.entry("feat-b")
         self.set_tasks(a, b)
-        # B is delegated too, so it needs a dispatch OF ITS OWN before Mode E
-        # can allow. That is FR-MST-22 step 7 doing its job, not the reported
-        # bug: A's dispatch must never vacuously satisfy B. Credit B properly,
-        # then the remaining question is purely whether A survived B arriving.
         self.seed_dispatch("tech-lead", slug="feat-b")
         self.assert_a_is_whole("A alongside B")
 
@@ -756,12 +683,20 @@ class TestLedgerV2(ProvBase):
         self.assert_a_is_whole("B ran ahead of A, then closed")
 
     def test_dispatches_do_not_bleed_between_slugs(self):
-        """A dispatch is recorded against ONE slug and satisfies only that
-        slug's delegated decision.
+        """A dispatch is recorded against ONE slug and is counted only for
+        that slug.
+
+        The observing gate used to be the execution gate, which blocked a
+        delegated entry with no dispatch of its own. That gate is gone; the
+        Mode A drift nudge is the surviving observable of the same per-slug
+        count, because it fires only for a self-execution entry whose OWN
+        dispatch list is empty. A regression to whole-ledger matching credits
+        feat-b with feat-a's dispatch and the nudge goes silent.
         """
         self.init_git()
         self.set_manifest()
-        a, b = self.entry("feat-a"), self.entry("feat-b")
+        a = self.entry("feat-a", execution="self", execution_why="glue only")
+        b = self.entry("feat-b", execution="self", execution_why="glue only")
         self.set_tasks(a, b)
         self.seed_dispatch("tech-lead", slug="feat-a")
 
@@ -769,12 +704,11 @@ class TestLedgerV2(ProvBase):
         self.assertEqual(len(gp.dispatches_for(ledger, "feat-a")), 1)
         self.assertEqual(gp.dispatches_for(ledger, "feat-b"), [])
 
-        # B is delegated with no dispatch of its own, so its source edit still
-        # blocks: A's dispatch must not vacuously satisfy it.
-        self.set_tasks(b, a)
-        r = self.source_edit()
-        self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("contradicts", r.stderr)
+        r = self.post_edit()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("'feat-b'", ctx)
+        self.assertNotIn("'feat-a'", ctx)
 
     def test_v2_tampered_checksum_returns_a_fresh_ledger(self):
         self.init_git()
@@ -926,7 +860,6 @@ class TestLedgerV2(ProvBase):
         # round trip: a second write keeps the same key
         self.seed_dispatch("developer")
         self.assertEqual(len(gp.dispatches_for(self.ledger(), "")), 2)
-        self.assertEqual(self.source_edit().returncode, 0)
 
     def test_partial_turnover_keeps_the_ledger_total_turnover_resets_it(self):
         """FR-MST-15 boundary. Entries appearing and closing around a live
@@ -960,8 +893,8 @@ class TestLedgerV2(ProvBase):
         active, then task B added while the tree is still at H.
 
         Treating that as an open generation let B inherit A's audit, and Mode
-        C and Mode D both allowed a commit that the single-task hook blocks -
-        an unnamed BLOCK-to-ALLOW at N == 1, which no band may do.
+        C then allowed a commit that the single-task hook blocks - an unnamed
+        BLOCK-to-ALLOW at N == 1, which no band may do.
         """
         self.init_git()
         self.set_manifest()
@@ -988,8 +921,6 @@ class TestLedgerV2(ProvBase):
         on_disk({})
         self.assertEqual(self.commit().returncode, 2,
                          "Mode C must not inherit a closed task's audit")
-        self.assertEqual(json.loads(self.stop().stdout)["decision"], "block",
-                         "Mode D must not inherit it either")
         self.assertEqual(self.ledger()["audits"], [],
                          "an empty recorded map must reset the ledger")
 
