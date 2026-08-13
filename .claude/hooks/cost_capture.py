@@ -129,8 +129,6 @@ def main():
         sys.exit(0)
 
     try:
-        import json
-
         root = c.project_root(payload)
         kind = _event_kind(payload)
 
@@ -149,45 +147,70 @@ def main():
         costs_path = os.path.join(state_dir, "costs.log")
         models_path = os.path.join(root, "company", "models.json")
 
-        cursor = c.read_json_file(cursor_path)
-        if not isinstance(cursor, dict):
-            cursor = {}
-        entry = cursor.get(session_id)
-        if not isinstance(entry, dict):
-            entry = {"offset": 0, "cum": dict(_ZEROS)}
-        prev_offset = entry.get("offset", 0)
-        if not isinstance(prev_offset, int) or prev_offset < 0:
-            prev_offset = 0
-        prev_cum = entry.get("cum")
-        if not isinstance(prev_cum, dict):
-            prev_cum = dict(_ZEROS)
-        prev_cum = {k: (prev_cum.get(k, 0) if isinstance(prev_cum.get(k, 0), int)
-                        else 0) for k in _ZEROS}
-
-        size = os.path.getsize(transcript_path)
-
-        if size >= prev_offset:
-            # NORMAL: only the freshly-appended byte range is new.
-            text = _read_range(transcript_path, prev_offset, size)
-            totals, model = _sum_assistant(text.splitlines())
-            delta = dict(totals)
-            new_offset = size
-            new_cum = {k: prev_cum[k] + delta[k] for k in _ZEROS}
-        else:
-            # COMPACTION: the transcript shrank. Re-read the whole file and take
-            # per-key max(0, file_total - cum). Surviving lines were already
-            # counted, so this delta is ~0 - the guard against double-counting.
-            text = _read_range(transcript_path, 0, size)
-            file_total, model = _sum_assistant(text.splitlines())
-            delta = {k: max(0, file_total[k] - prev_cum[k]) for k in _ZEROS}
-            new_offset = size
-            new_cum = {k: max(prev_cum[k], file_total[k]) for k in _ZEROS}
-
-        cursor[session_id] = {"offset": new_offset, "cum": new_cum}
-
         os.makedirs(state_dir, exist_ok=True)
-        with open(cursor_path, "w") as f:
-            json.dump(cursor, f)
+
+        # FR-HP-31: the cursor read, the delta/offset computation and the write
+        # are ONE critical section. The cursor is a single file shared by every
+        # concurrent session, so an unlocked read-modify-write drops another
+        # session's key or rewinds its offset, which double-counts its tokens.
+        # state_lock fails open: a lock it cannot take yields unlocked, so this
+        # hook still exits 0 and still never disturbs a stop.
+        with c.state_lock(root):
+            cursor = c.read_json_file(cursor_path)
+            if not isinstance(cursor, dict):
+                cursor = {}
+            entry = cursor.get(session_id)
+            if not isinstance(entry, dict):
+                entry = {"offset": 0, "cum": dict(_ZEROS)}
+            prev_offset = entry.get("offset", 0)
+            if not isinstance(prev_offset, int) or prev_offset < 0:
+                prev_offset = 0
+            prev_cum = entry.get("cum")
+            if not isinstance(prev_cum, dict):
+                prev_cum = dict(_ZEROS)
+            prev_cum = {k: (prev_cum.get(k, 0)
+                            if isinstance(prev_cum.get(k, 0), int)
+                            else 0) for k in _ZEROS}
+
+            size = os.path.getsize(transcript_path)
+
+            if size >= prev_offset:
+                # NORMAL: only the freshly-appended byte range is new.
+                text = _read_range(transcript_path, prev_offset, size)
+                totals, model = _sum_assistant(text.splitlines())
+                delta = dict(totals)
+                new_offset = size
+                new_cum = {k: prev_cum[k] + delta[k] for k in _ZEROS}
+            else:
+                # COMPACTION: the transcript shrank. Re-read the whole file and
+                # take per-key max(0, file_total - cum). Surviving lines were
+                # already counted, so this delta is ~0 - the guard against
+                # double-counting.
+                text = _read_range(transcript_path, 0, size)
+                file_total, model = _sum_assistant(text.splitlines())
+                delta = {k: max(0, file_total[k] - prev_cum[k]) for k in _ZEROS}
+                new_offset = size
+                new_cum = {k: max(prev_cum[k], file_total[k]) for k in _ZEROS}
+
+            cursor[session_id] = {"offset": new_offset, "cum": new_cum}
+
+            # write_json_atomic returns False rather than raising, and a failed
+            # cursor write is not worth disturbing a Stop over: it leaves the
+            # previous cursor byte-unchanged, so the next run recomputes from
+            # it. costs.log below stays an O_APPEND write and is already safe
+            # between processes, so it stays outside this section.
+            wrote_cursor = c.write_json_atomic(cursor_path, cursor)
+
+        # No cursor, no line. The cursor is the ONLY thing that stops a delta
+        # being attributed twice, which this module's docstring calls its hard
+        # invariant. While the cursor write was a bare open(), a failure RAISED
+        # and the outer except swallowed it before any line was appended - the
+        # unrecorded delta was simply recomputed on the next stop. Atomic
+        # writing reports failure by returning False instead, so that same case
+        # has to be made explicit here: appending the line while the cursor
+        # stayed put would append the identical delta again next stop.
+        if not wrote_cursor:
+            sys.exit(0)
 
         total_delta = delta["in"] + delta["out"] + delta["cache_r"] + delta["cache_w"]
         # Log only genuine assistant activity: a model was found and the delta
