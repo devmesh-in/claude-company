@@ -42,6 +42,8 @@ Open your project in Claude Code and give the orchestrator your first request:
 /orchestrator build me a REST API for tracking workouts, with user accounts
 ```
 
+For one small piece of work, `/lean-company` is the same company with the hierarchy and the paperwork cut back and every gate still in force.
+
 You do not need to initialize anything first. The company notices it is new here and onboards itself:
 
 ```mermaid
