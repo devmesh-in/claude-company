@@ -8,8 +8,9 @@ easy to erode one hook at a time. Two DIFFERENT things share the word
 
   EXEMPTION types are PER-ENTRY. A gate that skips because the single task's
   type is exempt now evaluates the NON-EXEMPT entries and blocks if any fails.
-  Sites: guard_spec, stop_gate, Mode D, and the FR-DE-15 tracking gate in
-  Mode B-pre. (guard_tests never honored hotfix at all, and still does not.)
+  Sites: guard_spec, Mode D, and the FR-DE-15 tracking gate in Mode B-pre.
+  (guard_tests never honored hotfix at all, and still does not. A fourth
+  site, the standalone Stop-time gate, went away with DECISIONS #20.)
 
   WAIVER bypasses are ANY, and exist ONLY where blocking a declared production
   emergency behind an UNRELATED entry is the worse failure.
@@ -20,7 +21,7 @@ easy to erode one hook at a time. Two DIFFERENT things share the word
   hotfix entry, which is the mitigation.
 
 This file is the inventory. It asserts the ANY set is EXACTLY those four and
-that the other four still block, so that widening a fifth gate has to be a
+that the other three still block, so that widening a fifth gate has to be a
 conscious edit against a red test rather than silent drift. The tests here
 deliberately assert that the accepted weakenings DO happen - do not "fix" them
 into blocks.
@@ -120,7 +121,7 @@ class TestAnyBypassSites(InventoryBase):
 
 
 # --------------------------------------------------------------------------
-# The four per-entry-exemption sites. A hotfix entry exempts ITSELF and
+# The three per-entry-exemption sites. A hotfix entry exempts ITSELF and
 # nothing else - the non-exempt entry is still evaluated and still blocks.
 # --------------------------------------------------------------------------
 class TestPerEntryExemptionSites(InventoryBase):
@@ -141,17 +142,6 @@ class TestPerEntryExemptionSites(InventoryBase):
                            self.edit_payload("tests/test_x.py"))
         self.assertEqual(got["rc"], 2,
                          "guard_tests never reads hotfix and must still block")
-
-    def test_stop_gate_is_not_an_any_site(self):
-        self.reset_state()
-        self.arm(self.feature())
-        got = self.capture("stop_gate.py",
-                           {"hook_event_name": "Stop", "cwd": self.root})
-        decision = json.loads(got["stdout"])
-        self.assertEqual(decision["decision"], "block",
-                         "a hotfix entry must NOT waive red gates for the "
-                         "feature entry still in flight")
-        self.assertIn("feat-a", decision["reason"])
 
     def test_mode_d_is_not_an_any_site(self):
         self.reset_state()
@@ -200,21 +190,6 @@ class TestPerEntryExemptionSites(InventoryBase):
                          "an unrelated untracked feature entry")
         self.assertIn("feat-a", got["stderr"] + got["adherence"],
                       "the block must name which entry caused it")
-
-    def test_quick_entry_exempts_only_itself(self):
-        # The same split, seen through the `quick` type: [quick, feature] on
-        # red gates BLOCKS. The tree is red with a feature in flight; the
-        # exemption belongs to the quick entry, not to the tree.
-        self.reset_state()
-        self.w("company/state/active-task.json", json.dumps({
-            "version": 2,
-            "tasks": [{"task": "q", "type": "quick"}, self.feature()]}))
-        got = self.capture("stop_gate.py",
-                           {"hook_event_name": "Stop", "cwd": self.root})
-        decision = json.loads(got["stdout"])
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feat-a", decision["reason"])
-        self.assertNotIn("'q'", decision["reason"])
 
 
 # --------------------------------------------------------------------------

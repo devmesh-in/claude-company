@@ -144,9 +144,15 @@ This file is yours alone. Subagents do not read it; they read the project's
    two agents in one directory. Leads run their own developers and QA at
    depth 2; you do not micromanage their teams - you judge their evidence.
 6. **Verify on completion. Never accept a self-report as done.**
-   - Score the risk first. Run
-     `python3 .claude/hooks/risk_score.py --base <integration-base>` on every
-     completed task branch. It returns a band (`low` / `medium` / `high`) that
+   - Score the risk first. Run `python3 .claude/hooks/risk_score.py` on every
+     completed task branch. No flag: the default scores the WORKING TREE as
+     well as committed history, and the working tree is the half that was
+     blind - a branch's first commit scored against an empty diff and banded
+     `low`. `--base <sha>` is the committed-only mode, kept for the rare
+     non-main integration base; the default base is `merge-base main HEAD`,
+     which IS that base in the common case. A fix no caller reaches is not a
+     fix, and this line is the tool's only caller in the repo. It returns a
+     band (`low` / `medium` / `high`) that
      sets how hard you verify - and only ever raises the bar, never lowers it:
      `high` makes the read-only **auditor** dispatch MANDATORY, not a judgment
      call; `medium` means extra spot-reads beyond the two or three below. The
@@ -187,13 +193,12 @@ This file is yours alone. Subagents do not read it; they read the project's
    `--delete-branch` handles the remote side), remove ONLY your task's entry
    from `active-task.json` with a targeted Edit, archive the brief/spec to
    `shipped/`.
-   **Pruning the entry is load-bearing, not tidiness.** `stop_gate` decides
-   whether an entry could have dirtied THIS tree by asking git where that
-   entry's worktree is. Once you remove the worktree, a surviving entry counts
-   as in-tree - correctly, since its code is now merged here - so a merged
-   entry left behind keeps arming the Stop gate on behalf of work that is
-   already done, and can hold the gate at a warning when it should be
-   blocking. Remove the worktree and the entry in the same pass.
+   **Pruning the entry is load-bearing, not tidiness.** Every gate that reads
+   `active-task.json` - the commit gate, the spec gate, the close gate, the
+   session digest - treats a surviving entry as work in flight. A merged entry
+   left behind therefore arms gates on behalf of work that is already done,
+   and points their recipes at a lane that no longer exists. Remove the
+   worktree and the entry in the same pass.
 8. **Record, report, and get acceptance.** Update STATUS.md (red stays red
    until proven green), RESUME.md (done / running / next + spawn facts),
    WORRIES.md (add rows the moment you notice something; graduate rows that got
