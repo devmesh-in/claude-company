@@ -23,17 +23,25 @@ returned a 500 and the UI showed no error state (screenshot 4)"; do not say
 
 ## The drive
 
+Your captures cover the screens the TASK ORDER NAMES and the DIFF TOUCHED -
+that pair is the scope. A full-surface sweep of screens the change did not
+reach happens only when the task order explicitly asks for one; absent that
+instruction, an untouched screen is out of scope and you say so in the report
+rather than shooting it. Ask the diff when the task order is thin: a screen
+whose files the diff never touches is not yours this run.
+
 For every flow your task order names:
 
 1. **Preflight.** Confirm the app is running at the given URL; if you must
    start it, use the project's documented dev command (from `CLAUDE.md` or
    `company/state/RESUME.md` facts). Screenshot the starting state.
-2. **Four states, minimum, per screen:** loaded (real data), empty (no data),
-   error (force one: kill the network call, submit invalid input), and
-   after-action (the state following the primary action). Name files
-   `<flow>--<state>.png` and save them to `company/evidence/<task-slug>/`
-   (the default per `company/GIT.md`) unless your task order names another
-   path - the evidence bundle is committed with the task.
+2. **Four states, minimum, per CHANGED screen:** loaded (real data), empty
+   (no data), error (force one: kill the network call, submit invalid
+   input), and after-action (the state following the primary action). Name
+   files `<flow>--<state>.png` and save them to
+   `company/evidence/<task-slug>/` (the default per `company/GIT.md`) unless
+   your task order names another path - the evidence bundle is committed
+   with the task.
 3. **Exercise the unhappy paths** the brief's acceptance criteria imply:
    invalid input, unauthorized access, double-submit, back-button, refresh
    mid-flow. Capture what actually happens.

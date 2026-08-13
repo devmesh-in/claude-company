@@ -43,7 +43,10 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    company recognizes. The gate suite (`company/run-gates.sh`, defined per
    project in `company/gates.config`, contract in `company/GATES.md`) decides,
    never an agent's self-report. Every gate is blocking, none is ever waived,
-   and commits are hook-blocked while gates are red or stale.
+   and commits are hook-blocked while gates are red or stale. Freshness is
+   CONTENT-based: a stamp goes stale when the content of the work changes under
+   it, not when HEAD moves, so a commit or a merge of already-green content
+   invalidates nothing.
 
 5. **Verify, never trust - and never let the producer grade itself.** The agent
    that built something never judges it done. Developers report with evidence;
@@ -55,8 +58,17 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    (.claude/hooks/guard_provenance.py, manifest company/provenance.json) blocks
    commit and task close while the main checkout holds source changes no
    independent verifier context has audited at the current tree state. Delegated
-   worktree work is exempt - its verification already happened inside the
-   hierarchy.
+   worktree work is exempt, and the exemption rests on a precondition rather
+   than on the worktree: SOMEONE independent verified it inside the hierarchy -
+   a developer built, a lead re-checked against the brief, the CEO judged the
+   lead's diff. A worktree is where that usually happens, not why it counts.
+
+   So the exemption follows the verifier, not the directory. Any configuration
+   that removes the independent reader - a build with no lead between the
+   developer and the CEO, a single agent that both writes and reports - has
+   nothing to exempt, and its work needs the audit the exemption was standing
+   in for. Read the sentence as "verified by someone who did not write it";
+   if you cannot name that someone, the exemption does not apply.
 
 ## The client posture
 
@@ -99,7 +111,8 @@ Owner (human)
   Developers    - build exactly what their task order says, inside owned
                   directories, in a worktree.
   QA engineers  - drive the built surface (Playwright), capture evidence
-                  screenshots: loaded / empty / error / after-action.
+                  screenshots for each CHANGED screen: loaded / empty /
+                  error / after-action.
 ```
 
 Depth is capped at two below the CEO by construction (CEO -> lead -> dev/QA).
@@ -116,8 +129,8 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 | Class | What | Path |
 |---|---|---|
 | `ideation` | The ask is ideas/direction, or too fuzzy to build without guessing | Brainstorm engagement per `company/IDEATION.md`: parallel strategists diverge, CEO converges, client gets an options memo; the winner reclassifies as quick/feature/program. |
-| `quick` | Small bug, copy change, config tweak | Brief only. One developer or the CEO itself. No Phase 0. Gates still gate. |
-| `feature` | New user-visible capability, or anything touching a frozen surface, an invariant, or money | Phase 0 spec -> spec-ready gate -> brief -> one tech lead + team -> QA evidence -> verify -> integrate |
+| `quick` | Small bug, copy change, config tweak | No Phase 0, and a quick entry needs no brief - the request is the work order. The exemption is PER ENTRY: a briefless quick entry exempts itself and never the tree, so a feature entry beside it still needs its brief. One developer or the CEO itself. Gates still gate. |
+| `feature` | New user-visible capability, or anything touching a frozen surface, an invariant, or money | Phase 0 at one of two rungs, chosen on objective conditions and never on appetite. `spec-lite`: permitted only when ALL FOUR hold - one repo, nothing frozen, no money, no invariant in play - and the CEO derives the sealed brief straight from the request, recording the rung on the task's entry. Otherwise a full Phase 0 spec -> spec-ready gate. The escape upward is ONE-WAY: the moment the work touches a frozen surface, a second repo, or an invariant it becomes a full spec and never comes back down. Then brief (required at both rungs) -> one tech lead + team -> QA evidence -> verify -> integrate. |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |
 | `hotfix` | Production is on fire | Declared by the CEO on that task's entry in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day, and no hotfix closes without a postmortem (`company/templates/POSTMORTEM-TEMPLATE.md`) filed next to its retroactive spec in `company/specs/shipped/` as `postmortem-<slug>.md`. The CEO checks its prevention line at close: the postmortem must name a real mechanical change that prevents recurrence (a new witness, a new gate, a new frozen pattern) or state why none is possible. |
 
@@ -146,6 +159,8 @@ All under `company/state/`, all owned by the CEO:
 | `active-task.json` | The machine-readable list of tasks in flight in this working tree (read by hooks). One entry per task; an entry carries that task's written execution decision (execution / execution_why) for feature/program work, plus reclassified_why on downgrades. Write it per the rule below. |
 | `provenance-ledger.json` | Audit and dispatch records for the task in flight (written only by the provenance hook). |
 | `gates.status` | The stamped gate result (written only by the gate runner). |
+| `gates.log` | One line per ladder run - the run history, oldest first. Written only by the gate runner. |
+| `gate-output/` | The latest full output of each gate, one file per gate, replaced on every run. Written only by the gate runner. |
 | `adherence.log` | Every hook block and bypass, one line each. Proof the system enforces. |
 | `costs.log` | One line per agent stop: token usage and an estimated spend, appended by the cost_capture hook. Estimates only, not billing. |
 
@@ -172,6 +187,35 @@ prompt, so a `feat` entry would be credited by a prompt naming `task/feat-a`.
 Remove ONLY your entry. Never rewrite the whole file. An Edit replaces against
 current disk content, so two sessions editing at different anchors both
 survive. A whole-file Write drops the other session's entry.
+
+### Build in parallel, integrate alone
+
+Concurrent BUILDING sessions in one checkout are supported and expected - the
+entry list above and the state lock layer exist for exactly that. Integrating
+is the exception: one integrating session per repository at a time. Merging,
+stamping the ladder, removing worktrees, and pruning entries all contend for
+the same HEAD and the same state files, and two sessions doing that at once
+leave an integration nobody can reconstruct afterwards.
+
+No hook enforces this. Git's own `index.lock` already makes the collision loud
+rather than silent - the second merge fails visibly instead of interleaving
+quietly - so the mistake costs a retry, and a guard would buy nothing the error
+message has not already bought.
+
+### Right-sized paperwork
+
+`RESUME.md` and `DECISIONS.md` are working documents, not archives. Keep each
+to around 300 lines. When one grows past that, move the overflow VERBATIM into
+`company/state/archive/` and leave a one-line pointer behind. Move, never
+summarize: a summarized decision loses the reason it was made, which is the
+only part anyone comes back for.
+
+This is doctrine only - no hook and no gate enforces the number, and none will.
+A line count is a magic number, and this company rejects numeric fences as an
+enforcement shape: a check that fires at 301 lines teaches padding to 299, not
+brevity. The rule stands on its own consequence instead - a handoff file nobody
+finishes reading has already stopped working. (OQ-HP-13 assumption: doctrine
+prose only, never a hook.)
 
 ## What is never decided below the owner
 
