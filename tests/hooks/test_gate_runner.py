@@ -10,12 +10,14 @@ copies of `.claude/settings.json`.
 The three properties worth stating up front, because they are the ones that
 were broken:
 
-  1. FR-HP-28: the ladder gates and stamps the tree containing the cwd. The
-     harness pins CLAUDE_PROJECT_DIR to the MAIN checkout even for a subagent
-     whose cwd is a worktree, so the old precedence handed a lead a green
-     stamp for code it did not build. The stamper resolves its own root, so
-     the runner has to hand it the resolved one or the same false green comes
-     back in a different place.
+  1. FR-HP-28: the ladder gates and stamps the project the RUNNER ITSELF
+     lives in - the script ships at <root>/company/run-gates.sh. The harness
+     pins CLAUDE_PROJECT_DIR to the MAIN checkout even for a subagent whose
+     cwd is a worktree, so trusting it handed a lead a green stamp for code
+     it did not build; and resolving from the cwd's git work tree instead
+     broke explicit absolute invocation, because the cwd is incidental. The
+     stamper resolves its own root, so the runner has to hand it the resolved
+     one or the same false green comes back in a different place.
   2. FR-HP-20/21: a green gate is quiet but its output is PRESERVED. A pointer
      line naming a deleted file is worse than no pointer.
   3. FR-HP-23: the freeze needs all THREE landing spots. ALWAYS_DEFAULTS is the
@@ -339,22 +341,77 @@ class RootResolution(RunnerBase):
         self.assertTrue(os.path.exists(
             os.path.join(main, "company", "state", "gates.status")))
 
-    def test_outside_any_git_tree_falls_back_to_project_dir(self):
+    def test_script_location_beats_project_dir_env(self):
+        # CLAUDE_PROJECT_DIR is the thing FR-HP-28 distrusts. When it and the
+        # runner's own location disagree, the runner wins: you are executing
+        # THAT project's gates.config, next to THAT project's state.
         plain = os.path.join(self.tmp, "plain")
         make_project(plain, [{"name": "ok", "command": "true"}])
         elsewhere = os.path.join(self.tmp, "elsewhere")
         make_project(elsewhere, [{"name": "ok", "command": "true"}])
         r = run_ladder(plain, project_dir=elsewhere)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn(elsewhere, r.stdout)
+        self.assertIn(plain, r.stdout)
+        self.assertTrue(os.path.exists(
+            os.path.join(plain, "company", "state", "gates.status")))
+        self.assertFalse(os.path.exists(
+            os.path.join(elsewhere, "company", "state", "gates.status")))
 
-    def test_outside_any_git_tree_and_no_project_dir_falls_back_to_pwd(self):
+    def test_non_git_project_resolves_with_no_env_at_all(self):
         plain = os.path.join(self.tmp, "plain")
         make_project(plain, [{"name": "ok", "command": "true"}])
         r = run_ladder(plain, project_dir=None)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue(os.path.exists(
             os.path.join(plain, "company", "state", "gates.status")))
+
+    def test_installer_fixture_shape(self):
+        """The exact invocation shape in tests/install/run_tests.sh.
+
+        A NON-git fixture holding only company/run-gates.sh and its config,
+        invoked by ABSOLUTE path with CLAUDE_PROJECT_DIR set to it, while the
+        cwd stays inside a completely different git repository. Resolving from
+        the cwd's git work tree sent the runner into that other repo, read the
+        wrong gates.config and never stamped the fixture. This is the case
+        that took CI red on ubuntu node 18, 20 and 22.
+        """
+        other = os.path.join(self.tmp, "other-repo")
+        self.init_repo(other)
+        make_project(other, [{"name": "wrong", "command": "true"}])
+
+        fixture = os.path.join(self.tmp, "fixture")
+        make_project(fixture, [{"name": "right", "command": "echo good"}],
+                     with_stamper=False)
+        self.assertFalse(os.path.isdir(os.path.join(fixture, ".git")))
+
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = fixture
+        r = subprocess.run(
+            ["bash", os.path.join(fixture, "company", "run-gates.sh")],
+            cwd=other, capture_output=True, text=True, env=env,
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn(fixture, r.stdout)
+        self.assertIn("right", r.stdout)
+        self.assertNotIn("wrong", r.stdout)
+        self.assertTrue(os.path.exists(os.path.join(
+            fixture, "company", "state", "gate-output", "right.log")))
+        self.assertFalse(os.path.exists(
+            os.path.join(other, "company", "state", "gates.status")))
+
+    def test_unresolvable_script_path_falls_back_to_project_dir(self):
+        # Piped stdin leaves $0 as "bash", so the script cannot locate itself.
+        # A confidently wrong root would be worse than an honest fallback.
+        plain = os.path.join(self.tmp, "plain")
+        make_project(plain, [{"name": "ok", "command": "true"}])
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = plain
+        with open(os.path.join(plain, "company", "run-gates.sh")) as f:
+            script = f.read()
+        r = subprocess.run(["bash", "-s"], input=script, cwd=self.tmp,
+                           capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn(plain, r.stdout)
 
 
 # --------------------------------------------------------------------------
@@ -471,9 +528,13 @@ class FreezeAndIgnore(Base):
             entries = [ln.strip() for ln in f if ln.strip()]
         self.assertIn("company/state/gates.log", entries)
         self.assertIn("company/state/gate-output/", entries)
+        # The stamp is machine-written single-writer evidence for the same
+        # reason, and was committable until now.
+        self.assertIn("company/state/gates.status", entries)
 
     def test_run_artifacts_are_git_ignored_for_real(self):
         for rel in ("company/state/gates.log",
+                    "company/state/gates.status",
                     "company/state/gate-output/tests.log"):
             r = subprocess.run(
                 ["git", "-C", REPO_ROOT, "check-ignore", "-q", rel],
@@ -512,6 +573,62 @@ class FreezeAndIgnore(Base):
     def test_gate_output_blocked_with_registry(self):
         self.block_case("company/state/gate-output/tests.log",
                         with_registry=True)
+
+
+class FrozenBaselineAgreement(unittest.TestCase):
+    """The frozen baseline exists in TWO copies, and they must agree.
+
+    guard_frozen.ALWAYS_DEFAULTS is hardcoded, so it is the copy that reaches
+    an EXISTING install on update. The `always` list in
+    company/frozen-surfaces.json is laid down by install.sh via copy_if_absent
+    and restored by update.sh only when the file is ABSENT, so it is the copy
+    that reaches a FRESH install. A pattern in the registry alone protects
+    nobody who is already installed.
+
+    That is not hypothetical: CR-UPD-1 added install-manifest.json and
+    .update-backups/** to the registry only, and they sat unprotected on every
+    existing install for a release. This class is the mechanical answer, and
+    it is the same move as the FR-HP-25 wiring gate - generalized from "is the
+    hook wired" to "do the two copies of the baseline still agree".
+    """
+
+    def baselines(self):
+        sys.path.insert(0, HOOKS_DIR)
+        import guard_frozen
+        with open(os.path.join(
+                REPO_ROOT, "company", "frozen-surfaces.json")) as f:
+            registry = json.load(f)["always"]
+        return set(guard_frozen.ALWAYS_DEFAULTS), set(registry)
+
+    def test_every_registry_pattern_reaches_existing_installs(self):
+        defaults, registry = self.baselines()
+        missing = sorted(registry - defaults)
+        self.assertEqual(
+            missing, [],
+            "in company/frozen-surfaces.json `always` but NOT in "
+            "guard_frozen.ALWAYS_DEFAULTS: {}. These are unprotected on every "
+            "EXISTING install, because update.sh restores the registry only "
+            "when it is absent. Add them to ALWAYS_DEFAULTS.".format(missing),
+        )
+
+    def test_no_default_drifts_out_of_the_registry(self):
+        defaults, registry = self.baselines()
+        missing = sorted(defaults - registry)
+        self.assertEqual(
+            missing, [],
+            "in guard_frozen.ALWAYS_DEFAULTS but NOT in the "
+            "company/frozen-surfaces.json `always` list: {}. Both copies are "
+            "the same baseline; project-specific patterns belong in "
+            "`surfaces`, not `always`.".format(missing),
+        )
+
+    def test_cr_upd_1_patterns_are_in_both(self):
+        # Named explicitly so the regression is legible, not just a set diff.
+        defaults, registry = self.baselines()
+        for pat in ("company/state/install-manifest.json",
+                    "company/state/.update-backups/**"):
+            self.assertIn(pat, defaults)
+            self.assertIn(pat, registry)
 
 
 # --------------------------------------------------------------------------

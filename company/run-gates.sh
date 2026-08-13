@@ -6,15 +6,44 @@
 set -euo pipefail
 
 # --- resolve project root -------------------------------------------------
-# FR-HP-28: the work tree that contains the cwd wins over CLAUDE_PROJECT_DIR.
-# The harness pins CLAUDE_PROJECT_DIR to the MAIN checkout even for an agent
-# whose cwd is a worktree, so trusting it first gates and stamps a tree the
-# caller never built - a green stamp for somebody else's code.
+# FR-HP-28: the root is resolved from the RUNNER'S OWN LOCATION. This script
+# always ships at <root>/company/run-gates.sh, so the root is the parent of the
+# directory holding it - and gates.config, .claude/hooks and company/state are
+# all its siblings. The runner is part of the project it gates.
+#
+# NOT resolved from CLAUDE_PROJECT_DIR first: the harness pins that to the MAIN
+# checkout even for an agent whose cwd is a worktree, so a lead running the
+# ladder in its worktree would gate and stamp a tree it never built and receive
+# a green stamp for somebody else's code.
+#
+# NOT resolved from the cwd's git work tree either: the cwd is incidental. An
+# explicit `bash /path/to/project/company/run-gates.sh` issued from anywhere
+# must gate THAT project, and a cwd that merely happens to sit inside some
+# other git repository must not redirect the run. Every in-repo invocation is
+# relative (`bash company/run-gates.sh` from the project root), so a worktree
+# run still executes the worktree's copy and still resolves to the worktree.
+#
 # OQ-HP-14 assumption: a ladder run inside a worktree deliberately does NOT
 # satisfy the main checkout's stamp. That is intended; the alternative is the
-# false green this order exists to kill.
-if GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" && [ -n "$GIT_ROOT" ]; then
-  PROJECT_ROOT="$GIT_ROOT"
+# false green this rule exists to kill.
+SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+# Follow symlinks by hand: `readlink -f` is GNU-only and macOS does not have it.
+LINK_HOPS=0
+while [ -L "$SCRIPT_PATH" ] && [ "$LINK_HOPS" -lt 16 ]; do
+  LINK_TARGET="$(readlink "$SCRIPT_PATH")"
+  case "$LINK_TARGET" in
+    /*) SCRIPT_PATH="$LINK_TARGET" ;;
+    *)  SCRIPT_PATH="$(dirname "$SCRIPT_PATH")/$LINK_TARGET" ;;
+  esac
+  LINK_HOPS=$((LINK_HOPS + 1))
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd -P || true)"
+
+# The "company" check is what keeps the fallbacks reachable: piped stdin and
+# `bash -c` leave $0 as "bash", and a confidently wrong root is worse than an
+# honest fallback.
+if [ -n "$SCRIPT_DIR" ] && [ "$(basename "$SCRIPT_DIR")" = "company" ]; then
+  PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 elif [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
   PROJECT_ROOT="$CLAUDE_PROJECT_DIR"
 else
