@@ -96,22 +96,25 @@ def index_fingerprint(path):
 # imports the same kernel under test.
 # ---------------------------------------------------------------------------
 
+# The children announce READY once the interpreter is up and _common is
+# imported, then BLOCK on a line from the parent. The parent releases them
+# only after every child has reported, so contention is arranged by a real
+# synchronization primitive instead of by a wall-clock barrier and a hope
+# about scheduling. Interpreter startup - the large, load-sensitive part - is
+# finished before the clock starts on anything these tests assert.
 CHILD_SERIALIZE = '''
 import json, sys, time
 sys.path.insert(0, sys.argv[1])
 import _common
-root, start_at, hold = sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
-delay = start_at - time.time()
-if delay > 0:
-    time.sleep(delay)
-wake = time.time()
+root, hold = sys.argv[2], float(sys.argv[3])
+sys.stdout.write("READY\\n")
+sys.stdout.flush()
+sys.stdin.readline()
 with _common.state_lock(root):
     enter = time.time()
     time.sleep(hold)
     leave = time.time()
-print(json.dumps({"wake": wake - start_at,
-                  "enter": enter - start_at,
-                  "leave": leave - start_at}))
+print(json.dumps({"enter": enter, "leave": leave}))
 '''
 
 CHILD_RMW = '''
@@ -119,12 +122,11 @@ import contextlib, json, os, sys, tempfile, time
 sys.path.insert(0, sys.argv[1])
 import _common
 root, path, marker = sys.argv[2], sys.argv[3], sys.argv[4]
-start_at, pause = float(sys.argv[5]), float(sys.argv[6])
-locked = sys.argv[7] == "lock"
-delay = start_at - time.time()
-if delay > 0:
-    time.sleep(delay)
-wake = time.time()
+pause = float(sys.argv[5])
+locked = sys.argv[6] == "lock"
+sys.stdout.write("READY\\n")
+sys.stdout.flush()
+sys.stdin.readline()
 ctx = _common.state_lock(root) if locked else contextlib.nullcontext()
 with ctx:
     with open(path) as f:
@@ -135,7 +137,7 @@ with ctx:
     with os.fdopen(fd, "w") as f:
         json.dump(data, f)
     os.replace(tmp, path)
-print(json.dumps({"wake": wake - start_at}))
+print(json.dumps({"marker": marker}))
 '''
 
 CHILD_NO_FCNTL = '''
@@ -188,26 +190,35 @@ class KernelBase(Base):
     def spawn(self, script, *args):
         return subprocess.Popen(
             [sys.executable, script, HOOKS_DIR] + [str(a) for a in args],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
         )
 
-    # Both children sleep until one absolute wall-clock instant. Everything
-    # these timing tests conclude rests on them actually being there together:
-    # a child whose interpreter startup ran past the barrier produces
-    # non-overlapping work for a reason that has nothing to do with the lock,
-    # which is a false GREEN on the positive cases and a false RED on the
-    # negative control. So the precondition is measured and reported by the
-    # children rather than assumed, and a box that cannot meet it gets an
-    # explicit skip naming the numbers - never a quietly passing assertion.
-    BARRIER_SLACK = 0.15
+    def spawn_together(self, script, per_child_args):
+        """Start N children and release them only once ALL are ready.
 
-    def require_barrier(self, wakes):
-        if wakes and max(wakes) > self.BARRIER_SLACK:
-            self.skipTest(
-                "children did not reach the barrier together (wakes={}, "
-                "slack={}s) - the box is too loaded for timing evidence"
-                .format([round(w, 3) for w in wakes], self.BARRIER_SLACK)
-            )
+        Each child prints READY after importing the kernel and then blocks
+        reading a line, so the parent can wait for genuine readiness instead
+        of guessing at a wall-clock instant. This is the difference between
+        arranging contention and hoping for it: interpreter startup, which is
+        the part a loaded box stretches, is complete for every child before
+        any of them proceeds.
+        """
+        procs = [self.spawn(script, *args) for args in per_child_args]
+        for proc in procs:
+            self.assertEqual(proc.stdout.readline().strip(), "READY")
+        for proc in procs:
+            proc.stdin.write("go\n")
+            proc.stdin.flush()
+        return procs
+
+    def collect(self, procs):
+        out = []
+        for proc in procs:
+            stdout, stderr = proc.communicate(timeout=60)
+            self.assertEqual(proc.returncode, 0, stderr)
+            out.append(json.loads(stdout.strip()))
+        return out
 
     def state_file(self, name="shared.json", data=None):
         path = os.path.join(self.root, "company", "state", name)
@@ -222,56 +233,52 @@ class KernelBase(Base):
 
 
 class TestStateLock(KernelBase):
-    def run_rmw_pair(self, mode):
-        """Two child processes read-modify-write one file at the same instant.
+    RMW_PAUSE = 0.3
 
-        `mode` is "lock" or "nolock". Both children wake on the same absolute
-        wall-clock barrier and pause between the read and the write, so the
-        interleaving is arranged rather than hoped for.
+    def run_rmw_pair(self, mode):
+        """Two child processes read-modify-write one file, released together.
+
+        `mode` is "lock" or "nolock". Both children are already running and
+        blocked on the parent's go signal before either touches the file, and
+        each pauses RMW_PAUSE between its read and its write. The pause is the
+        skew tolerance: post-handshake skew is process-scheduling latency, not
+        interpreter startup, so 0.3s is orders of magnitude more than it needs
+        to be for both children to have read before either writes.
         """
         script = self.child_script("rmw.py", CHILD_RMW)
         path = self.state_file()
-        start_at = time.time() + 0.4
-        procs = [
-            self.spawn(script, self.root, path, marker, start_at, 0.2, mode)
+        procs = self.spawn_together(script, [
+            (self.root, path, marker, self.RMW_PAUSE, mode)
             for marker in ("a", "b")
-        ]
-        wakes = []
-        for proc in procs:
-            out, err = proc.communicate(timeout=30)
-            self.assertEqual(proc.returncode, 0, err)
-            wakes.append(json.loads(out.strip())["wake"])
+        ])
+        self.collect(procs)
         with open(path) as f:
-            return json.load(f)["seen"], wakes
+            return json.load(f)["seen"]
 
     def test_two_processes_serialize_fr_hp_01(self):
-        """Two children holding the lock 0.2s each cannot overlap.
+        """Two children holding the lock cannot overlap in time.
 
-        The assertion is a LOWER bound on the span from the first acquisition
-        to the last release: serialized is 0.4s, a lost lock is 0.2s, and a
-        slow box can only push the number up. The non-overlap check is the
-        same fact stated without any timing margin at all.
+        The load-bearing assertion is INTERVAL DISJOINTNESS, which is a
+        relational claim about two absolute timestamps and carries no margin
+        and no dependence on machine speed: whatever the box does to the
+        durations, a genuinely shared lock means one child's critical section
+        ends before the other's begins. The span check backs it with a LOWER
+        bound only - serialized is 2 x hold, a lost lock is 1 x hold, and a
+        loaded box can only push the number up, never down, so it cannot go
+        red for being slow.
         """
+        hold = 0.2
         script = self.child_script("serialize.py", CHILD_SERIALIZE)
-        start_at = time.time() + 0.4
-        procs = [self.spawn(script, self.root, start_at, 0.2)
-                 for _ in range(2)]
-        spans = []
-        for proc in procs:
-            out, err = proc.communicate(timeout=30)
-            self.assertEqual(proc.returncode, 0, err)
-            spans.append(json.loads(out.strip()))
-        self.require_barrier([s["wake"] for s in spans])
+        procs = self.spawn_together(script, [(self.root, hold)] * 2)
+        spans = self.collect(procs)
         enters = [s["enter"] for s in spans]
         leaves = [s["leave"] for s in spans]
-        self.assertGreater(max(leaves) - min(enters), 0.35, spans)
         self.assertLessEqual(min(leaves), max(enters), spans)
+        self.assertGreater(max(leaves) - min(enters), hold * 1.75, spans)
 
     def test_lock_preserves_both_updates_fr_hp_01(self):
         """The read-modify-write cycle inside the lock loses nothing."""
-        seen, wakes = self.run_rmw_pair("lock")
-        self.require_barrier(wakes)
-        self.assertEqual(sorted(seen), ["a", "b"])
+        self.assertEqual(sorted(self.run_rmw_pair("lock")), ["a", "b"])
 
     def test_without_the_lock_an_update_is_lost_fr_hp_01(self):
         """The negative control: the identical body unlocked drops a write.
@@ -279,9 +286,7 @@ class TestStateLock(KernelBase):
         Without this, a state_lock that silently never locked would leave the
         positive case green and the suite would be certifying nothing.
         """
-        seen, wakes = self.run_rmw_pair("nolock")
-        self.require_barrier(wakes)
-        self.assertEqual(len(seen), 1, seen)
+        self.assertEqual(len(self.run_rmw_pair("nolock")), 1)
 
     def test_missing_fcntl_still_yields_fr_hp_01(self):
         """No fcntl means no lock, and no lock must still run the body.
@@ -299,39 +304,66 @@ class TestStateLock(KernelBase):
     def test_body_exception_releases_the_lock_fr_hp_01(self):
         """A raising body propagates, releases, and leaks no descriptor.
 
-        flock is bound to the open file description, so a leaked descriptor
-        would block the very next acquisition even inside one process - which
-        is what the timing assertion below detects.
+        The release is proven DIRECTLY rather than inferred from how long a
+        later acquisition took: after the exception, this process takes a
+        non-blocking exclusive flock on the lock file itself. flock is bound
+        to the open file description, so a descriptor the kernel forgot to
+        close would still hold the lock and this probe would raise
+        BlockingIOError - even from inside the same process. That is the
+        actual mechanism, asserted with no clock in the loop at all.
         """
+        try:
+            import fcntl
+        except ImportError:
+            self.skipTest("no fcntl on this platform")
         before = open_fd_count()
         if before is None:
             self.skipTest("no /proc/self/fd or /dev/fd on this platform")
+
         with self.assertRaises(RuntimeError):
             with _common.state_lock(self.root):
                 raise RuntimeError("boom")
-        self.assertEqual(open_fd_count(), before)
-        started = time.time()
+
+        self.assertEqual(open_fd_count(), before, "descriptor leaked")
+        lock_file = os.path.join(self.root, "company", "state", ".state.lock")
+        self.assertTrue(os.path.exists(lock_file), lock_file)
+        fd = os.open(lock_file, os.O_RDWR | os.O_CREAT)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError as exc:
+            self.fail("lock was still held after the body raised: %s" % exc)
+        finally:
+            os.close(fd)
+
         entered = []
         with _common.state_lock(self.root, timeout=2.0):
             entered.append(1)
-        elapsed = time.time() - started
         self.assertEqual(entered, [1])
-        # A stranded lock would burn the whole 2.0s timeout here.
-        self.assertLess(elapsed, 1.0)
+
+    HOLDER_SECONDS = 30.0
 
     def test_timeout_proceeds_unlocked_fr_hp_01(self):
         """A contended lock times out and runs the body anyway, never raises.
 
-        The holder keeps the lock for 5s, far past this call's 0.3s timeout,
-        so entering the body at all proves the kernel gave up and proceeded
-        UNLOCKED. The lower bound proves it waited the timeout first; the
-        upper bound proves it did not simply block until the holder released.
+        Entering the body at all, while another PROCESS demonstrably holds the
+        lock, is the whole requirement (OQ-HP-11: proceed unlocked, fail open)
+        and it carries no timing margin.
+
+        The two numeric bounds are both mechanism discriminators rather than
+        speed limits. The lower bound can only be violated by returning EARLY,
+        which means not waiting the timeout - a loaded box pushes it up, never
+        down. The upper bound separates "timed out after 0.3s" from "blocked
+        until the holder let go", and the holder deliberately keeps the lock
+        for 30s so the two outcomes are 100x apart: no amount of scheduling
+        noise turns one into the other.
         """
         script = self.child_script("hold.py", CHILD_HOLD)
-        proc = self.spawn(script, self.root, 5.0)
+        proc = self.spawn(script, self.root, self.HOLDER_SECONDS)
         # Cleanups run last-registered-first: kill, reap, then close the pipes.
         self.addCleanup(proc.stderr.close)
         self.addCleanup(proc.stdout.close)
+        self.addCleanup(proc.stdin.close)
         self.addCleanup(proc.wait)
         self.addCleanup(proc.kill)
         self.assertEqual(proc.stdout.readline().strip(), "HELD")
@@ -342,7 +374,7 @@ class TestStateLock(KernelBase):
         elapsed = time.time() - started
         self.assertEqual(entered, [1])
         self.assertGreaterEqual(elapsed, 0.25)
-        self.assertLess(elapsed, 2.5)
+        self.assertLess(elapsed, self.HOLDER_SECONDS / 3)
 
 
 # ---------------------------------------------------------------------------
@@ -527,11 +559,48 @@ class TestTornReads(KernelBase):
         self.assertGreaterEqual(reader.call_count, 2)
 
     def test_permanently_unparseable_is_empty_and_bounded_fr_hp_04(self):
-        """Garbage that never resolves gives up fast and fails open."""
+        """Garbage that never resolves gives up and fails open, and the RETRY
+        BUDGET is what is asserted - not the wall clock.
+
+        The requirement (OQ-HP-10) is "3 retries, 0.06s apart". That is a
+        claim about the code path, so it is measured on the code path: the
+        read attempts are counted and the sleep durations are captured. The
+        earlier version of this test asserted the elapsed time was under 0.5s,
+        which is a claim about the MACHINE - it went red on a loaded
+        macos-latest runner at 0.55s (PR #107) while the kernel was behaving
+        exactly as specified. A test that fails in the harness rather than in
+        the product teaches people to re-run reds instead of reading them.
+        """
+        self.put("not json at all")
+        real_read = _common.read_json_file
+        reads, sleeps = [], []
+
+        def counting_read(path):
+            reads.append(path)
+            return real_read(path)
+
+        # The sleeps are recorded and NOT performed: the budget is the claim,
+        # so there is no reason to spend it. Patched on the time module the
+        # kernel imported, and restored by the context manager.
+        with mock.patch.object(_common, "read_json_file", counting_read), \
+                mock.patch.object(_common.time, "sleep", sleeps.append):
+            self.assertEqual(_common.active_tasks(self.root), [])
+
+        self.assertEqual(len(reads), 4, "one read plus exactly three retries")
+        self.assertEqual(sleeps, [0.06, 0.06, 0.06])
+
+    def test_unparseable_read_loop_is_not_unbounded_fr_hp_04(self):
+        """The one wall-clock check kept, and it is a sanity ceiling only.
+
+        The intended budget is about 0.18s of sleeping. This ceiling is over a
+        hundred times that, so no scheduling noise, cold cache or shared CI
+        runner can reach it - only a genuinely unbounded retry loop can, which
+        is the single failure this is here to catch.
+        """
         self.put("not json at all")
         started = time.time()
         self.assertEqual(_common.active_tasks(self.root), [])
-        self.assertLess(time.time() - started, 0.5)
+        self.assertLess(time.time() - started, 30)
 
     def test_unreadable_true_only_for_exists_and_unparseable_fr_hp_04(self):
         """The three states a caller must be able to tell apart."""
@@ -721,9 +790,19 @@ class TestRealWorktreeIndex(unittest.TestCase):
     """
 
     def test_real_worktree_index_is_untouched_fr_hp_05(self):
+        # No checkout, no index, no evidence to gather - and no failure to
+        # report either. The suite runs from a plain directory export in at
+        # least one place (the installer fixtures) and inside mutation-testing
+        # copies, where asserting an index EXISTS would be a claim about the
+        # harness rather than about the kernel. The fixture-repo version of
+        # this assertion in TestContentWorkHash always runs, so skipping here
+        # never leaves the requirement uncovered.
         path = index_path(REPO_ROOT)
-        self.assertIsNotNone(path)
-        self.assertTrue(os.path.exists(path), path)
+        if path is None or not os.path.exists(path):
+            self.skipTest(
+                "not a git checkout ({}) - the fixture-repo index assertion "
+                "covers this requirement".format(REPO_ROOT)
+            )
         # A concurrent session running git in this checkout also rewrites the
         # index, so a single disagreement is retried. A kernel that touches
         # the index fails every attempt.
