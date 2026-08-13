@@ -159,6 +159,26 @@ require the same explicit, batched owner decision that every other escalation
 does. A program that doubles in flight without one decision point is a process
 defect, not diligence.
 
+## A weakness the port closed that nobody knew about
+
+Found 2026-08-13 while investigating why a commit passed the gate when the
+stamp should have been stale. It was not a malfunction.
+
+The LEGACY `work_hash` fingerprinted `HEAD` plus `git status --porcelain` plus
+the diffs. For an UNTRACKED file, `status --porcelain` prints `?? path` no
+matter what the file contains, and `git diff` covers only tracked files. So the
+old hash could see an untracked file APPEAR, and was blind to every subsequent
+edit to its CONTENT. A brand-new source file could be rewritten freely after a
+green stamp without staling it.
+
+Verified both directions in a throwaway repo: the content-based hash now on
+main returns a different value after an untracked file's content changes; the
+legacy digest does not. So FR-HP-05 closed a real enforcement gap on top of the
+staleness-churn problem it was built for, and neither the DevMesh catalog nor
+this program's spec knew that. Worth remembering as evidence for the general
+shape of this port: several changes justified on ergonomics turned out to be
+correctness fixes once someone looked.
+
 ## Measured baselines, taken 2026-08-13 before any change
 
 Recorded so the close-out compares against numbers rather than impressions.
