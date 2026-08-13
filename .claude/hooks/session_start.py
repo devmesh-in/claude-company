@@ -8,7 +8,14 @@ truncated at three entries plus one overflow line.
 
 With exactly ONE entry the two lines are what they have always been (BR-MST-02
 identity). `dispatches` is that entry's PER-SLUG count; `self-authored` is the
-GLOBAL count, a property of the tree rather than of an entry. Always exits 0.
+GLOBAL count, a property of the tree rather than of an entry.
+
+One further line, added when DECISIONS #20 deleted the Stop-time gate: a
+`gates:` advisory when the stamp cannot support a commit and gating work is in
+flight. Same fact the deleted hook blocked on, said once to the session that
+can act on it instead of shouted at a session trying to finish.
+
+ALWAYS exits 0, and has no block path. Nothing here may grow one.
 """
 
 import os
@@ -26,6 +33,37 @@ DIGEST_CAP = 3
 EXEC_LINE = (
     "execution: {} | dispatches: {} | self-authored: {} files | team: {}"
 )
+
+
+def gate_alert(root, tasks):
+    """One advisory line, or None. NEVER a decision.
+
+    Armed when the tree has a gating entry (anything not quick/hotfix) AND
+    check_stamp says the stamp cannot support a commit - missing, red, stale,
+    malformed, or hand-edited. That is the exact condition the deleted
+    Stop-time gate blocked on; it is worth SAYING to the session that can run
+    the ladder, and worth nothing refusing the turn of a session that cannot.
+
+    Rendered near the top of the digest deliberately. RESUME.md and STATUS.md
+    can fill MAX_LINES between them, and a warning that scrolls off the end
+    was not delivered.
+
+    Fails silent: any trouble computing the stamp returns None rather than
+    losing the whole digest, since this line is advisory and the digest is not.
+    """
+    gating = [e for e in tasks if e.get("type") not in ("quick", "hotfix")]
+    if not gating:
+        return None
+    try:
+        ok, reason = c.check_stamp(root)
+    except Exception:
+        return None
+    if ok:
+        return None
+    # Name every gating entry: this line is the only place a session learns
+    # its own slug is implicated, so the default cap of 3 would hide one.
+    return "gates: {} - in flight: {}. Run /gates before you commit.".format(
+        reason, c.slug_list(gating, cap=max(len(gating), 1)))
 
 
 def head_lines(path, n):
@@ -100,13 +138,16 @@ def main():
             sys.exit(0)
 
         out = ["claude-company state digest"]
+        tasks = c.active_tasks(root)
+        alert = gate_alert(root, tasks)
+        if alert:
+            out.append(alert)
         if os.path.exists(resume):
             out.append("-- RESUME.md --")
             out.extend(head_lines(resume, 40))
         if os.path.exists(status):
             out.append("-- STATUS.md --")
             out.extend(head_lines(status, 20))
-        tasks = c.active_tasks(root)
         # BR-MST-02: the single-entry path is the shipped path, untouched.
         if len(tasks) == 1:
             single_digest(root, tasks, out)
