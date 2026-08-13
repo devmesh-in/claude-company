@@ -175,5 +175,154 @@ class TestAlwaysExitZero(Base):
         self.assertIn("RISK_JSON: ", r.stdout)
 
 
+class WorkTree(Base):
+    """Harness for the default (no --base) subject.
+
+    With no --base the tool scores from merge-base(main, HEAD), so these
+    cases need a real `main` and a work branch off it.
+    """
+
+    def branch_from_main(self):
+        base = self.base_commit()
+        git(self.root, "branch", "-M", "main")
+        git(self.root, "checkout", "-b", "work")
+        return base
+
+    def big_body(self):
+        """850 lines: over the 800-line cut, so size scores its top 15."""
+        return "".join("x_{} = {}\n".format(i, i) for i in range(850))
+
+
+class TestWorkingTreeSubject(WorkTree):
+    """The tree as it stands is the subject, not just what reached git.
+
+    Failure mode this pins (CR-HP-4): the scorer read `base...HEAD` only, so
+    a branch whose work was written but not yet committed scored an empty
+    diff. Identical content banded `low` uncommitted and `medium`/`high`
+    committed - the scorer was blind exactly while the work was in progress.
+    """
+
+    def test_identical_content_scores_the_same_before_and_after_commit(self):
+        self.branch_from_main()
+        self.write(".claude/hooks/bighook.py", self.big_body())
+        before = run_cli([], self.root)
+        self.assertEqual(before.returncode, 0, before.stdout + before.stderr)
+        uncommitted = parse_risk(before.stdout)
+        self.commit_all("commit the very same content")
+        after = run_cli([], self.root)
+        committed = parse_risk(after.stdout)
+        self.assertEqual(uncommitted["band"], committed["band"],
+                         before.stdout + after.stdout)
+        self.assertEqual(uncommitted["score"], committed["score"])
+        self.assertEqual(uncommitted["signals"]["size"], 15)
+        self.assertEqual(uncommitted["signals"]["sensitive_paths"], 10)
+
+    def test_untracked_file_is_scored_but_not_under_base(self):
+        base = self.branch_from_main()
+        self.write("src/big.py", self.big_body())  # never added to the index
+        default = run_cli([], self.root)
+        self.assertEqual(default.returncode, 0, default.stderr)
+        self.assertEqual(parse_risk(default.stdout)["signals"]["size"], 15)
+        committed_only = run_cli(["--base", base], self.root)
+        self.assertEqual(
+            parse_risk(committed_only.stdout)["signals"]["size"], 0)
+
+    def test_committed_answer_wins_when_the_tree_reverts_it(self):
+        # The higher of the two answers is the answer: an unfinished undo in
+        # the working tree must not lower the bar for what is already in the
+        # branch.
+        self.write("README.md", "hello\n")
+        self.write("src/big.py", "x = 0\n")
+        self.commit_all("base")
+        git(self.root, "branch", "-M", "main")
+        git(self.root, "checkout", "-b", "work")
+        self.write("src/big.py", self.big_body())
+        self.commit_all("850 lines land on the branch")
+        self.write("src/big.py", "x = 0\n")  # reverted, uncommitted
+        r = run_cli([], self.root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(parse_risk(r.stdout)["signals"]["size"], 15, r.stdout)
+        self.assertIn("subject: committed", r.stdout)
+
+    def test_uncommitted_secret_is_scored(self):
+        base = self.branch_from_main()
+        self.write("src/config.py", "key = \"" + FAKE_SECRET + "\"\n")
+        default = run_cli([], self.root)
+        self.assertEqual(default.returncode, 0, default.stderr)
+        self.assertEqual(
+            parse_risk(default.stdout)["signals"]["secrets"], 25,
+            default.stdout)
+        # The committed-only comparison cannot see it - guard_secrets
+        # --scan-branch scans base...HEAD.
+        committed_only = run_cli(["--base", base], self.root)
+        self.assertEqual(
+            parse_risk(committed_only.stdout)["signals"]["secrets"], 0)
+
+
+class TestBaseFlagIsCommittedOnly(WorkTree):
+    def test_dirty_tree_does_not_change_the_base_answer(self):
+        base = self.branch_from_main()
+        self.write("src/small.py", "a = 1\n")
+        self.commit_all("committed work")
+        clean = run_cli(["--base", base], self.root)
+        # A big, sensitive, secret-carrying change lands in the tree.
+        self.write(".claude/hooks/bighook.py",
+                   "key = \"" + FAKE_SECRET + "\"\n" + self.big_body())
+        dirty = run_cli(["--base", base], self.root)
+        self.assertEqual(clean.returncode, dirty.returncode)
+        self.assertEqual(clean.stdout, dirty.stdout, dirty.stdout)
+
+
+class TestSensitiveRule(Base):
+    """The sensitive set is 'the machinery that judges other changes'.
+
+    Each path is scored on its own commit so one match cannot mask another.
+    """
+
+    JUDGING = [
+        ".claude/hooks/guard_new.py",     # the enforcement code
+        ".claude/settings.json",          # what wires the hooks to events
+        "company/gates.config",           # what the gate runner executes
+        "company/METHOD.md",              # the canon it enforces
+        "company/frozen-surfaces.json",   # a registry it reads
+        "company/adr/ADR-0099-a-decision.md",
+        "CLAUDE.md",
+        "db/migrations/0001_init.sql",    # irreversibility, the other rule
+    ]
+
+    NOT_JUDGING = [
+        "src/app.py",
+        "docs/guide.md",
+        "company/briefs/brief-x.md",      # paperwork records judgments
+        "company/state/adherence.log",    # state, not the judge
+        "README.md",
+    ]
+
+    def content_for(self, rel):
+        return "{}\n" if rel.endswith(".json") else "x = 1\n"
+
+    def score_one(self, rel):
+        prev = git(self.root, "rev-parse", "HEAD").stdout.strip()
+        self.write(rel, self.content_for(rel))
+        self.commit_all("add " + rel)
+        r = run_cli(["--base", prev], self.root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return parse_risk(r.stdout)["signals"]["sensitive_paths"], r.stdout
+
+    def test_judging_paths_are_sensitive(self):
+        self.base_commit()
+        for rel in self.JUDGING:
+            with self.subTest(path=rel):
+                points, out = self.score_one(rel)
+                self.assertEqual(points, 10, out)
+
+    def test_ordinary_paths_are_not_sensitive(self):
+        self.base_commit()
+        for rel in self.NOT_JUDGING:
+            with self.subTest(path=rel):
+                points, out = self.score_one(rel)
+                self.assertEqual(points, 0, out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
