@@ -10,15 +10,28 @@ not running a company against an app.
 `company/` ships verbatim into every install, so it must stay generic. The
 tracked `company/gates.config` keeps `CONFIGURE ME` placeholder gates on
 purpose - they are what a fresh install inherits before onboarding wires real
-commands. NEVER commit this repo's real gate commands into it. The two suites
-that actually gate THIS repo are run directly, not through `run-gates.sh`:
+commands. NEVER commit this repo's real gate commands into it. The suites that
+actually gate THIS repo are run directly, not through `run-gates.sh`:
 
 ```bash
 python3 -m unittest discover -s tests/hooks -q   # the hooks
-npm test                                          # CLI + install + pack manifest
+npm test                                          # CLI ONLY - tests/cli/test_cli.sh
+bash tests/install/run_tests.sh                   # installer + the run-gates.sh runner
+bash tests/install/test_tui.sh                    # the install TUI
+bash tests/install/test_update.sh                 # update/rollout, incl. legacy field installs
 ```
 
-Both must be green before any commit.
+All five must be green before any commit, and CI runs all five plus the pack
+manifest, the readme check and the no-slop scan.
+
+**`npm test` is the CLI suite alone.** It does NOT run the installer, TUI or
+update suites - only `prepublishOnly` chains those. This file previously said
+two suites gate the repo and annotated `npm test` as covering install; both
+claims were wrong, and on 2026-08-13 that error reached three sealed briefs and
+cost a lane a full rebuild after CI caught a regression that two green local
+suites had missed. If you change anything under `company/run-gates.sh`,
+`install.sh`, `update.sh` or `lib/`, the installer suite is the one most likely
+to catch you, and it is the one nobody runs by habit.
 
 ## Layout
 
