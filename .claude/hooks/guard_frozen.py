@@ -39,6 +39,14 @@ ALWAYS_DEFAULTS = [
     "company/state/costs.log",
     "company/state/.cost-cursor.json",
     "company/state/provenance-ledger.json",
+    # FR-HP-23: the gate runner's own machine-written run records. Single
+    # writer is company/run-gates.sh; a hand edit forges the evidence the
+    # company answers "did the ladder run, and what did it print" with.
+    # These live here as well as in company/frozen-surfaces.json because
+    # install/update only lay that registry down when it is ABSENT - this
+    # hardcoded list is the only copy that reaches an EXISTING install.
+    "company/state/gates.log",
+    "company/state/gate-output/**",
 ]
 
 ENV_ALLOW_SUFFIXES = (".example", ".sample", ".template")

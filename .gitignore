@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .claude/worktrees/
 company/state/adherence.log
+company/state/gates.log
+company/state/gate-output/

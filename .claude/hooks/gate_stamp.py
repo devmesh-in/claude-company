@@ -15,13 +15,40 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
 
 
 def resolve_root():
+    # FR-HP-28: deliberately unchanged. The gate runner is now the thing that
+    # decides which tree was gated and invokes this CLI with CLAUDE_PROJECT_DIR
+    # set to it, so a worktree run stamps the worktree. "Fixing" this fallback
+    # to prefer a git root or the harness-pinned dir reopens the false-green.
     return os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+
+
+def _atomic_write_json(path, payload):
+    """Write `payload` as JSON to `path` through a same-directory temp file.
+
+    The temp file is created in the DESTINATION directory so os.replace is a
+    rename within one filesystem, which is the atomic step. On any failure the
+    temp file is removed and `path` is left byte-unchanged.
+    """
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".gates.status.", dir=directory)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(payload, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def write_stamp(root, results_json):
@@ -40,9 +67,16 @@ def write_stamp(root, results_json):
     )
     state_dir = os.path.join(root, "company", "state")
     os.makedirs(state_dir, exist_ok=True)
-    with open(os.path.join(state_dir, "gates.status"), "w") as f:
-        json.dump(payload, f, indent=2)
-        f.write("\n")
+    # FR-HP-24: atomic replace, never an in-place rewrite. guard_commit and
+    # stop_gate read this file at arbitrary moments; a torn read surfaced to
+    # them as a false "gates.status is malformed" merge block.
+    #
+    # L1 SEAM (FR-HP-02 / FR-HP-24): the kernel lane is landing
+    # _common.atomic_write_json(path, payload) this wave, in parallel with
+    # this change. Prefer it the moment it exists. Once that lane merges,
+    # _atomic_write_json above is dead code and can be deleted deliberately.
+    writer = getattr(c, "atomic_write_json", None) or _atomic_write_json
+    writer(os.path.join(state_dir, "gates.status"), payload)
     return status
 
 
