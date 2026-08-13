@@ -45,6 +45,10 @@ lives outside these paths, report it; do not make it.
 Universal DoD (every task) plus this task's specifics:
 - [ ] Every FR in scope implemented, tested, or explicitly deferred with reason
 - [ ] `bash company/run-gates.sh` green - run it yourself before reporting
+- [ ] Test suites: run the ones your diff can break, not all of them. This
+      repo's scoper is `python3 scripts/affected-suites.py`, which derives the
+      suites from CI and asks for every one of them when it cannot tell. Where
+      a project has no scoper, run them all.
 - [ ] No edits outside owned directories; zero frozen surfaces patched locally
 - [ ] UI work: screen driven live, four states captured (loaded/empty/error/after-action)
 - [ ] Tests added for new behavior (tests are the oracle - never edited to pass)
