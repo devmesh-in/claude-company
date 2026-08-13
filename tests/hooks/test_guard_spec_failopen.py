@@ -43,9 +43,17 @@ import guard_spec  # noqa: E402
 
 # The byte anchors for the two identity cases (c and j), captured by running
 # guard_spec.py against a fixture BEFORE either change landed. The full stderr
-# is pinned by identity to NO_BRIEF_MSG above; these two literals are what
-# would have to change for that identity pin to be silently satisfied by a
-# different message.
+# is pinned by identity to the canonical no-brief message; these two literals
+# are what would have to change for that identity pin to be silently satisfied
+# by a different message.
+#
+# The identity target is now guard_spec.no_brief_msg(<state file>) rather than
+# the NO_BRIEF_MSG template, because the acting-tree work made the recipe name
+# the ABSOLUTE state file the decision was read from - the relative form named
+# a file that does not exist from a worktree cwd, so following it created a
+# second task file no hook reads. The pin is unweakened: still full-stderr
+# identity, still one rendering, and the anchors below still catch a different
+# message satisfying it.
 BLOCK_LINE = "guard_spec | BLOCK | src/app.py | no active brief"
 BLOCK_FIRST_LINE = "BLOCKED: no active brief. Self-serve fix:"
 
@@ -117,7 +125,10 @@ class QuickExemption(GuardSpecBase):
         r = self.run_src()
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertEqual(r.stdout, "")
-        self.assertEqual(r.stderr, guard_spec.NO_BRIEF_MSG + "\n")
+        self.assertEqual(
+            r.stderr,
+            guard_spec.no_brief_msg(c.active_tasks_path(self.root))
+            + "\n")
         self.assertEqual(r.stderr.splitlines()[0], BLOCK_FIRST_LINE)
         self.assertEqual(self.log_lines(), [BLOCK_LINE])
 
@@ -210,7 +221,10 @@ class TornTaskFileFailsOpen(GuardSpecBase):
         r = self.run_src()
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertEqual(r.stdout, "")
-        self.assertEqual(r.stderr, guard_spec.NO_BRIEF_MSG + "\n")
+        self.assertEqual(
+            r.stderr,
+            guard_spec.no_brief_msg(c.active_tasks_path(self.root))
+            + "\n")
         self.assertEqual(r.stderr.splitlines()[0], BLOCK_FIRST_LINE)
         self.assertEqual(self.log_lines(), [BLOCK_LINE])
 
@@ -227,7 +241,10 @@ class TornTaskFileFailsOpen(GuardSpecBase):
         self.raw_tasks('{"version": 2, "tasks": []}')
         r = self.run_src()
         self.assertEqual(r.returncode, 2, r.stdout)
-        self.assertEqual(r.stderr, guard_spec.NO_BRIEF_MSG + "\n")
+        self.assertEqual(
+            r.stderr,
+            guard_spec.no_brief_msg(c.active_tasks_path(self.root))
+            + "\n")
         self.assertEqual(self.log_lines(), [BLOCK_LINE])
 
 
