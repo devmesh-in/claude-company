@@ -1,7 +1,7 @@
 # CR-HPD-2: guard_spec must exempt `quick` entries, or the new doctrine is false on disk
 
 _Requesting agent/task: tech-lead, task/hp-doctrine (L6, issue #102). Date: 2026-08-13._
-_Status: PROPOSED_
+_Status: APPROVED_
 
 ## Surface affected
 
@@ -95,3 +95,20 @@ and the difference is one sentence.
 
 ---
 _CEO decision and remarks:_
+
+DECIDED by the CEO, 2026-08-13, after independent reproduction (two
+entries, feat-a with a good brief and quick-b with none, one edit to
+src/app.py: exit 2, blocked, naming quick-b).
+
+Ruling: THE DOCTRINE COMES OUT, the code change does NOT go in here. The
+quick-needs-no-brief clause is removed from METHOD.md and ORCHESTRATOR.md
+(commit 0bc4e20). The guard_spec exemption moves to L4, which owns that
+file in wave 2, and the doctrine clause returns once the code is true.
+spec-lite is unaffected and stays: it governs whether a PM spec is
+required, never whether a brief is.
+
+Mechanically pinned so this cannot diverge again unnoticed:
+tests/hooks/test_stop_gate_scope.py::CeremonyDoctrineMatchesTheGuard runs
+the reproduction and asserts the guard and the prose agree. When L4 lands
+the exemption that test fails, and its message is the instruction to
+restore the clause in the same wave.

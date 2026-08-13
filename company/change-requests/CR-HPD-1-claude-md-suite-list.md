@@ -1,7 +1,7 @@
 # CR-HPD-1: CLAUDE.md gate block must name all five suites before hp-doctrine merges
 
 _Requesting agent/task: tech-lead, task/hp-doctrine (L6, issue #102). Date: 2026-08-13._
-_Status: PROPOSED_
+_Status: APPLIED_
 
 ## Surface affected
 
@@ -65,3 +65,8 @@ reintroduce the defect the check exists to stop.
 
 ---
 _CEO decision and remarks:_
+
+APPROVED and APPLIED by the CEO, 2026-08-13, via option (a): the
+CLAUDE.md suite-list fix merged to main as PR #106 (85a4313). This lane
+rebased onto it and the `canon` job runs green on the real tree - all five
+suites named, exit 0. No edit to CLAUDE.md was made by this lane.
