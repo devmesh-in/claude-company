@@ -17,6 +17,8 @@
     "company/state/.cost-cursor.json",
     "company/state/provenance-ledger.json",
     "company/state/install-manifest.json",
-    "company/state/.update-backups/**"
+    "company/state/.update-backups/**",
+    "company/state/gates.log",
+    "company/state/gate-output/**"
   ]
 }

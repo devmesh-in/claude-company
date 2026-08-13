@@ -10,7 +10,9 @@ it in three modes:
   b) PreToolUse (Edit|Write|MultiEdit) on .claude/agents/<role>.md: a
      frontmatter `model:` edit that contradicts the manifest -> BLOCK.
   c) --check CLI: compare every agent frontmatter `model:` against the
-     manifest; exit 0 on full agreement, 1 on any mismatch. For CI / gates.
+     manifest, and assert the shipped hook wiring in .claude/settings.json
+     (EXPECTED_WIRING); exit 0 on full agreement, 1 on any mismatch or missing
+     binding. For CI / gates.
 
 Hotfix mode (ANY active-task entry with type=hotfix) bypasses the PreToolUse
 modes with a logged BYPASS. Everything fails open: a missing/unreadable
@@ -30,6 +32,51 @@ HOOK = "guard_models"
 MODEL_LINE = re.compile(r"^model:\s*(\S+)", re.MULTILINE)
 
 SPAWN_TYPE_FIELDS = ("subagent_type", "agent_type", "type")
+
+# FR-HP-25: the expected hook wiring, transcribed from the shipped
+# .claude/settings.json. Rows are (event, tools, hook filename). `tools` is
+# None for the events that carry no matcher; otherwise it is a tuple and EVERY
+# tool named in it must be covered, so un-wiring a single alternative of a
+# matcher (say dropping Write from "Edit|Write|MultiEdit") is still caught.
+#
+# WHY THIS GATE EXISTS: a fork of this codebase un-wired a hook while its own
+# doctrine still cited that hook as a live integrity point. Nothing caught it,
+# because no CODE had changed - so no test could fail. This table is the
+# mechanical answer to that class of drift: enforcement cannot ship as code
+# without teeth.
+#
+# OQ-HP-02 assumption: there is NO exemption knob for this assertion. A
+# missing binding is a red gate and a change request, never a config opt-out.
+EDIT_TOOLS = ("Edit", "Write", "MultiEdit")
+SPAWN_TOOLS = ("Task", "Agent")
+
+EXPECTED_WIRING = [
+    ("PreToolUse", EDIT_TOOLS, "guard_frozen.py"),
+    ("PreToolUse", EDIT_TOOLS, "guard_spec.py"),
+    ("PreToolUse", EDIT_TOOLS, "guard_tests.py"),
+    ("PreToolUse", EDIT_TOOLS, "no_slop.py"),
+    ("PreToolUse", EDIT_TOOLS, "guard_models.py"),
+    ("PreToolUse", EDIT_TOOLS, "guard_provenance.py"),
+    ("PreToolUse", SPAWN_TOOLS, "guard_models.py"),
+    ("PreToolUse", SPAWN_TOOLS, "guard_provenance.py"),
+    ("PreToolUse", ("Bash",), "guard_commit.py"),
+    ("PreToolUse", ("Bash",), "guard_secrets.py"),
+    ("PreToolUse", ("Bash",), "guard_tests.py"),
+    ("PreToolUse", ("Bash",), "guard_provenance.py"),
+    ("PostToolUse", EDIT_TOOLS, "guard_provenance.py"),
+    ("PostToolUse", SPAWN_TOOLS, "guard_provenance.py"),
+    ("UserPromptSubmit", None, "context_pin.py"),
+    ("Stop", None, "stop_gate.py"),
+    ("Stop", None, "guard_provenance.py"),
+    ("Stop", None, "cost_capture.py"),
+    ("SubagentStop", None, "cost_capture.py"),
+    ("SessionStart", None, "session_start.py"),
+]
+
+WIRING_FIXIT = (
+    "re-run `claude-company update` to restore the shipped hook bindings in "
+    ".claude/settings.json"
+)
 
 
 def load_manifest(root):
@@ -229,6 +276,60 @@ def check_spawn_wiring(root):
     return False, fixit
 
 
+def group_covers(group, tool, filename):
+    """True iff `group` runs `filename` for `tool` (None tool = no matcher).
+
+    Same matcher semantics as check_spawn_wiring: a tool is covered when it is
+    one of the "|"-separated alternatives of the group's matcher.
+    """
+    if not isinstance(group, dict):
+        return False
+    if tool is not None and tool not in (group.get("matcher") or "").split("|"):
+        return False
+    for h in group.get("hooks") or []:
+        if isinstance(h, dict) and filename in (h.get("command") or ""):
+            return True
+    return False
+
+
+def check_full_wiring(root):
+    """Assert every EXPECTED_WIRING row is bound in .claude/settings.json.
+
+    A SUBSET assertion, never an equality one: extra hooks and extra groups are
+    allowed. A row is checked only when .claude/hooks/<filename> exists in this
+    project, so an older install that simply does not have a newer hook is not
+    failed for it. Only the project settings.json counts - settings.local.json
+    is ignored. Returns (ok, [one line per missing binding]).
+
+    A project whose settings.json is missing or unreadable IS un-wired: every
+    row whose hook is on disk is then reported missing. That is deliberate -
+    --check is a CLI gate, not a hook, so it fails loud rather than open.
+    """
+    settings = c.read_json_file(
+        os.path.join(root, ".claude", "settings.json")
+    )
+    hooks_cfg = settings.get("hooks") if isinstance(settings, dict) else None
+    if not isinstance(hooks_cfg, dict):
+        hooks_cfg = {}
+    hooks_dir = os.path.join(root, ".claude", "hooks")
+    missing = []
+    for event, tools, filename in EXPECTED_WIRING:
+        if not os.path.exists(os.path.join(hooks_dir, filename)):
+            continue  # hook not installed here - nothing to wire
+        groups = hooks_cfg.get(event)
+        if not isinstance(groups, list):
+            groups = []
+        for tool in (tools if tools is not None else (None,)):
+            if any(group_covers(g, tool, filename) for g in groups):
+                continue
+            missing.append(
+                "{} ({}) does not run {}".format(
+                    event, tool if tool else "no matcher", filename
+                )
+            )
+    return not missing, missing
+
+
 def run_check(root):
     """Compare every agent frontmatter against the manifest. Exit 0/1.
 
@@ -300,7 +401,17 @@ def run_check(root):
             print("\nspawn wiring:")
             print("  - " + fixit)
 
-    if mismatches or not wiring_ok:
+    # FR-HP-25: the full hook-wiring assertion. Additive to the spawn-wiring
+    # one above and NOT gated on the builtins section - an install that has a
+    # hook on disk but does not run it is un-wired regardless of its manifest.
+    full_ok, missing_wiring = check_full_wiring(root)
+    if not full_ok:
+        print("\nhook wiring:")
+        for line in missing_wiring:
+            print("  - " + line)
+        print("  fix: " + WIRING_FIXIT)
+
+    if mismatches or not wiring_ok or not full_ok:
         return 1
     print("\nall agent models agree with company/models.json")
     return 0
