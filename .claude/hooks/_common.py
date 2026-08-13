@@ -314,8 +314,53 @@ def gates_config(root):
     return read_json_file(os.path.join(root, "company", "gates.config"))
 
 
+def _enclosing_checkout(candidate, root_norm):
+    """The nearest git working-tree root strictly below root_norm that
+    contains `candidate`, or None when there is none.
+
+    This is what makes rel_path see a worktree the way it sees the main
+    checkout. A linked worktree lives INSIDE the project root, so a file in
+    one IS project-relative-able, and rel_path used to hand back the PREFIXED
+    string `.claude/worktrees/<slug>/company/state/gates.status`. That string
+    matches no frozen pattern, no test-path rule and no source-path rule, so
+    every check keyed on rel_path missed silently - the frozen registry, the
+    always-list, accepted-ADR immutability, test scope and source scope, all
+    unenforced in the one place where every delegated build actually happens.
+
+    A working-tree root is derived, never assumed: it is exactly a directory
+    holding a `.git` entry (a FILE in a linked worktree, a directory in a
+    clone). Nothing here depends on worktrees living under `.claude/worktrees`
+    or on any other naming convention - `git worktree add` accepts any path.
+
+    Filesystem stats only, deliberately. rel_path runs on every Edit and Write
+    through no_slop, guard_frozen, guard_spec, guard_tests and guard_models,
+    so shelling out to `git rev-parse --show-toplevel` here would put a
+    subprocess in front of every tool call in every session. The walk is
+    bounded, and the caller's try/except keeps the whole thing fail-open: on
+    any trouble the answer degrades to the old project-relative path rather
+    than to a block.
+    """
+    directory = os.path.dirname(candidate)
+    for _ in range(64):
+        if not directory.startswith(root_norm + "/"):
+            return None
+        if os.path.exists(os.path.join(directory, ".git")):
+            return directory
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            return None
+        directory = parent
+    return None
+
+
 def rel_path(root, file_path):
-    """Project-relative, forward-slash path for file_path under root.
+    """Path for file_path relative to the checkout that OWNS it.
+
+    Usually that is the project root. When file_path sits inside a linked
+    worktree (or any nested checkout) under the root, it is relative to THAT
+    worktree instead, so `<root>/.claude/worktrees/<slug>/company/state/
+    gates.status` reads as `company/state/gates.status` and matches the same
+    patterns the main checkout's copy matches.
 
     Falls back to the input (minus a leading slash) when file_path is outside
     the project tree.
@@ -333,6 +378,9 @@ def rel_path(root, file_path):
         if candidate == root_norm:
             return ""
         if candidate.startswith(root_norm + "/"):
+            inner = _enclosing_checkout(candidate, root_norm)
+            if inner:
+                return candidate[len(inner) + 1:]
             return candidate[len(root_norm) + 1:]
     except Exception:
         pass

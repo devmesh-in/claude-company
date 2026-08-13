@@ -44,7 +44,7 @@ from unittest import mock
 # Same-dir sibling import: works under `unittest discover -s tests/hooks` and
 # under `-s tests/hooks -t tests/hooks` (what the CI runner uses).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_hooks import Base, git, HOOKS_DIR  # noqa: E402
+from test_hooks import Base, git, run_hook, HOOKS_DIR  # noqa: E402
 
 sys.path.insert(0, HOOKS_DIR)
 import _common  # noqa: E402
@@ -963,6 +963,224 @@ class TestFreshnessAdr(unittest.TestCase):
         body = self.body()
         self.assertIn("FR-HP-05", body)
         self.assertIn("FR-HP-06", body)
+
+
+# ---------------------------------------------------------------------------
+# rel_path inside linked worktrees - the P0
+# ---------------------------------------------------------------------------
+
+
+class TestWorktreeRelPath(Base):
+    """rel_path made every guard keyed on it blind inside worktrees.
+
+    A linked worktree lives INSIDE the project root, so rel_path never took
+    its outside-the-tree branch. It returned a PREFIXED project-relative path
+    - `.claude/worktrees/<slug>/company/state/gates.status` - which matches no
+    frozen pattern, no test-path rule and no source-path rule. Every guard
+    keyed on rel_path therefore allowed, silently, in the one place where all
+    delegated work happens: guard_frozen (registry, always-list, accepted-ADR
+    immutability), guard_tests, guard_spec, guard_models, no_slop's log target.
+
+    What held the line was doctrine, not mechanism. These cases exist so the
+    mechanism holds it too, and every one of them is asserted through a real
+    hook subprocess rather than against rel_path alone, because the bug was
+    never in rel_path's own return value - it was in what the guards did with
+    it.
+    """
+
+    def setUp(self):
+        super(TestWorktreeRelPath, self).setUp()
+        self.init_git()
+        self.wt = os.path.join(self.root, ".claude", "worktrees", "lane")
+        result = git(self.root, "worktree", "add", "-b", "task/lane", self.wt)
+        if result.returncode != 0:
+            self.skipTest("git worktree add unavailable: " + result.stderr)
+        self.addCleanup(git, self.root, "worktree", "remove", "--force",
+                        self.wt)
+
+    def wt_file(self, rel, content="x\n"):
+        """A path inside the linked worktree, with its parents created."""
+        path = os.path.join(self.wt, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def edit(self, hook, file_path):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Edit",
+                   "tool_input": {"file_path": file_path,
+                                  "old_string": "x", "new_string": "y"},
+                   "cwd": self.root}
+        return run_hook(hook, payload, self.root)
+
+    # -- the control, both directions -------------------------------------
+
+    def test_frozen_file_blocks_in_main_checkout_fr_hp_09(self):
+        """The direction that always worked, kept as the control's other half.
+
+        Without this, a rel_path change that broke main-checkout matching
+        would look like a pass on the worktree case alone.
+        """
+        target = os.path.join(self.root, "company", "state", "gates.status")
+        self.write("company/state/gates.status", '{"status": "green"}')
+        r = self.edit("guard_frozen.py", target)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("frozen", r.stderr.lower())
+
+    def test_frozen_file_blocks_inside_worktree_fr_hp_09(self):
+        """The reported P0: the IDENTICAL edit to the IDENTICAL frozen file,
+        allowed with exit 0 purely because the path ran through a worktree.
+        """
+        target = self.wt_file("company/state/gates.status",
+                              '{"status": "green"}')
+        r = self.edit("guard_frozen.py", target)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("frozen", r.stderr.lower())
+
+    def test_accepted_adr_is_immutable_inside_worktree_fr_hp_09(self):
+        """Accepted-ADR immutability is the same blind spot, and it is the one
+        this lane walked past: ADR-0002 was written proposed because doctrine
+        said so, not because anything would have stopped it.
+        """
+        target = self.wt_file(
+            "company/adr/ADR-0002-content-based-freshness.md",
+            "# ADR-0002\n\nStatus: accepted\nDate: 2026-08-13\n",
+        )
+        r = self.edit("guard_frozen.py", target)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("accepted ADR", r.stderr)
+
+    # -- the other guards that consume rel_path ---------------------------
+
+    def test_guard_tests_blocks_test_edit_inside_worktree_fr_hp_09(self):
+        """guard_tests already held here, and this pins that it still does.
+
+        Measured, not assumed: this case passes against the OLD rel_path too.
+        guard_tests keys on path SEGMENTS (`tests` anywhere in the path), not
+        on a prefix-anchored pattern, so the worktree prefix never hid it.
+        That is exactly why the blind spot was invisible for so long - the
+        guards that use rel_path do not all use it the same way, and the two
+        segment-based ones kept working while the pattern-based ones did not.
+        It is a regression pin, not a proof of the fix.
+        """
+        self.set_task({"task": "lane", "type": "feature",
+                       "brief": "company/briefs/brief-lane.md"})
+        self.write("company/briefs/brief-lane.md", "# Brief\n")
+        target = self.wt_file("tests/hooks/test_thing.py", "assert True\n")
+        r = self.edit("guard_tests.py", target)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("tests", r.stderr.lower())
+
+    def test_guard_tests_still_allows_with_scope_open_inside_worktree(self):
+        """The fix must not turn test_scope into a dead grant.
+
+        This one matters more than it looks: every lane in flight edits tests
+        inside a worktree, so a fix that made rel_path unrecognizable to
+        guard_tests would block all of them at once.
+        """
+        self.set_task({"task": "lane", "type": "feature",
+                       "brief": "company/briefs/brief-lane.md",
+                       "test_scope": True})
+        self.write("company/briefs/brief-lane.md", "# Brief\n")
+        target = self.wt_file("tests/hooks/test_thing.py", "assert True\n")
+        r = self.edit("guard_tests.py", target)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_guard_spec_blocks_unbriefed_source_edit_inside_worktree(self):
+        """A source edit with no active brief is blocked in the main checkout
+        and used to sail through in a worktree, because `.claude` is an exempt
+        directory segment and the prefixed path started with it.
+        """
+        target = self.wt_file("src/app.py", "print('x')\n")
+        r = self.edit("guard_spec.py", target)
+        self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_guard_provenance_delegated_exemption_survives_fr_hp_09(self):
+        """The one place a worktree SHOULD stay exempt stays exempt.
+
+        Delegated worktree work is verified inside the hierarchy, so
+        guard_provenance exempts it deliberately. That exemption must not be
+        collateral damage of this fix - it is checked before rel_path is used,
+        and this asserts it stays that way.
+        """
+        self.write("company/models.json",
+                   json.dumps({"version": 1,
+                               "roles": {"developer": "opus"}}))
+        self.set_task({"task": "lane", "type": "feature",
+                       "brief": "company/briefs/brief-lane.md"})
+        self.write("company/briefs/brief-lane.md", "# Brief\n")
+        target = self.wt_file("src/app.py", "print('x')\n")
+        r = self.edit("guard_provenance.py", target)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # -- derivation, not convention ---------------------------------------
+
+    def test_worktree_at_an_unconventional_path_fr_hp_09(self):
+        """Nothing may depend on the `.claude/worktrees` naming.
+
+        `git worktree add` accepts any path, so the rule is derived from the
+        `.git` marker that defines a working-tree root. A literal string match
+        on our own convention would pass the case above and fail this one.
+        """
+        odd = os.path.join(self.root, "build", "elsewhere", "wt2")
+        result = git(self.root, "worktree", "add", "-b", "task/other", odd)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.addCleanup(git, self.root, "worktree", "remove", "--force", odd)
+        target = os.path.join(odd, "company", "state", "gates.status")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w") as f:
+            f.write("{}")
+        self.assertEqual(
+            _common.rel_path(self.root, target), "company/state/gates.status")
+        r = self.edit("guard_frozen.py", target)
+        self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_a_directory_that_merely_looks_like_a_worktree_is_not_one(self):
+        """No false positives: a plain directory named like a worktree keeps
+        its real project-relative path, because it IS just a project
+        directory. This is the case a string match on `.claude/worktrees`
+        would get wrong in the other direction.
+        """
+        path = os.path.join(self.root, ".claude", "worktrees", "notacheckout",
+                            "company", "state", "gates.status")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write("{}")
+        self.assertEqual(
+            _common.rel_path(self.root, path),
+            ".claude/worktrees/notacheckout/company/state/gates.status")
+
+    # -- rel_path itself, including the fail-open edges --------------------
+
+    def test_rel_path_resolves_to_the_owning_checkout_fr_hp_09(self):
+        target = self.wt_file("company/state/gates.status", "{}")
+        self.assertEqual(
+            _common.rel_path(self.root, target), "company/state/gates.status")
+
+    def test_rel_path_unchanged_for_main_checkout_paths_fr_hp_09(self):
+        self.write("company/state/gates.status", "{}")
+        target = os.path.join(self.root, "company", "state", "gates.status")
+        self.assertEqual(
+            _common.rel_path(self.root, target), "company/state/gates.status")
+        self.assertEqual(
+            _common.rel_path(self.root, "src/app.py"), "src/app.py")
+        self.assertEqual(_common.rel_path(self.root, self.root), "")
+        self.assertEqual(_common.rel_path(self.root, ""), "")
+
+    def test_rel_path_outside_the_tree_is_unchanged_fr_hp_09(self):
+        outside = tempfile.mkdtemp(prefix="cc-outside-")
+        self.addCleanup(shutil.rmtree, outside, True)
+        target = os.path.join(outside, "company", "state", "gates.status")
+        self.assertEqual(_common.rel_path(self.root, target),
+                         target.lstrip("/"))
+
+    def test_rel_path_fails_open_on_a_broken_root_fr_hp_09(self):
+        """Any trouble degrades to the old answer, never to an exception."""
+        with mock.patch.object(os.path, "exists",
+                               side_effect=OSError("boom")):
+            value = _common.rel_path(self.root, "company/state/gates.status")
+        self.assertEqual(value, "company/state/gates.status")
+        self.assertEqual(_common.rel_path(None, "a/b.py"), "a/b.py")
 
 
 if __name__ == "__main__":
