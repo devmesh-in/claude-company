@@ -266,15 +266,12 @@ class StopGateMultiEntry(MultiBase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), "")
 
-    def test_two_gating_entries_are_both_named(self):
-        self.set_tasks(
-            {"task": "feat-a", "type": "feature"},
-            {"task": "feat-b", "type": "feature"},
-        )
-        r = run_hook("stop_gate.py", self.stop_payload(), self.root)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertIn("feat-a, feat-b", decision["reason"])
+    # The multi-entry block this class used to assert
+    # (test_two_gating_entries_are_both_named) was DELETED with the behavior
+    # it proved: FR-HP-50 replaced that block with a WARN line, because one
+    # session's stale tree was blocking every other session. The N > 1 cases
+    # live in tests/hooks/test_stop_gate_scope.py; duplicating them here would
+    # be padding.
 
     def test_slugless_gating_entry_still_renders_unknown(self):
         self.set_tasks({})
