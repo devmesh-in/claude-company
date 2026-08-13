@@ -29,10 +29,18 @@ Python 3.8 stdlib only.
 
 Signal points (summed):
   size 0-15, out_of_ownership 10/path, frozen_proximity 15 direct / 5 sibling,
-  test_ratio 0-15, sensitive_paths flat 10, secrets 25.
+  test_ratio 0-15, sensitive_paths 10 + 0/8/15 PER sensitive path, secrets 25.
 Bands: score < 25 low; 25-49 medium; >= 50 high.
+
 The band cuts and the per-signal points are the calibration this tool was
-accepted with. Change WHAT IS MEASURED, never the arithmetic.
+accepted with. Change WHAT IS MEASURED, never the arithmetic - with ONE
+recorded exception, #122 (task risk-scale). `sensitive_paths` used to award a
+flat 10 for any number of sensitive paths at any size, so a 717-line rewrite
+of the hook that decides whether anything gets audited scored exactly what a
+one-line comment fix in a canon file scored. It now scales with blast radius;
+the derivation and the reason no new number was invented are in
+`score_sensitive` below. Band cuts 25/50 are untouched, and no other signal
+changed.
 """
 
 import argparse
@@ -407,16 +415,23 @@ def load_brief(root, brief_arg):
 
 
 # --- scoring --------------------------------------------------------------
+def amount_of_change_points(total_lines):
+    """The tool's accepted amount-of-change ladder: how much is in play.
+
+    Monotonic mapping: <200 -> 0 ; 200-799 -> 8 ; >=800 -> 15. This is the
+    calibration `size` shipped with; it is named here rather than inlined
+    because `score_sensitive` reuses it on a different subject (see there).
+    """
+    if total_lines >= 800:
+        return 15
+    if total_lines >= 200:
+        return 8
+    return 0
+
+
 def score_size(rows):
-    # Monotonic mapping: <200 -> 0 ; 200-799 -> 8 ; >=800 -> 15.
     total = sum(a + d for a, d, _ in rows)
-    if total >= 800:
-        pts = 15
-    elif total >= 200:
-        pts = 8
-    else:
-        pts = 0
-    return pts, "{} changed line(s)".format(total)
+    return amount_of_change_points(total), "{} changed line(s)".format(total)
 
 
 def score_test_ratio(rows):
@@ -457,11 +472,77 @@ def score_frozen(paths, root, patterns):
     return pts, "{} direct, {} sibling".format(direct, sibling)
 
 
-def score_sensitive(paths):
-    present = [p for p in paths if is_sensitive(p)]
-    if present:
-        return 10, "sensitive path(s): {}".format(", ".join(present[:3]))
-    return 0, "none"
+SENSITIVE_PRESENCE = 10
+"""Points for one sensitive path being in play at all, at any size.
+
+Not a new number: it is the flat 10 this signal was accepted with (#19), kept
+as the FLOOR so the scale below can only add. That is what makes it a scale
+and not an offset - a one-line comment fix in a canon file scores exactly what
+it scored before.
+"""
+
+
+def score_sensitive(rows, paths):
+    """Sensitivity scales with blast radius (#122, task risk-scale).
+
+    THE PRINCIPLE. Blast radius is how much else is wrong if this change is
+    wrong. A change to the machinery that judges other changes is the maximum
+    because every later judgment inherits the error (see is_enforcement_path).
+    The old flat 10 could not express that: it saturated on presence, so a
+    wholesale rewrite of a hook and a typo fix in a canon file were equal.
+
+    THE DERIVATION, in two terms, per sensitive path:
+
+      presence   SENSITIVE_PRESENCE - a judge is in play at all.
+      extent     amount_of_change_points(that path's own changed lines) -
+                 how much OF that judge is in play. A one-line edit puts a
+                 sliver of its behavior at risk; a 900-line edit is a rewrite,
+                 so all of it is.
+
+    Summed PER PATH, not over the pooled line count, because two judges break
+    two independent sets of later judgments. 900 lines spread across a hook
+    and an ADR is not "one judge 900 lines wrong", and pooling would say it
+    was. Per-path accumulation is also this tool's accepted grain for distinct
+    risky things touched - out_of_ownership charges 10 per path and
+    frozen_proximity 15 per path, both unbounded, for the same reason.
+
+    NO NEW NUMBER IS INTRODUCED HERE, and that is deliberate. This tool's
+    calibration has been challenged before for resting on hand-picked
+    thresholds; a table of per-kind weights (enforcement code 15, canon 10,
+    data 5) would have been exactly that, and nothing derives the ratios
+    between such tiers - in this repo the canon is READ by the enforcement
+    code at run time (frozen-surfaces.json, gates.config, the provenance
+    manifest), so an error in canon propagates through the same judgments an
+    error in code does. Both terms above are numbers this tool already
+    shipped with: the presence 10 of this signal, and the size ladder. What
+    changed is which subject the ladder is applied to - the sensitive slice
+    of the diff, one path at a time, instead of the whole diff.
+
+    Consequence worth knowing: a change that is entirely inside enforcement
+    code is scored by the ladder twice, once as `size` and once here. That is
+    the intent, not an accident. `size` asks how much review the change needs;
+    this asks how much of the judge is in play. They coincide only when the
+    change IS the judge.
+    """
+    # Deduped: the presence term is charged once per distinct judge, so a
+    # path listed twice by a subject cannot charge it twice.
+    present = list(dict.fromkeys(p for p in paths if is_sensitive(p)))
+    if not present:
+        return 0, "none"
+    churn = collections.defaultdict(int)
+    for added, deleted, path in rows:
+        churn[path] += added + deleted
+    pts = 0
+    shown = []
+    for path in present:
+        lines = churn.get(path, 0)
+        pts += SENSITIVE_PRESENCE + amount_of_change_points(lines)
+        if len(shown) < 3:
+            shown.append("{} ({} line(s))".format(path, lines))
+    note = "{} sensitive path(s): {}".format(len(present), ", ".join(shown))
+    if len(present) > len(shown):
+        note += ", +{} more".format(len(present) - len(shown))
+    return pts, note
 
 
 def band_of(score):
@@ -522,7 +603,7 @@ def build_report(root, base, brief_arg, subject):
 
     # 5. sensitive paths
     signals["sensitive_paths"], notes["sensitive_paths"] = score_sensitive(
-        paths
+        rows, paths
     )
 
     # 6. secrets
