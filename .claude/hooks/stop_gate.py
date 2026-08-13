@@ -73,6 +73,12 @@ def in_this_tree(entry, trees, root):
     entry. If that convention is ever broken the lookup simply misses, the
     entry counts as in-tree, and the gate stays armed - the failure is a false
     block, never a false pass, which is the direction a gate may fail in.
+
+    Note the coupling this creates with integration cleanup: once a merged
+    lane's worktree is removed, its entry - if it was left in active-task.json
+    - counts as in-tree again. That is the honest answer, because the lane's
+    code IS in this tree after the merge, but it means pruning a merged entry
+    is what keeps the gating set describing work actually in flight.
     """
     slug = entry.get("task")
     if not slug:
