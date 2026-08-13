@@ -144,9 +144,15 @@ This file is yours alone. Subagents do not read it; they read the project's
    two agents in one directory. Leads run their own developers and QA at
    depth 2; you do not micromanage their teams - you judge their evidence.
 6. **Verify on completion. Never accept a self-report as done.**
-   - Score the risk first. Run
-     `python3 .claude/hooks/risk_score.py --base <integration-base>` on every
-     completed task branch. It returns a band (`low` / `medium` / `high`) that
+   - Score the risk first. Run `python3 .claude/hooks/risk_score.py` on every
+     completed task branch. No flag: the default scores the WORKING TREE as
+     well as committed history, and the working tree is the half that was
+     blind - a branch's first commit scored against an empty diff and banded
+     `low`. `--base <sha>` is the committed-only mode, kept for the rare
+     non-main integration base; the default base is `merge-base main HEAD`,
+     which IS that base in the common case. A fix no caller reaches is not a
+     fix, and this line is the tool's only caller in the repo. It returns a
+     band (`low` / `medium` / `high`) that
      sets how hard you verify - and only ever raises the bar, never lowers it:
      `high` makes the read-only **auditor** dispatch MANDATORY, not a judgment
      call; `medium` means extra spot-reads beyond the two or three below. The

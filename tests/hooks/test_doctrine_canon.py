@@ -246,6 +246,25 @@ class DoctrineClauses(unittest.TestCase):
             "exactly one lane",
         ])
 
+    def test_the_risk_scorer_is_invoked_in_its_default_mode(self):
+        """The runbook line is the ONLY invocation of risk_score.py anywhere in
+        this repo, so its flags decide what the CEO actually gets. `--base` is
+        the committed-only mode, kept deliberately so the old answer stays
+        available byte-identical; the default is where the working-tree scoring
+        lands (#115), and a branch whose work is not committed yet scores an
+        empty diff and bands `low` without it. Pinning the invocation is what
+        stops a correct fix from reaching no caller.
+        """
+        text = doc("ORCHESTRATOR.md")
+        self.assertIn("`python3 .claude/hooks/risk_score.py`", text,
+                      "the runbook must invoke the scorer with no --base, or "
+                      "the CEO keeps getting the committed-only answer")
+        for num, line in enumerate(text.splitlines(), 1):
+            if "risk_score.py --base <integration-base>" in line:
+                self.fail("ORCHESTRATOR.md:{} pins the scorer to its "
+                          "committed-only mode: {!r}".format(num,
+                                                             line.strip()))
+
     # -- company/METHOD.md -------------------------------------------------
 
     def test_fr_hp_63_state_table_and_content_freshness(self):
