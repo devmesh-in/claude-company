@@ -419,7 +419,8 @@ Next steps:
        /company-init   (new project - scaffold specs and gates)
        /onboard        (existing codebase - map what is already there)
   4. Then start driving the work:
-       /orchestrator
+       /orchestrator   (the full company)
+       /lean-company   (one small piece of work - less ceremony, same gates)
 
 Configure your gates in company/gates.config, then verify with:
        bash company/run-gates.sh

@@ -5,6 +5,93 @@ every spawn, merge, CR decision, and agent report. If a session died mid-flight,
 check each worktree's git log before respawning - work may be complete on disk
 without a report._
 
+## 0. IN FLIGHT RIGHT NOW - harness-port program, wave 1 (2026-08-13)
+
+Three tech-leads dispatched in parallel at 2026-08-13. If this session died,
+CHECK EACH WORKTREE'S GIT LOG BEFORE RESPAWNING - work may be complete on disk
+without a report.
+
+| Lane | Slug | Issue | Worktree | Branch | FRs |
+|---|---|---|---|---|---|
+| L1 kernel | hp-kernel | #98 | `.claude/worktrees/hp-kernel` | task/hp-kernel | FR-HP-01..08 |
+| L2 guards | hp-guards | #99 | `.claude/worktrees/hp-guards` | task/hp-guards | FR-HP-10..17 |
+| L3 runner | hp-runner | #97 | `.claude/worktrees/hp-runner` | task/hp-runner | FR-HP-20..28 |
+
+All three branched off origin/main at 55cf436. Spec:
+`company/specs/spec-harness-port.md` (53 FRs, 14 decided OQ fallbacks).
+Status board: `company/state/harness-port-checklist.md` - every change from the
+review, ported or not, with its reason. Baseline before any change: hooks 393
+green, npm 62 green.
+
+WAVE 2 (L4 state-writers #100, L5 provenance-scope #101, L6 stop_gate and
+doctrine #102) CANNOT START until wave 1 is FULLY merged, not just L1:
+`guard_spec.py` and `guard_provenance.py` are each split across the two waves by
+function, so wave 2 lanes would collide with wave-1 work still on a branch.
+
+READ THIS BEFORE VERIFYING ANYTHING. CLAUDE.md's claim that TWO suites gate this
+repo was WRONG. `npm test` is `tests/cli/test_cli.sh` alone. FIVE suites gate it:
+
+    python3 -m unittest discover -s tests/hooks -q
+    npm test
+    bash tests/install/run_tests.sh
+    bash tests/install/test_tui.sh          # known 20/1 in a wired checkout
+    bash tests/install/test_update.sh       # slow, ~10 min, 139 tests
+
+The fix is in the main checkout's CLAUDE.md but is UNCOMMITTED, so the four task
+branches still carry the old two-suite text. Every lane was told by message. If
+you respawn a lane, tell it again. This error already cost one lane a full
+rebuild after CI caught 13 failures in a suite nobody was running.
+
+Baseline on main, all five verified 2026-08-13: hooks 393, CLI 62, installer 96,
+update 139, TUI 20/1 (known). A quick task `tui-clean-source` is fixing that
+last one so "all five green" is actually reachable locally.
+
+INTEGRATED MAIN VERIFIED 2026-08-13 at ef30e52, in a throwaway worktree, after
+merging #103 #104 #105: hooks 510, installer 96/0, TUI 22/0, CLI 62/0. The test
+arithmetic composes exactly - 393 baseline + 42 (L3) + 75 (L2) = 510 - so no
+lane's tests were lost or double-counted when the three came together.
+
+DEFERRED DELIBERATELY TO THE L1 MERGE, do not lose these:
+1. WITNESSES for the three merged lanes are NOT yet recorded. Curated
+   candidates, strongest first: `guard_commit.py` `i += 2 if toks[i] in
+   ARG_OPTS else 1` (reopens four enforcement escapes with every existing test
+   still green); `guard_spec.py` `segs[0] in EXEMPT_DIRS` (un-gates nested
+   source across every install, and 0 of 138 tracked files change
+   classification here so no local test catches the revert);
+   `guard_provenance.py` `audit_verdict(response_text(resp))` (re-deadlocks the
+   commit gate against passing audits); `run-gates.sh` the `basename ==
+   "company"` guard (the whole root-resolution rule hangs off it);
+   `test_gate_runner.py` the `FrozenBaselineAgreement` failure message (its
+   existence is what makes a fourth half-landed freeze impossible);
+   `test_tui.sh` the `git archive HEAD` line.
+2. THIS CHECKOUT IS BEHIND. It sits on `chore/v0.2.6-published` at 97fe918 with
+   the merges absent and a large uncommitted paperwork set (CLAUDE.md, the
+   spec, five briefs, the checklist, state files).
+3. `company/adr/README.md` still says "Next free number: ADR-0002" and needs
+   ADR-0002's row once L1 merges.
+
+WHY DEFERRED, and it is a real deviation from ORCHESTRATOR step 7 rather than
+an oversight: every one of those actions moves HEAD or dirties the tree, and
+under today's history-based `work_hash` each one stales the stamp and demands
+another full ladder run. Four have already been spent this session, 1570s
+total, all on paperwork. L1's content hashing makes committing identical
+content free, so ONE consolidated pass after it merges - sync the checkout,
+commit the paperwork, record the witnesses, update the ADR index, run the
+ladder once - costs a single run instead of four. Batching into a run that must
+happen anyway is the cut; skipping the check is not.
+
+CEO obligations while wave 1 builds: approve CR-2 (freezing
+`company/state/gates.log` and `gate-output/**`) when L3 files it - it is a merge
+condition for that lane, not paperwork. L5 in wave 2 requires an independent
+auditor pass as a merge condition (BR-HP-09), because it converts BLOCKs into
+ALLOWs.
+
+FOUR PARKED OWNER DECISIONS, none blocking: merge-only stamp gating; a
+risk-scaled audit band; the Phase 0 spec-lite rung together with letting `quick`
+entries skip a brief; and splitting the ladder into worktree-meaningful versus
+integration-only gates. Model tiering stays rejected under DECISIONS #1.
+DECISIONS #18 settled stop_gate: SCOPE it, do not unwire - assigned to L6.
+
 ## 1. Program state at handoff
 
 Adoption program SHIPPED 2026-07-10. Merged: #27 (wave 1), #33 (wave 2 enforce, ex-#29), #34 (wave 2 doctrine,
@@ -14,19 +101,24 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
 
 ## 2. Next actions, in order
 
-00000000. v0.2.6 PREPARED 2026-07-29 - THE ONLY THING LEFT IS THE OWNER'S TAG.
-   package.json is bumped to 0.2.6 on main. The registry is still on 0.2.5, so
-   multi-session-tasks is NOT yet in anyone's install. The publish path is the
-   release.yml workflow, which fires on a PUBLISHED GitHub release (not on a
-   bare tag push) and authenticates by OIDC trusted publishing - no token
-   exists anywhere, so an agent cannot publish even by accident.
-   OWNER-ONLY, from a clean clone at the tag:
-     git tag -a v0.2.6 <main-sha> -m "v0.2.6" && git push origin v0.2.6
-   then publish the GitHub release to trigger release.yml.
-   TWO READINESS CRITERIA ARE RED and were escalated rather than waived:
-   R7 (two open P1 worries) and R3 (27 orphan MST requirement IDs, though
-   trace_check itself exits 0). Neither is a defect in the installed product.
-   The proposal row is on DECISIONS.md awaiting the owner.
+00000000. v0.2.6 PUBLISHED 2026-07-29. Registry latest = 0.2.6, SLSA provenance
+   via OIDC trusted publishing, release workflow green (it re-ran the full
+   suite including the update tests that had never run on CI before that day).
+   Tag v0.2.6 at 6d2b9b1. main is 55cf436. NOTHING IS IN FLIGHT.
+   The owner ACCEPTED both red readiness criteria rather than holding the
+   release: R7 (two open P1 worries) and R3 (27 orphan MST requirement IDs,
+   though trace_check itself exits 0). Neither is a defect in what installs.
+   MECHANICS WORTH KNOWING NEXT TIME: release.yml fires on a PUBLISHED GitHub
+   release, NOT on a tag push - a pushed tag alone publishes nothing. The
+   permission classifier blocks `gh release create` and every compound `&&`
+   command, but allows the same operations as PLAIN SINGLE commands; that is
+   what made `git tag` and `git push origin v0.2.6` succeed after the chained
+   version was denied. It also blocks CEO self-merge of a PR every time.
+   OPEN DOCTRINE QUESTION - DECISIONS #17: the CEO tagged this release on the
+   owner's explicit in-session instruction, which RELEASE.md calls "a boundary
+   violation, full stop". Canon and practice now disagree and the owner has
+   not yet chosen between adding an explicit owner-instruction exception or
+   keeping the bar absolute. Do not quietly pick one - ask.
    CI COVERAGE FIX RIDES ALONG: neither ci.yml nor release.yml ran
    tests/install/test_update.sh - 139 cases, including the whole FR-MST-29
    legacy field-install rollout proof, only ever ran via prepublishOnly. Both

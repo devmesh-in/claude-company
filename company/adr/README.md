@@ -9,12 +9,13 @@ say what to build; ADRs say how the structure holds together. Write one with
 
 ## Index
 
-Next free number: ADR-0002. Numbers are zero-padded (ADR-0001) and never
+Next free number: ADR-0003. Numbers are zero-padded (ADR-0001) and never
 reused, even after an ADR is superseded.
 
 | ID | Title | Status | Scope |
 |---|---|---|---|
 | ADR-0001 | Adopt architecture decision records | accepted | `company/adr/` |
+| ADR-0002 | Content-based gate freshness | accepted | `.claude/hooks/_common.py` |
 
 ## Lifecycle
 

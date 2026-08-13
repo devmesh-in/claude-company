@@ -172,6 +172,7 @@ Every block and every hotfix bypass is one line in `company/state/adherence.log`
 | Command                     | What it does |
 | --------------------------- | ----------------------------------------------------------------------- |
 | `/orchestrator`             | Start or resume the company. The only command you need day to day       |
+| `/lean-company`             | The fast door for one small piece of work: less hierarchy and paperwork, the same gates |
 | `/brainstorm`               | Explore ideas in parallel and get an options memo with a recommendation |
 | `/standup`                  | One-screen status: done, in flight, blocked, decisions you owe          |
 | `/feature`                  | Run one feature through the full pipeline                               |
