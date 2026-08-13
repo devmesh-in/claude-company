@@ -3,10 +3,23 @@
 
 Writing SOURCE CODE requires an active brief. Non-source files (docs, config,
 data, dotfiles, and anything under company/, .claude/, docs/, .github/) are
-exempt. quick and hotfix entries exempt THEMSELVES from the check (logged);
-every other entry in flight is still evaluated, and one unusable brief blocks.
-An existing-but-unparseable task file is a torn read and allows the edit.
-Fails open on error.
+exempt, and so is any path belonging to no checkout of this repository - a
+scratchpad file is not this project's source. A linked worktree IS, wherever
+it sits on disk. quick and hotfix entries exempt THEMSELVES from the check
+(logged); every other entry in flight is still evaluated, and one unusable
+brief blocks. An existing-but-unparseable task file is a torn read and allows
+the edit. Fails open on error.
+
+The task state is read from the tree being ACTED ON, not from
+CLAUDE_PROJECT_DIR: the harness pins that variable to the main checkout while
+every delegated agent works in a linked worktree, so a worktree that keeps its
+own active-task.json governs itself and one that does not falls back to the
+main checkout (c.task_state_root).
+
+The DECISION comes from the acting tree; the LOG LINE always goes to the
+project root. A worktree is gitignored and gets pruned at task close, so a
+block recorded only inside one is evidence that deletes itself. One project,
+one adherence.log.
 """
 
 import os
@@ -22,12 +35,16 @@ NON_SOURCE_EXT = {
 }
 EXEMPT_DIRS = {"company", ".claude", "docs", ".github"}
 
+# The token NO_BRIEF_MSG carries where the state file belongs. no_brief_msg()
+# swaps it for the ABSOLUTE path of the file the hook actually read.
+STATE_FILE = "company/state/active-task.json"
+
 NO_BRIEF_MSG = (
     "BLOCKED: no active brief. Self-serve fix:\n"
     "1) Write company/briefs/brief-<slug>.md from "
     "company/templates/BRIEF-TEMPLATE.md covering what you are about to build.\n"
     "2) ADD your entry to the tasks list in "
-    "company/state/active-task.json with a targeted Edit. Other sessions own "
+    + STATE_FILE + " with a targeted Edit. Other sessions own "
     "the other entries, so never rewrite the whole file. Your entry:\n"
     "   {\"task\": \"<slug>\", \"type\": \"feature\", "
     "\"brief\": \"company/briefs/brief-<slug>.md\", \"test_scope\": false}\n"
@@ -39,6 +56,18 @@ NO_BRIEF_MSG = (
     "If you are the CEO handling a production emergency, set type to hotfix "
     "(logged, not silent)."
 )
+
+
+def no_brief_msg(state_path):
+    """NO_BRIEF_MSG naming the state file this decision was read from.
+
+    The reader is almost always sitting in a linked worktree, where the
+    relative path names a file that does not exist. Following that recipe
+    creates a SECOND task file that no hook reads, so the reader "declares"
+    the task and stays blocked. The absolute path is the same file the hook
+    read and the same file the BLOCK line was logged next to.
+    """
+    return NO_BRIEF_MSG.replace(STATE_FILE, state_path)
 
 
 def is_source(rel, base):
@@ -78,7 +107,7 @@ def exempt_reason(exempt):
     return "/".join(names) + " mode"
 
 
-def render_offenders(offenders):
+def render_offenders(offenders, state_path):
     """FR-MST-30: name every entry at fault and say what is wrong with it.
 
     Every offender is listed, uncapped: each one needs its own fix, and a
@@ -93,7 +122,7 @@ def render_offenders(offenders):
             lines.append(
                 "  {} - brief '{}' does not exist".format(name, brief)
             )
-    lines.append(NO_BRIEF_MSG)
+    lines.append(no_brief_msg(state_path))
     return "\n".join(lines)
 
 
@@ -110,12 +139,30 @@ def main():
         sys.exit(0)
 
     try:
+        # A path that belongs to no checkout of this project is not this
+        # project's business at all. c.rel_path falls back to stripping the
+        # leading slash there, so a write to the scratchpad every agent is
+        # told to use arrived as `private/tmp/.../foo.py`, classified as
+        # source, and blocked. Asked FIRST, the way guard_provenance mode E
+        # asks it.
+        #
+        # Scope is "no checkout of this repository", NOT "outside the root
+        # directory": `git worktree add` accepts any path, so a lane building
+        # in /tmp/<slug> is writing project source and still needs a usable
+        # brief. Exempting by directory position would let any lane buy
+        # unbriefed source writes by choosing where to put its worktree.
+        tree, outside = c.path_checkout(root, file_path)
+        if outside:
+            sys.exit(0)
+
         rel = c.rel_path(root, file_path)
         base = os.path.basename(rel) or os.path.basename(file_path)
         if not is_source(rel, base):
             sys.exit(0)
 
-        tasks = c.active_tasks(root)
+        state_root = c.task_state_root(root, tree)
+        state_path = c.active_tasks_path(state_root)
+        tasks = c.active_tasks(state_root)
 
         # FR-HP-32: a torn read is not an absent task file. active-task.json
         # is written whole by several sessions, so a reader can catch its
@@ -128,7 +175,12 @@ def main():
         # and fail open on every transient blip, which loses real enforcement.
         # Ask active_tasks() first, consult unreadable only on its empty
         # answer. Do not reorder.
-        if not tasks and c.active_tasks_unreadable(root):
+        #
+        # Probed against STATE_ROOT, not root: the entries were read from the
+        # acting tree's file, so asking whether a DIFFERENT file was mid-write
+        # answers a question nobody asked - it would miss the torn read that
+        # actually produced the empty answer and fail open on one that did not.
+        if not tasks and c.active_tasks_unreadable(state_root):
             c.log_bypass(root, HOOK, rel, "task file unreadable")
             sys.exit(0)
 
@@ -140,7 +192,8 @@ def main():
         # reorder. An ABSENT file still lands here and blocks; only the
         # unreadable probe above lets an empty answer through.
         if not tasks:
-            c.block(root, HOOK, rel, "no active brief", NO_BRIEF_MSG)
+            c.block(root, HOOK, rel, "no active brief",
+                    no_brief_msg(state_path))
 
         # (b) quick and hotfix are per-entry EXEMPTION types, never an ANY
         # waiver: each removes its OWN entry from the check and nothing else.
@@ -166,7 +219,9 @@ def main():
                 continue
             brief_path = brief
             if not os.path.isabs(brief_path):
-                brief_path = os.path.join(root, brief)
+                # A brief pointer is relative to the checkout whose task list
+                # names it, which is the same checkout the entry was read from.
+                brief_path = os.path.join(state_root, brief)
             if not os.path.exists(brief_path):
                 offenders.append((entry, brief))
 
@@ -176,11 +231,13 @@ def main():
                 # what this hook produced before multi-entry support landed.
                 entry, brief = offenders[0]
                 if brief is None:
-                    c.block(root, HOOK, rel, "no active brief", NO_BRIEF_MSG)
+                    c.block(root, HOOK, rel, "no active brief",
+                            no_brief_msg(state_path))
                 c.block(
-                    root, HOOK, rel, "brief file missing: " + str(brief),
+                    root, HOOK, rel,
+                    "brief file missing: " + str(brief),
                     "BLOCKED: active brief '{}' does not exist. {}".format(
-                        brief, NO_BRIEF_MSG
+                        brief, no_brief_msg(state_path)
                     ),
                 )
             c.block(
@@ -188,7 +245,7 @@ def main():
                 c.qualify_reason(
                     "no usable brief", tasks, [e for e, _b in offenders]
                 ),
-                render_offenders(offenders),
+                render_offenders(offenders, state_path),
             )
     except SystemExit:
         raise

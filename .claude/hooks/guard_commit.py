@@ -8,7 +8,9 @@
     Hotfix tasks are exempt (ALLOW + log BYPASS); a commit with no active
     task is a founding commit and is exempt; merge on main is the owner's
     local integration and is exempt.
-  - commit / merge: require a green, fresh, valid gates.status stamp. If
+  - commit / merge: require a green, fresh, valid gates.status stamp - the
+    ACTING TREE's own, the tree the segment commits into, which is not the
+    main checkout when the segment carries a -C or runs from a worktree. If
     gates.config is missing, has zero gates, or contains ONLY CONFIGURE-ME
     placeholders (a fresh project with nothing to gate yet), ALLOW + log
     BYPASS - unconfigured gates must not deadlock founding commits, and the
@@ -22,8 +24,6 @@ Fails open on any internal error.
 """
 
 import os
-import re
-import shlex
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +31,24 @@ import _common as c  # noqa: E402
 
 HOOK = "guard_commit"
 PROTECTED = {"main", "master"}
+
+# Re-exports, not leftovers. The parsers themselves live in _common - there is
+# exactly one implementation of them - but three callers reach them through
+# THIS module's names and must keep working:
+#   - guard_secrets.py calls guard_commit.git_subcmd(seg), and
+#     tests/hooks/test_guard_parsers.py asserts that exact string appears in
+#     the guard_secrets source (FR-HP-12, one parser and one behavior),
+#   - guard_provenance.py calls guard_commit.segments and
+#     guard_commit.git_subcmd, and that file is owned by an open PR,
+#   - test_guard_parsers.py monkeypatches guard_commit.git_subcmd and asserts
+#     guard_secrets follows the patch, which works because the name is looked
+#     up on this module at call time.
+# Deleting an alias breaks a caller outside this file. Leave them.
+ARG_OPTS = c.ARG_OPTS
+segments = c.segments
+git_subcmd = c.git_subcmd
+git_cwd = c.git_cwd
+seg_git_dir = c.seg_git_dir
 
 # DISPLAY truncation for the branch recipe only (FR-MST-30). It never reaches
 # a block/allow decision - the gate arms on presence, not on a count.
@@ -47,99 +65,6 @@ BRANCH_TAIL = (
     "If this task is finished and you are integrating, use git merge "
     "(allowed on main) - see company/GIT.md."
 )
-
-
-def segments(command):
-    parts = re.split(r"&&|\|\||;|\|", command)
-    return [p.strip() for p in parts if p.strip()]
-
-
-# FR-HP-10: global options that carry a SEPARATED argument. Skipping one
-# token each leaves the argument to be read as the subcommand, so
-# `git -C sub commit` parses as subcommand "sub" and the whole segment goes
-# unseen by every Bash-gated check. Attached forms (-Cdir, --git-dir=x) carry
-# their argument in the same token and consume one token only.
-ARG_OPTS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace",
-            "--exec-path")
-
-
-def git_subcmd(segment):
-    """Return (subcommand, args) for a `git ...` segment, else (None, []).
-
-    Only tokens BEFORE the subcommand are scanned: `git commit -C HEAD~1` is
-    --reuse-message, where HEAD~1 is a commit ref and not a path.
-    """
-    try:
-        toks = shlex.split(segment)
-    except Exception:
-        toks = segment.split()
-    if not toks or toks[0] != "git":
-        return None, []
-    i = 1
-    while i < len(toks) and toks[i].startswith("-"):
-        i += 2 if toks[i] in ARG_OPTS else 1
-    if i >= len(toks):
-        return None, []
-    return toks[i], toks[i + 1:]
-
-
-def git_cwd(payload, root):
-    """Resolve the directory the git command actually runs in (#26).
-
-    The branch checks must reflect the working tree git operates on, not the
-    project root. A commit issued from a worktree checkout of a task branch
-    must be judged by that worktree's branch, even when CLAUDE_PROJECT_DIR (and
-    thus root) points at the main checkout on a protected branch. Prefer the
-    payload's cwd when it is present and inside a git work tree; otherwise fall
-    back to root.
-    """
-    if isinstance(payload, dict):
-        cwd = payload.get("cwd")
-        if cwd:
-            out = c._git(cwd, ["rev-parse", "--is-inside-work-tree"])
-            if out is not None and out.strip() == "true":
-                return cwd
-    return root
-
-
-def seg_git_dir(seg, payload, root):
-    """The directory whose branch a single git SEGMENT must be judged by.
-
-    FR-HP-11: now that FR-HP-10 makes `git -C <path> commit` visible to this
-    gate, it must also be judged by the tree that -C names. A session sitting
-    in the main checkout that runs `git -C .claude/worktrees/<slug> commit`
-    lands the commit on the worktree's task branch, so judging it by the main
-    checkout's branch (main) would be a false block.
-
-    Only tokens BEFORE the subcommand are scanned, for the same reason as
-    git_subcmd: `git commit -C HEAD~1` is --reuse-message, not a path. The
-    LAST -C wins, which is git's own semantics. A relative path resolves
-    against the payload cwd when present, else root.
-    """
-    try:
-        toks = shlex.split(seg)
-    except Exception:
-        toks = seg.split()
-    path = None
-    i = 1
-    while i < len(toks) and toks[i].startswith("-"):
-        if toks[i] == "-C" and i + 1 < len(toks):
-            path = toks[i + 1]
-        elif toks[i].startswith("-C") and len(toks[i]) > 2:
-            path = toks[i][2:]
-        i += 2 if toks[i] in ARG_OPTS else 1
-    if path:
-        base = payload.get("cwd") if isinstance(payload, dict) else None
-        base = base or root
-        cand = path if os.path.isabs(path) else os.path.join(base, path)
-        # OQ-HP-12 assumption: accept the candidate only when git itself
-        # answers `true` there. Any other answer (missing directory, not a
-        # repo, git error) falls through to git_cwd, which falls back to
-        # root. Fail open, never fail hard.
-        out = c._git(cand, ["rev-parse", "--is-inside-work-tree"])
-        if out is not None and out.strip() == "true":
-            return cand
-    return git_cwd(payload, root)
 
 
 def push_targets_protected(branch_dir, args):
@@ -196,6 +121,73 @@ def branch_recipe(entries):
     return "".join(lines)
 
 
+# FR-HP-29: appended ONLY when a -C was written and could not be confirmed as
+# a work tree. The recipe above then names the FALLBACK tree's branch, and a
+# reader who is already on that branch reads a recipe that tells them to
+# create the branch they are standing on. Saying so is the difference between
+# a message and a recipe. Appended, never woven in: at one entry the recipe is
+# byte-pinned by BR-MST-02.
+UNRESOLVED_C_NOTE = (
+    "\nNOTE: the -C target `{target}` could not be resolved to a git work "
+    "tree, so this gate judged the tree the command ran in instead - the "
+    "branch named above is THAT tree's branch, not the branch of the tree "
+    "you aimed at.\n"
+    "A hook sees the RAW command text and never a shell that expanded it, so "
+    "a variable is delivered literally and no filesystem call can resolve it. "
+    "Fix: pass a LITERAL absolute path to -C.\n"
+)
+
+
+def unresolved_note(target):
+    """The note text for an unresolvable -C target, or "" for none."""
+    if not target:
+        return ""
+    return UNRESOLVED_C_NOTE.format(target=target)
+
+
+def same_tree(a, b):
+    """True when two paths name the same directory. False on any doubt."""
+    try:
+        return os.path.realpath(a) == os.path.realpath(b)
+    except Exception:
+        return False
+
+
+def stamp_message(sub, reason, branch_dir, root):
+    """The gate-stamp block message, naming the tree whose stamp was judged.
+
+    `Fix: run bash company/run-gates.sh` is a correct recipe only from the
+    tree that was judged. Run from anywhere else it gates and stamps a
+    DIFFERENT tree, so the retry blocks on exactly the same reason and the
+    reader has no way to tell why. When the acting tree is not the project
+    root, the path is spelled out absolutely and the judged tree is named.
+    """
+    head = "BLOCKED: git {} requires green, fresh gates. {}.\n".format(
+        sub, reason
+    )
+    placeholder = (
+        "If company/gates.config still has only CONFIGURE-ME placeholders, "
+        "run `python3 .claude/hooks/gates_detect.py --write` first to "
+        "auto-configure real gates, then rerun the suite."
+    )
+    if same_tree(branch_dir, root):
+        return (
+            head
+            + "Fix: run `bash company/run-gates.sh` until green, then retry.\n"
+            + placeholder
+        )
+    return (
+        head
+        + "Judged: the acting tree {}. This gate reads THAT tree's own "
+        "company/state/gates.status - a green stamp in another checkout does "
+        "not stand in for it.\n"
+        "Fix: run `bash {}/company/run-gates.sh` until green, then retry. Use "
+        "the absolute path: from any other directory the runner gates a "
+        "different tree.\n".format(branch_dir, branch_dir)
+        + placeholder
+    )
+
+
 def main():
     payload = c.read_stdin_json()
     if payload is None:
@@ -213,10 +205,13 @@ def main():
             sub, args = git_subcmd(seg)
             if sub is None:
                 continue
-            # #26 + FR-HP-11: branch checks must reflect the tree THIS segment
+            # #26 + FR-HP-11: every check must reflect the tree THIS segment
             # runs in, resolved per segment so a -C in one segment cannot
-            # mis-judge the others.
-            branch_dir = seg_git_dir(seg, payload, root)
+            # mis-judge the others. `unresolved_c` carries the -C argument as
+            # written when one was present and could not be confirmed as a
+            # work tree, so a block message can say which tree it is really
+            # talking about.
+            branch_dir, unresolved_c = c.acting_tree(seg, payload, root)
 
             if sub == "push":
                 if push_targets_protected(branch_dir, args):
@@ -259,7 +254,8 @@ def main():
                             c.qualify_reason(
                                 "commit on protected branch", tasks, tasks
                             ),
-                            branch_recipe(tasks),
+                            branch_recipe(tasks) + unresolved_note(
+                                unresolved_c),
                         )
 
                 hf = c.hotfix_entry(tasks)
@@ -269,7 +265,40 @@ def main():
                         c.qualify_reason("hotfix mode", tasks, hf),
                     )
                     continue
-                cfg = c.gates_config(root)
+                # The acting-tree rule, applied to the gate stamp: a hook
+                # judges the tree that contains the thing being acted on.
+                # These two resolutions MUST move together - see below.
+                #
+                # FR-HP-28 made company/run-gates.sh resolve its root from the
+                # runner's own location, so a ladder run inside a worktree
+                # gates and stamps THAT worktree. The stamp that describes the
+                # acting tree is therefore the acting tree's own. Reading the
+                # main checkout's stamp instead let a lane be green-lit by a
+                # sibling lane's run, and blocked by a sibling lane's drift,
+                # with no self-service fix in either direction. It is the
+                # single largest source of friction in the adherence log (23
+                # stale-stamp blocks) and three lanes filed it independently
+                # as CR-HP-2.
+                #
+                # Moving check_stamp while leaving gates_config on `root`
+                # would DEADLOCK every worktree in THIS repo. Per the
+                # dual-nature rule in CLAUDE.md the tracked
+                # company/gates.config holds only CONFIGURE-ME placeholders on
+                # purpose, and this repo's real gate commands exist only as an
+                # untracked modification in the main checkout. A worktree
+                # therefore inherits placeholders and can never produce a
+                # green stamp, so a split resolution - real gates read from
+                # the main checkout, stamp demanded from the worktree - would
+                # block every worktree commit permanently with no way out.
+                # Resolving both from the acting tree degrades that case to
+                # the existing, LOGGED placeholder bypass below, which is the
+                # same treatment a fresh install gets before onboarding.
+                #
+                # In a normal install, where gates.config is committed with
+                # real gates, the worktree inherits those real gates and the
+                # lane that runs its own ladder in its own worktree satisfies
+                # its own stamp. That is the behavior asked for.
+                cfg = c.gates_config(branch_dir)
                 gates = cfg.get("gates") if isinstance(cfg, dict) else None
                 if not gates:
                     c.log_bypass(
@@ -285,18 +314,11 @@ def main():
                         "gates.config has only CONFIGURE-ME placeholders",
                     )
                     continue
-                ok, reason = c.check_stamp(root)
+                ok, reason = c.check_stamp(branch_dir)
                 if not ok:
                     c.block(
                         root, HOOK, "git " + sub, reason,
-                        "BLOCKED: git {} requires green, fresh gates. {}.\n"
-                        "Fix: run `bash company/run-gates.sh` until green, "
-                        "then retry.\n"
-                        "If company/gates.config still has only CONFIGURE-ME "
-                        "placeholders, run `python3 "
-                        ".claude/hooks/gates_detect.py --write` first to "
-                        "auto-configure real gates, then rerun the "
-                        "suite.".format(sub, reason),
+                        stamp_message(sub, reason, branch_dir, root),
                     )
                 continue
     except SystemExit:

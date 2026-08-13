@@ -118,7 +118,9 @@ class GuardSpecMultiEntry(MultiBase):
             seen.append((r.returncode, r.stdout, r.stderr))
         for i, got in enumerate(seen):
             self.assertEqual(got[0], 2, "state %d allowed the write" % i)
-            self.assertEqual(got[2].strip(), guard_spec.NO_BRIEF_MSG)
+            self.assertEqual(
+                got[2].strip(),
+                guard_spec.no_brief_msg(self.task_path()))
         self.assertEqual(seen[0], seen[1])
         self.assertEqual(seen[1], seen[2])
 
@@ -373,7 +375,9 @@ class SingleEntryParity(MultiBase):
             {"task": "alpha", "type": "feature"},
         )
         self.assertEqual(got[0], 2)
-        self.assertEqual(got[2].strip(), guard_spec.NO_BRIEF_MSG)
+        self.assertEqual(
+            got[2].strip(),
+            guard_spec.no_brief_msg(self.task_path()))
         self.assertEqual(got[3], ["guard_spec | BLOCK | src/app.py | "
                                   "no active brief"])
 
