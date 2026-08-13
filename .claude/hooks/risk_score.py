@@ -4,9 +4,22 @@
 CLI (not a hook):
   python3 .claude/hooks/risk_score.py [--base <ref>] [--brief <path>] [--json]
 
-Scores the diff `base...HEAD` across six signals, sums them into a band
-(low/medium/high) and prints a human table plus exactly one machine line last:
+Scores a change across six signals, sums them into a band (low/medium/high)
+and prints a human table plus exactly one machine line last:
   RISK_JSON: {"score": N, "band": "...", "signals": {...}, "recommendation": ...}
+
+WHAT GETS SCORED - the subject
+  "How risky is this change" means the tree as it stands, not whatever
+  happens to be in git yet. Two subjects exist:
+    committed     the diff `base...HEAD` - what is committed
+    working tree  the same fork point against the files on disk - tracked
+                  edits, staged or not, plus untracked files
+  A default run (no --base) scores BOTH and the HIGHER total is the answer.
+  Higher rather than a merged diff: a working tree that reverts committed
+  work produces a smaller diff, and unfinished undo must not lower the bar
+  for what is already in the branch.
+  An explicit `--base <ref>` is the committed-only comparison and prints
+  byte-for-byte what this tool printed before working-tree scoring existed.
 
 This is a USER-INSTALL advisory tool: it never blocks. Every internal error
 fails OPEN (the offending signal scores 0 with a note) and the process ALWAYS
@@ -18,9 +31,12 @@ Signal points (summed):
   size 0-15, out_of_ownership 10/path, frozen_proximity 15 direct / 5 sibling,
   test_ratio 0-15, sensitive_paths flat 10, secrets 25.
 Bands: score < 25 low; 25-49 medium; >= 50 high.
+The band cuts and the per-signal points are the calibration this tool was
+accepted with. Change WHAT IS MEASURED, never the arithmetic.
 """
 
 import argparse
+import collections
 import fnmatch
 import json
 import os
@@ -48,17 +64,14 @@ def default_base(root):
     return out or None
 
 
-def numstat(root, base):
-    """Rows of (added, deleted, path) for `git diff --numstat base...HEAD`.
+def parse_numstat(out):
+    """Rows of (added, deleted, path) from `git diff --numstat` output.
 
     OQ-W2-01 assumption: binary files render added/deleted as "-"; count them
     as 0 changed lines.
     """
-    out = c._git(root, ["diff", "--numstat", base + "...HEAD"])
-    if not out:
-        return []
     rows = []
-    for line in out.splitlines():
+    for line in (out or "").splitlines():
         parts = line.split("\t")
         if len(parts) < 3:
             continue
@@ -69,11 +82,85 @@ def numstat(root, base):
     return rows
 
 
+def parse_names(out):
+    return [p for p in (out or "").splitlines() if p.strip()]
+
+
+def numstat(root, base):
+    """Rows for `git diff --numstat base...HEAD` (the committed subject)."""
+    return parse_numstat(c._git(root, ["diff", "--numstat", base + "...HEAD"]))
+
+
 def changed_paths(root, base):
-    out = c._git(root, ["diff", "--name-only", base + "...HEAD"])
-    if not out:
-        return []
-    return [p for p in out.splitlines() if p.strip()]
+    return parse_names(c._git(root, ["diff", "--name-only", base + "...HEAD"]))
+
+
+# --- subjects: WHAT gets scored -------------------------------------------
+# A subject is a set of changed lines and paths plus the way its secrets are
+# counted. `secret_hits` is a callable so the scan only runs for the subject
+# that is actually reported on.
+Subject = collections.namedtuple("Subject", "name rows paths secret_hits")
+
+EMPTY_SUBJECT = Subject("committed", [], [], lambda: None)
+
+
+def fork_point(root, base):
+    """What `base...HEAD` really diffs against: merge-base(base, HEAD).
+
+    The working-tree subject measures from the SAME point, so the two answers
+    are comparable line for line. Falls back to `base` on any git doubt.
+    """
+    out = c._git(root, ["merge-base", base, "HEAD"])
+    if out is None:
+        return base
+    return out.strip() or base
+
+
+def untracked_entries(root):
+    """[(path, [line, ...])] for every untracked, non-ignored file.
+
+    Untracked files are the ones `git diff` cannot see at all, and the first
+    change on a branch is usually made of them - the case this scorer used to
+    read as an empty diff. OQ-RWT-01 assumption: a file holding a NUL byte is
+    binary and counts as 0 lines, matching the numstat binary rule above.
+    """
+    entries = []
+    for path in parse_names(
+            c._git(root, ["ls-files", "--others", "--exclude-standard"])):
+        try:
+            with open(os.path.join(root, path), "rb") as f:
+                data = f.read()
+        except Exception:
+            continue  # unreadable file: fail open, score nothing for it
+        if b"\x00" in data:
+            entries.append((path, []))
+        else:
+            text = data.decode("utf-8", "replace")
+            entries.append((path, text.splitlines()))
+    return entries
+
+
+def collect_committed(root, base):
+    """Today's subject: what is in git."""
+    return Subject(
+        "committed", numstat(root, base), changed_paths(root, base),
+        lambda: run_secret_scan(base),
+    )
+
+
+def collect_worktree(root, base):
+    """The tree as it stands: tracked edits (staged or not) plus untracked
+    files, measured from the committed subject's fork point."""
+    fork = fork_point(root, base)
+    rows = parse_numstat(c._git(root, ["diff", "--numstat", fork]))
+    paths = parse_names(c._git(root, ["diff", "--name-only", fork]))
+    untracked = untracked_entries(root)
+    rows.extend((len(lines), 0, path) for path, lines in untracked)
+    paths.extend(path for path, _ in untracked)
+    return Subject(
+        "working tree", rows, paths,
+        lambda: worktree_secret_hits(root, fork, untracked),
+    )
 
 
 # --- classification -------------------------------------------------------
@@ -91,16 +178,52 @@ def is_test_path(path):
     return False
 
 
-def is_sensitive(path):
-    if "migrations" in path.split("/"):
-        return True
+def is_enforcement_path(path):
+    """True when `path` is part of the machinery that JUDGES other changes.
+
+    This is a RULE, not a list of interesting filenames, and it is written
+    down here so nobody trims it back to one. A change to the machinery that
+    decides whether other changes are audited, blocked or accepted has the
+    largest blast radius in the repository by construction: if the judge is
+    wrong, every judgment made after it is wrong - including the judgment on
+    the change that broke the judge. So the set is everything that decides,
+    configures, or states how a change gets judged:
+
+      - the enforcement code itself           .claude/hooks/**
+      - what wires it and what it runs        .claude/settings.json,
+                                              company/gates.config
+      - the registries it reads               company/*.json (frozen
+                                              surfaces, witnesses, the
+                                              provenance manifest)
+      - the canon it enforces                 company/*.md, company/adr/*.md
+                                              (settled decisions), CLAUDE.md
+
+    Anything a future edit adds under those roots is covered without being
+    named. Per-task paperwork (company/briefs/**, company/specs/**) and
+    running state (company/state/**) are NOT here: they record judgments,
+    they do not make them.
+    """
+    parts = path.split("/")
     if path.startswith(".claude/hooks/"):
         return True
-    if path == "company/gates.config":
+    if path in (".claude/settings.json", "company/gates.config", "CLAUDE.md"):
         return True
-    if path == ".claude/settings.json":
+    if len(parts) == 2 and parts[0] == "company" and (
+            path.endswith(".md") or path.endswith(".json")):
+        return True
+    if len(parts) == 3 and parts[0] == "company" and parts[1] == "adr" \
+            and path.endswith(".md"):
         return True
     return False
+
+
+def is_sensitive(path):
+    # Two different principles land in one signal. Irreversibility: a
+    # migration cannot be taken back by a revert.
+    if "migrations" in path.split("/"):
+        return True
+    # Blast radius: see is_enforcement_path.
+    return is_enforcement_path(path)
 
 
 # --- ownership parse (OQ-W2-02) -------------------------------------------
@@ -213,6 +336,44 @@ def run_secret_scan(base):
     return len(hits) if isinstance(hits, list) else None
 
 
+def load_secret_scanner():
+    """guard_secrets as a module, or None on any import trouble.
+
+    Its --scan-branch CLI scans `base...HEAD` only and its JSON line is a
+    frozen contract, so the working-tree subject reuses that hook's pure
+    matching functions rather than a second copy of the patterns. Importing
+    is the whole change; guard_secrets itself is untouched.
+    """
+    try:
+        import guard_secrets
+        return guard_secrets
+    except Exception:
+        return None
+
+
+def worktree_secret_hits(root, fork, untracked):
+    """Secret hits in the tree as it stands, or None (fail open).
+
+    Tracked edits go through the scanner's own diff reader; an untracked file
+    has no diff, so each of its lines is an added line by definition.
+    """
+    gs = load_secret_scanner()
+    if gs is None:
+        return None
+    try:
+        hits, _ = gs.scan_diff(c._git(root, ["diff", "-U0", fork]) or "")
+        count = len(hits)
+        for path, lines in untracked:
+            for text in lines:
+                if gs.skip_line(path, text):
+                    continue
+                if gs.match_pattern(text) is not None:
+                    count += 1
+        return count
+    except Exception:
+        return None
+
+
 # --- brief loading --------------------------------------------------------
 def load_brief(root, brief_arg):
     """Return (text, note). text is None (with a note) when there is no brief."""
@@ -312,19 +473,19 @@ def band_of(score):
 
 
 # --- main -----------------------------------------------------------------
-def build_report(root, base, brief_arg):
-    """Return (signals, notes, base_note). Never raises for git/brief issues."""
+def build_report(root, base, brief_arg, subject):
+    """Score one subject: return (signals, notes, base_note).
+
+    Never raises for git/brief issues.
+    """
     signals = {}
     notes = {}
     base_note = None
 
     if base is None:
         base_note = "no base (no main / no git) - diff signals skipped"
-        rows = []
-        paths = []
-    else:
-        rows = numstat(root, base)
-        paths = changed_paths(root, base)
+    rows = subject.rows
+    paths = subject.paths
 
     # 1. size
     signals["size"], notes["size"] = score_size(rows)
@@ -369,7 +530,7 @@ def build_report(root, base, brief_arg):
         signals["secrets"] = 0
         notes["secrets"] = "skipped - no base ref"
     else:
-        count = run_secret_scan(base)
+        count = subject.secret_hits()
         if count is None:
             signals["secrets"] = 0
             notes["secrets"] = "fail-open - guard_secrets scan unavailable"
@@ -389,9 +550,9 @@ SIGNAL_ORDER = [
 ]
 
 
-def print_table(signals, notes, base_note, score, band, rec):
-    if base_note:
-        print(base_note)
+def print_table(signals, notes, preamble, score, band, rec):
+    for line in preamble:
+        print(line)
         print("")
     header = "{:<18} {:>6}  {}".format("SIGNAL", "POINTS", "NOTE")
     print(header)
@@ -416,8 +577,30 @@ def main(argv):
     root = resolve_root()
     try:
         base = args.base if args.base else default_base(root)
-        signals, notes, base_note = build_report(root, base, args.brief)
+        subject_note = None
+        if base is None:
+            subject = EMPTY_SUBJECT
+        else:
+            subject = collect_committed(root, base)
+        signals, notes, base_note = build_report(root, base, args.brief,
+                                                 subject)
         score = sum(signals.values())
+        # An explicit --base is the committed-only comparison and stays
+        # byte-identical; a default run also scores the tree as it stands and
+        # lets the higher answer stand.
+        if base is not None and not args.base:
+            committed_score = score
+            wt = collect_worktree(root, base)
+            wt_signals, wt_notes, _ = build_report(root, base, args.brief, wt)
+            wt_score = sum(wt_signals.values())
+            winner = subject.name
+            if wt_score > committed_score:
+                signals, notes, score = wt_signals, wt_notes, wt_score
+                winner = wt.name
+            subject_note = (
+                "subject: {} (committed {}, working tree {}) - "
+                "higher wins".format(winner, committed_score, wt_score)
+            )
         band, rec = band_of(score)
     except Exception as exc:
         # Absolute fail-open: emit a minimal well-formed line and exit 0.
@@ -430,7 +613,8 @@ def main(argv):
         return 0
 
     if not args.json:
-        print_table(signals, notes, base_note, score, band, rec)
+        preamble = [ln for ln in (subject_note, base_note) if ln]
+        print_table(signals, notes, preamble, score, band, rec)
 
     print("RISK_JSON: " + json.dumps(
         {"score": score, "band": band, "signals": signals,
