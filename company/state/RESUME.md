@@ -5,19 +5,36 @@ every spawn, merge, CR decision, and agent report. If a session died mid-flight,
 check each worktree's git log before respawning - work may be complete on disk
 without a report._
 
-## 0. IN FLIGHT RIGHT NOW - harness-port program, wave 1 (2026-08-13)
+## 0. IN FLIGHT RIGHT NOW - 2026-08-13, SECOND HALF (enforcement repair)
 
-Three tech-leads dispatched in parallel at 2026-08-13. If this session died,
-CHECK EACH WORKTREE'S GIT LOG BEFORE RESPAWNING - work may be complete on disk
-without a report.
+The harness-port program (wave 1 and 2) is MERGED. What follows it is a second
+program the owner ordered after the port exposed the enforcement layer fighting
+the work: DECISIONS #20, #21, #22. If this session died, check each worktree's
+git log before respawning.
 
-| Lane | Slug | Issue | Worktree | Branch | FRs |
-|---|---|---|---|---|---|
-| L1 kernel | hp-kernel | #98 | `.claude/worktrees/hp-kernel` | task/hp-kernel | FR-HP-01..08 |
-| L2 guards | hp-guards | #99 | `.claude/worktrees/hp-guards` | task/hp-guards | FR-HP-10..17 |
-| L3 runner | hp-runner | #97 | `.claude/worktrees/hp-runner` | task/hp-runner | FR-HP-20..28 |
+| PR | Slug | Worktree | What |
+|---|---|---|---|
+| #118 | acting-tree | `.claude/worktrees/acting-tree` | **THE P0.** guard_secrets had NEVER scanned a delegated commit - it read the main checkout's index while every lane commits in a worktree. Also guard_commit stamp resolution, guard_spec scope, the GRANT-line cut, and the `_git` timeout that let a slow `git status` read as a clean tree. Tree resolution now lives ONCE in `_common`, asserted by a test. |
+| #119 | cut-stop-gate | `.claude/worktrees/cut-stop-gate` | stop_gate DELETED (DECISIONS #20). Canon tests moved to `tests/hooks/test_doctrine_canon.py` FIRST and proven still failing. Check moved to `session_start.gate_alert()`, no block path. |
+| #117 | risk-working-tree | `.claude/worktrees/risk-working-tree` | risk_score scores the working tree, not just committed history. Arithmetic untouched. |
+| CLOSED | hp-provenance | `.claude/worktrees/hp-provenance` | #112 closed UNMERGED after two HALT verdicts - DECISIONS #22. Worktree kept until the salvage lane takes what survives. |
 
-All three branched off origin/main at 55cf436. Spec:
+NEXT ACTION, not yet dispatched - the SALVAGE from the closed lane. Four things
+the first audit cleared, none dependent on the rejected narrowing: apply
+`state_lock` to guard_provenance's ledger writes (it has ZERO call sites on main
+today, so concurrent sessions really do lose updates); record unattributed
+dispatches; replace the hardcoded `/.claude/worktrees/` check at :233 with the
+derived primitive #118 adds; and fix `dirty_source_paths` reading a falsy `_git`
+result as a clean tree. Branch it off main AFTER #118 merges - it needs those
+primitives.
+
+ALSO OUTSTANDING: `guard_provenance` modes D and E to be cut (mode E has never
+fired once; mode D has never fired and can deadlock), the affected-suites
+mechanism so a lane runs only the suites its changed paths can reach, and three
+dangling `stop_gate` references in `guard_commit.py:16`, `guard_provenance.py:952`
+and `gate_stamp.py:71` - the first states something now false in shipped code.
+
+OLD, for reference - wave 1 branched off 55cf436. Spec:
 `company/specs/spec-harness-port.md` (53 FRs, 14 decided OQ fallbacks).
 Status board: `company/state/harness-port-checklist.md` - every change from the
 review, ported or not, with its reason. Baseline before any change: hooks 393
