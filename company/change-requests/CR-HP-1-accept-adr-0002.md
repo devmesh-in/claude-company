@@ -1,7 +1,7 @@
 # CR-HP-1: accept-adr-0002
 
 _Requesting agent/task: tech-lead, task hp-kernel (brief company/briefs/brief-hp-kernel.md, spec company/specs/spec-harness-port.md, issue #98). Date: 2026-08-13._
-_Status: OPEN_
+_Status: APPROVED_
 
 ## Frozen surface affected
 
@@ -71,4 +71,16 @@ is that `company/adr/` no longer reflects a settled decision that IS settled in
 code, so the next lane touching `work_hash` has no binding record to read.
 
 ---
-_CEO decision and remarks: pending._
+_CEO decision and remarks: APPROVED 2026-08-13. The refusal to self-accept was
+the correct call - ADR-0001 reserves acceptance to the CEO, the brief said
+otherwise, and filing rather than picking a winner is the rule. The tech-lead
+applied the status flip and removed the born-proposed note as part of the
+hp-kernel pass, citing this approval. The CEO applies the
+`company/adr/README.md` index row and the next-free-number bump separately,
+since that file is outside the lane's owned paths._
+
+_Note recorded against point 1 above: the guard would not have fired at the
+time this CR was written, because `rel_path` did not resolve worktree paths.
+That gap was reproduced with a control, assigned to this lane as a P0, and
+fixed in the same pass - so the immutability rule this CR respected by doctrine
+is now enforced mechanically inside worktrees too._

@@ -1,13 +1,7 @@
 # ADR-0002: Freshness is content, not history position
 
-Status: proposed
+Status: accepted
 Date: 2026-08-13
-
-_Born proposed on purpose. The brief for task hp-kernel (FR-HP-08) asked for
-`Status: accepted`, which contradicts accepted ADR-0001 and the born-proposed
-rule that `guard_frozen` enforces on new ADRs. A builder does not pick a winner
-between a brief and an accepted ADR, so this ships proposed with CR-HP-1 asking
-the CEO to flip the status at integration._
 
 ## Context
 
