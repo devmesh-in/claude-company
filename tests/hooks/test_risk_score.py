@@ -110,7 +110,8 @@ class TestHighBand(Base):
         self.assertEqual(data["recommendation"], "auditor dispatch mandatory")
         self.assertGreaterEqual(data["score"], 50)
         self.assertEqual(data["signals"]["secrets"], 25)
-        self.assertEqual(data["signals"]["sensitive_paths"], 10)
+        # 851 lines inside one sensitive path: presence 10 + extent 15 (#122).
+        self.assertEqual(data["signals"]["sensitive_paths"], 25)
         self.assertEqual(data["signals"]["size"], 15)
 
 
@@ -215,7 +216,8 @@ class TestWorkingTreeSubject(WorkTree):
                          before.stdout + after.stdout)
         self.assertEqual(uncommitted["score"], committed["score"])
         self.assertEqual(uncommitted["signals"]["size"], 15)
-        self.assertEqual(uncommitted["signals"]["sensitive_paths"], 10)
+        # 850 lines inside one sensitive path: presence 10 + extent 15 (#122).
+        self.assertEqual(uncommitted["signals"]["sensitive_paths"], 25)
 
     def test_untracked_file_is_scored_but_not_under_base(self):
         base = self.branch_from_main()
@@ -322,6 +324,102 @@ class TestSensitiveRule(Base):
             with self.subTest(path=rel):
                 points, out = self.score_one(rel)
                 self.assertEqual(points, 0, out)
+
+
+class TestSensitivityScalesWithBlastRadius(Base):
+    """sensitive_paths scales with blast radius (#122, task risk-scale).
+
+    Failure mode this pins: the signal awarded a FLAT 10 for any number of
+    sensitive paths at any size. A 717-line rewrite of guard_provenance.py -
+    the hook that decides whether anything gets audited at all - therefore
+    scored exactly what a one-line comment fix in company/GIT.md scored, and
+    the whole change banded medium, below the arming threshold of its own
+    compensating control.
+
+    Each case scores one step against the commit before it, so a step's diff
+    holds only that step's files.
+    """
+
+    def lines(self, n, start=0):
+        return "".join(
+            "x_{} = {}\n".format(i, i) for i in range(start, start + n))
+
+    def score_step(self, files):
+        """Commit `files` (rel -> content) and score that commit alone."""
+        prev = git(self.root, "rev-parse", "HEAD").stdout.strip()
+        for rel, content in files.items():
+            self.write(rel, content)
+        self.commit_all("step")
+        r = run_cli(["--base", prev], self.root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return parse_risk(r.stdout), r.stdout
+
+    def test_a_one_line_fix_in_a_judge_still_scores_only_the_floor(self):
+        """The deliberate negative: a scale that lifts everything is an
+        offset, not a scale. This is the exact case from the brief."""
+        self.base_commit()
+        data, out = self.score_step({"company/GIT.md": "<!-- typo -->\n"})
+        self.assertEqual(data["signals"]["sensitive_paths"], 10, out)
+        self.assertEqual(data["band"], "low", out)
+
+    def test_a_rewrite_of_a_judge_outscores_a_one_line_fix_in_one(self):
+        self.base_commit()
+        small, small_out = self.score_step(
+            {".claude/hooks/guard_a.py": self.lines(1)})
+        big, big_out = self.score_step(
+            {".claude/hooks/guard_b.py": self.lines(850)})
+        self.assertEqual(small["signals"]["sensitive_paths"], 10, small_out)
+        self.assertEqual(big["signals"]["sensitive_paths"], 25, big_out)
+
+    def test_extent_is_measured_per_path_not_pooled(self):
+        """Two judges of 500 lines score 2 x (10 + 8) = 36, not the 10 + 15
+        that pooling their 1000 lines into one subject would give. Two judges
+        break two independent sets of later judgments."""
+        self.base_commit()
+        data, out = self.score_step({
+            ".claude/hooks/guard_a.py": self.lines(500),
+            ".claude/hooks/guard_b.py": self.lines(500),
+        })
+        self.assertEqual(data["signals"]["sensitive_paths"], 36, out)
+
+    def test_two_judges_outscore_one_at_the_same_churn(self):
+        self.base_commit()
+        one, one_out = self.score_step(
+            {".claude/hooks/guard_a.py": self.lines(1000)})
+        two, two_out = self.score_step({
+            ".claude/hooks/guard_b.py": self.lines(500),
+            ".claude/hooks/guard_c.py": self.lines(500),
+        })
+        self.assertEqual(one["signals"]["sensitive_paths"], 25, one_out)
+        self.assertGreater(two["signals"]["sensitive_paths"],
+                           one["signals"]["sensitive_paths"], two_out)
+
+    def test_ordinary_lines_do_not_lift_the_signal(self):
+        """The extent term reads the sensitive slice of the diff only - 850
+        lines of application code beside a one-line hook edit leave the
+        signal at its floor while `size` takes its top points."""
+        self.base_commit()
+        data, out = self.score_step({
+            "src/big.py": self.lines(850),
+            ".claude/hooks/guard_a.py": self.lines(1),
+        })
+        self.assertEqual(data["signals"]["sensitive_paths"], 10, out)
+        self.assertEqual(data["signals"]["size"], 15, out)
+
+    def test_the_motivating_shape_reaches_high(self):
+        """The shape of 9df86e4..1b957f6: a 717-line hook rewrite plus a
+        207-line accepted ADR, carried by healthy tests so test_ratio stays
+        0. Scored 25 (medium) under the flat 10; the real diff scores 51."""
+        self.base_commit()
+        data, out = self.score_step({
+            ".claude/hooks/guard_provenance.py": self.lines(717),
+            "company/adr/ADR-0003-a-decision.md": self.lines(207),
+            "tests/hooks/test_guard_provenance.py": self.lines(1400),
+        })
+        self.assertEqual(data["signals"]["sensitive_paths"], 36, out)
+        self.assertEqual(data["signals"]["test_ratio"], 0, out)
+        self.assertEqual(data["band"], "high", out)
+        self.assertEqual(data["recommendation"], "auditor dispatch mandatory")
 
 
 if __name__ == "__main__":
