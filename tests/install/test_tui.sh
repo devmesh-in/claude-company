@@ -10,7 +10,6 @@ set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$TEST_DIR/../.." && pwd)"
-INSTALL="$REPO/install"
 
 PASS=0
 FAIL=0
@@ -20,6 +19,27 @@ fail() { FAIL=$((FAIL+1)); printf '  \033[31mFAIL\033[0m %s\n' "$*"; }
 WORK="$(mktemp -d -t cctui.XXXXXX)"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
+
+# --- install from a CLEAN source, never the working tree -------------------
+# CLAUDE.md's dual-nature rule: company/gates.config stays at CONFIGURE-ME
+# placeholders in the TRACKED tree (that is what a fresh install inherits),
+# while this repo's own real gate commands live only in the working tree and
+# are never committed. Installing from the working tree therefore handed the
+# fixture real gate commands, so the placeholder assertion below could never
+# pass in a normal checkout - the suite read 20/1 forever and got mistaken for
+# a regression. `git archive HEAD` gives the fixture exactly the tracked bytes.
+# Do not collapse this back to installing from "$REPO".
+#
+# Split of duties, deliberate: the static checks below (node --check, shim
+# shebang, hero font table) still read the WORKING TREE so an uncommitted edit
+# to bin/ or lib/ is still inspected; everything that INSTALLS uses "$SRC".
+SRC="$WORK/clean-src"
+mkdir -p "$SRC"
+if ! git -C "$REPO" archive HEAD | tar -x -C "$SRC"; then
+  printf 'FATAL: could not export a clean source from HEAD in %s\n' "$REPO" >&2
+  exit 1
+fi
+INSTALL="$SRC/install"
 
 # recursive checksum snapshot, excluding adherence.log (touched every run)
 snapshot() {
@@ -35,8 +55,17 @@ if node --check "$REPO/bin/claude-company.js"; then pass "bin/claude-company.js 
 else fail "bin/claude-company.js parses clean"; fi
 if node --check "$REPO/lib/install-tui.js"; then pass "lib/install-tui.js parses clean"
 else fail "lib/install-tui.js parses clean"; fi
-[ "$(head -1 "$INSTALL")" = "#!/bin/sh" ] && pass "install is a POSIX sh shim" \
+[ "$(head -1 "$REPO/install")" = "#!/bin/sh" ] && pass "install is a POSIX sh shim" \
   || fail "install is a POSIX sh shim"
+
+echo "== clean source ships placeholder gates (dual-nature rule) =="
+# Pins the intent of the git-archive step above: the tree the fixture installs
+# FROM must carry CONFIGURE-ME gates, which is the whole reason it cannot be
+# the working tree. If this fails, the clean-source step has been removed or
+# the tracked gates.config was wrongly overwritten with real gate commands.
+grep -qi 'CONFIGURE ME' "$SRC/company/gates.config" \
+  && pass "clean source gates.config carries placeholders" \
+  || fail "clean source gates.config carries placeholders"
 
 echo "== --help =="
 "$INSTALL" --help >"$WORK/help.out" 2>&1
@@ -49,7 +78,8 @@ A="$WORK/viaTUI"; B="$WORK/bare"; mkdir -p "$A" "$B"
 git -C "$A" init -q; git -C "$B" init -q
 "$INSTALL" --yes --target "$A" >"$WORK/a.out" 2>&1
 RC_A=$?
-bash "$REPO/install.sh" "$B" >"$WORK/b.out" 2>&1
+# same source on both sides, or the diff would report clean-vs-dirty payload
+bash "$SRC/install.sh" "$B" >"$WORK/b.out" 2>&1
 RC_B=$?
 [ "$RC_A" -eq 0 ] && pass "plain install exits 0" \
   || { fail "plain install exits 0 (rc=$RC_A)"; cat "$WORK/a.out"; }
@@ -84,7 +114,9 @@ grep -qi 'does not exist' "$WORK/ne.err" && pass "nonexistent dir helpful messag
   || fail "nonexistent dir helpful message"
 
 echo "== target = repo itself -> refused, nonzero =="
-"$INSTALL" --plain --target "$REPO" </dev/null >"$WORK/rr.out" 2>"$WORK/rr.err"
+# the installer refuses its OWN root, which is now $SRC - passing $REPO here
+# would no longer be self-targeting and would install over this checkout.
+"$INSTALL" --plain --target "$SRC" </dev/null >"$WORK/rr.out" 2>"$WORK/rr.err"
 RC=$?
 [ "$RC" -ne 0 ] && pass "repo-itself refused nonzero" || fail "repo-itself refused nonzero"
 grep -qi 'repo itself' "$WORK/rr.err" && pass "repo-itself helpful message" \
