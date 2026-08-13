@@ -1181,16 +1181,29 @@ class TestWorktreeRelPath(Base):
         guard_provenance exempts it deliberately. That exemption must not be
         collateral damage of this fix - it is checked before rel_path is used,
         and this asserts it stays that way.
+
+        The exemption used to be observed at the execution gate, where a
+        worktree edit exited 0. That gate is gone and an exit 0 there would
+        now prove nothing, so the observable is Mode A: the exemption is what
+        stops the hook recording the path as self-authored, which means the
+        ledger must not exist at all. An exit code alone would still pass with
+        the exemption removed.
         """
-        self.write("company/models.json",
-                   json.dumps({"version": 1,
-                               "roles": {"developer": "opus"}}))
         self.set_task({"task": "lane", "type": "feature",
                        "brief": "company/briefs/brief-lane.md"})
         self.write("company/briefs/brief-lane.md", "# Brief\n")
         target = self.wt_file("src/app.py", "print('x')\n")
-        r = self.edit("guard_provenance.py", target)
+        payload = {"hook_event_name": "PostToolUse", "tool_name": "Write",
+                   "tool_input": {"file_path": target, "content": "x"},
+                   "cwd": self.root}
+        r = run_hook("guard_provenance.py", payload, self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(
+            os.path.exists(os.path.join(self.root, "company", "state",
+                                        "provenance-ledger.json")),
+            "a worktree edit must leave no self-authored record behind",
+        )
 
     # -- derivation, not convention ---------------------------------------
 

@@ -24,8 +24,9 @@ test_multi_task_provenance.TestSingleEntryParity (which pin the exact exit
 code, stdout and adherence line at one entry). This file is one leg of that
 proof, not the whole of it.
 
-Coverage: the ten consumer hooks, plus each of the six guard_provenance
-events (Mode A, B-pre, B-post, C, D, E).
+Coverage: the ten consumer hooks, plus each of the four guard_provenance
+events (Mode A, B-pre, B-post, C). Stop and PreToolUse Edit stay WIRED and
+inert, so there is nothing left there for two file shapes to differ about.
 
 Method: ONE fixture root per case. Run against the v1 file, capture, reset the
 mutable state that hooks write (adherence log, ledger, cost cursor, costs log),
@@ -121,7 +122,7 @@ class ParityBase(unittest.TestCase):
         git(self.root, "commit", "-m", "init")
         self.base_sha = git(
             self.root, "rev-parse", "HEAD").stdout.strip()
-        # A dirty, self-authored source path: this is what arms Modes C and D.
+        # A dirty, self-authored source path: this is what arms Mode C.
         self.w("src/app.py", "x = 1\n")
 
         self.transcript = os.path.join(self.root, "transcript.jsonl")
@@ -357,26 +358,6 @@ class TestProvenanceModeParity(ParityBase):
                     entry={"task": "hf", "type": "hotfix"},
                     expect=logs("BYPASS"))
 
-    def test_mode_d_close_gate(self):
-        self.parity(self.HOOK,
-                    {"hook_event_name": "Stop", "cwd": self.root},
-                    entry=self.self_entry(), expect=prints)
-
-    def test_mode_e_no_decision_blocks(self):
-        self.parity(self.HOOK, self.edit_payload("src/app.py"), expect=blocks)
-
-    def test_mode_e_delegated_no_dispatch_blocks(self):
-        e = dict(ENTRY)
-        e["execution"] = "delegated"
-        e["execution_why"] = "lead owns it"
-        self.parity(self.HOOK, self.edit_payload("src/app.py"),
-                    entry=e, expect=blocks)
-
-    def test_mode_e_hotfix_bypass(self):
-        self.parity(self.HOOK, self.edit_payload("src/app.py"),
-                    entry={"task": "hf", "type": "hotfix"},
-                    expect=logs("BYPASS"))
-
 
 # --------------------------------------------------------------------------
 # BR-MST-10: three ways of saying "no task" must be indistinguishable.
@@ -430,9 +411,13 @@ class TestEmptyStateIndistinguishable(ParityBase):
         self.assertNotIn("commit on protected branch", first["adherence"])
         self.assertIn("requires green, fresh gates", first["stderr"])
 
-    def test_mode_e_allows_in_every_empty_state(self):
+    def test_mode_c_allows_in_every_empty_state(self):
+        # The provenance leg of BR-MST-10. It used to be asserted at the
+        # execution gate; the commit gate is where guard_provenance still
+        # reads active-task.json on an Edit-free path, and `no entries` is one
+        # of its own early exits rather than a mode that no longer runs.
         first = self.run_all("guard_provenance.py",
-                             self.edit_payload("src/app.py"))
+                             self.bash_payload("git commit -m x"))
         self.assertEqual(first["rc"], 0)
 
     def test_context_pin_silent_in_every_empty_state(self):

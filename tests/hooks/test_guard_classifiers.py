@@ -5,7 +5,10 @@ FR-HP-13 anchors guard_spec.is_source at the FIRST path segment, so product
 code under a nested company/ or docs/ directory stops being invisible to every
 source gate. FR-HP-14 and FR-HP-15 replace the DO-NOT-SHIP substring test in
 guard_provenance Mode B-post with a labeled-verdict parser over a flattened
-tool_response. FR-HP-16 makes the Mode D block name the paths that armed it.
+tool_response. (FR-HP-16, which made the Mode D block name the paths that
+armed it, went with Mode D: the close gate no longer prints anything, so its
+display had no subject left. Mode C names its own paths and is witnessed in
+test_guard_provenance.TestCommitGate.)
 
 The classifiers are pure functions, so they are called directly; every gate
 decision they feed is still driven end to end through a real hook subprocess
@@ -78,10 +81,6 @@ class ClassifierBase(Base):
                 "tool_input": {"subagent_type": role},
                 "tool_response": resp, "cwd": self.root}
 
-    def stop_payload(self):
-        return {"hook_event_name": "Stop", "stop_hook_active": False,
-                "cwd": self.root}
-
     def read_ledger_raw(self):
         return json.load(open(os.path.join(
             self.root, "company", "state", "provenance-ledger.json")))
@@ -144,10 +143,16 @@ class TestNestedSourceReachesTheGates(ClassifierBase):
         # nested company/ directory now counts as dirty source, so it prices
         # the same audit every other source file prices. Wider gate, on
         # purpose.
+        #
+        # dirty_source_paths returns (answered, paths): git ran here, so the
+        # answer is affirmative and the classification question is about the
+        # paths half.
         self.init_git()
         self.write(self.NESTED, "x = 1")
         git(self.root, "add", self.NESTED)
-        self.assertIn(self.NESTED, gp.dirty_source_paths(self.root))
+        answered, paths = gp.dirty_source_paths(self.root)
+        self.assertTrue(answered)
+        self.assertIn(self.NESTED, paths)
 
 
 # --------------------------------------------------------------------------
@@ -212,8 +217,8 @@ class TestAuditVerdict(unittest.TestCase):
 class TestUnknownIsNotARejection(ClassifierBase):
     def test_fresh_audit_accepts_a_recorded_unknown(self):
         # OQ-HP-09: an ambiguous audit is not a rejection. Asserted, not
-        # assumed - the whole fail-open posture of Mode C and Mode D rests
-        # on fresh_audit reading "unknown" as passing.
+        # assumed - the whole fail-open posture of Mode C rests on
+        # fresh_audit reading "unknown" as passing.
         self.init_git()
         self.set_manifest()
         self.feature_task()
@@ -274,58 +279,6 @@ class TestResponseText(unittest.TestCase):
         loop = []
         loop.append(loop)
         self.assertIsInstance(gp.response_text(loop), str)
-
-
-# --------------------------------------------------------------------------
-# FR-HP-16 - the Mode D block reason names the offending paths
-# --------------------------------------------------------------------------
-class TestStopReasonNamesPaths(ClassifierBase):
-    # Byte-identical to the reason the hook printed before FR-HP-16, for the
-    # case where nothing dirty is recorded as self-authored.
-    BASE_REASON = (
-        "Active task 'feat-x' has self-authored source changes in the main "
-        "checkout with no fresh independent audit. Dispatch the auditor "
-        "(Task tool, subagent_type: auditor) and commit the audited work, "
-        "or move it to a worktree task branch, before finishing."
-    )
-
-    def test_seven_self_authored_paths_show_five_and_a_count(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        for i in range(7):
-            rel = "src/mod{}.py".format(i)
-            self.write(rel, "x = {}".format(i))
-            git(self.root, "add", rel)
-            # Mode A is what records a path as self-authored; seeding it any
-            # other way would test a ledger this hook cannot produce.
-            r = run_hook(HOOK, self.postedit_payload(rel), self.root)
-            self.assertEqual(r.returncode, 0, r.stderr)
-        r = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        reason = decision["reason"]
-        for i in range(5):
-            self.assertIn("src/mod{}.py".format(i), reason)
-        self.assertNotIn("src/mod5.py", reason)
-        self.assertNotIn("src/mod6.py", reason)
-        self.assertIn("(+2 more)", reason)
-        self.assertIn("earlier session", reason)
-
-    def test_no_self_authored_intersection_leaves_the_reason_untouched(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        # Dirty source exists, but no Mode A edit recorded it, so nothing in
-        # the tree is attributable to this session.
-        self.write("src/app.py", "x = 1")
-        git(self.root, "add", "src/app.py")
-        r = run_hook(HOOK, self.stop_payload(), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        decision = json.loads(r.stdout)
-        self.assertEqual(decision["decision"], "block")
-        self.assertEqual(decision["reason"], self.BASE_REASON)
 
 
 if __name__ == "__main__":

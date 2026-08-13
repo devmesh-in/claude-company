@@ -68,8 +68,8 @@ def write_stamp(root, results_json):
     state_dir = os.path.join(root, "company", "state")
     os.makedirs(state_dir, exist_ok=True)
     # FR-HP-24: atomic replace, never an in-place rewrite. guard_commit and
-    # stop_gate read this file at arbitrary moments; a torn read surfaced to
-    # them as a false "gates.status is malformed" merge block.
+    # the session digest read this file at arbitrary moments; a torn read
+    # surfaced to them as a false "gates.status is malformed" merge block.
     #
     # L1 SEAM (FR-HP-02 / FR-HP-24): the kernel lane is landing
     # _common.atomic_write_json(path, payload) this wave, in parallel with

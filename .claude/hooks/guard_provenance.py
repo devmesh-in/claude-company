@@ -3,41 +3,54 @@
 
 Nothing self-authored integrates on the authority of the context that produced
 it: work built in the main checkout by the CEO/lead must earn one independent,
-read-only auditor pass before it commits or the task closes. Work delegated
-into the hierarchy (a worktree task branch) is verified inside that hierarchy
-and needs no extra audit. This hook records provenance and enforces that rule
-across six modes keyed on (hook_event_name, tool_name):
+read-only auditor pass before it commits. Work delegated into the hierarchy (a
+worktree task branch) is verified inside that hierarchy and needs no extra
+audit. This hook records provenance and enforces that rule across four modes
+keyed on (hook_event_name, tool_name):
 
   A) PostToolUse Edit|Write|MultiEdit - telemetry + a once-per-state drift
      nudge when a feature/program runs execution: "self" with an idle team.
      NEVER blocks.
-  B-pre)  PreToolUse Task|Agent  - record a builder dispatch. NEVER blocks.
+  B-pre)  PreToolUse Task|Agent  - the FR-DE-15 tracking gate, then record a
+     builder dispatch. Blocks ONLY an untracked feature/program task.
   B-post) PostToolUse Task|Agent - record a verifier (auditor) completion and
      its verdict against the current work_hash. NEVER blocks.
   C) PreToolUse Bash - the commit gate: a git commit carrying dirty
      self-authored source in the main checkout with no fresh audit BLOCKS.
-  D) Stop - the close gate: finishing a task with dirty self-authored source
-     and no fresh audit emits a Stop block decision.
-  E) PreToolUse Edit|Write|MultiEdit - the execution gate: a source edit on a
-     feature/program task whose execution decision is missing (or delegated
-     with no dispatch) BLOCKS.
+
+Two further modes shipped and were deleted unfired. A Stop close gate that
+never fired and could deadlock - Mode B-post returns early for a worktree cwd
+and records no audit, while the close gate blocked demanding one, so the
+auditor ran, its result was discarded and Stop blocked again. And a PreToolUse
+Edit execution gate that never fired once in five weeks of adherence log. Both
+events stay WIRED and are now inert; see the note above main()'s dispatch.
 
 The manifest (company/provenance.json) is the rollout switch: missing or
-unreadable, every mode silently allows. Everything fails OPEN: any internal
-error lets the action through. Python 3.8 stdlib only.
+unreadable, every mode silently allows. Everything fails OPEN - any internal
+error lets the action through - with ONE deliberate exception, documented on
+dirty_source_paths: Mode C fails CLOSED when git never answers. Python 3.8
+stdlib only.
+
+Every ledger MUTATION goes through update_ledger, which holds c.state_lock
+across the whole read-modify-write. Several sessions share one checkout, so an
+unlocked cycle loses updates, and a lost update drops a recorded audit - after
+which Mode C blocks a commit whose audit really did happen, for a reason that
+reads wrong.
 
 active-task.json holds N entries at once (one owner, several Claude Code
 sessions, one checkout), so every mode reads ALL of them. FR-MST-23 splits
 the hotfix handling in two, and the split is the spine of this file:
 
   - Exemption TYPES are PER ENTRY. A gate that skips because the single
-    entry's type is exempt now evaluates the NON-EXEMPT entries and blocks if
-    any of them fails. That is Mode D (quick/hotfix) and the FR-DE-15 tracking
-    gate in Mode B-pre and Mode E.
+    entry's type is exempt still evaluates the NON-EXEMPT entries and blocks
+    if any of them fails. The site that survives is the FR-DE-15 tracking gate
+    in Mode B-pre: it filters to the feature/program entries and blocks when
+    ANY of them is untracked, so a hotfix entry sitting beside an untracked
+    feature entry does not let that feature's work start.
   - Waiver BYPASSES stay ANY, and only where blocking a declared production
     emergency behind an unrelated entry is the worse failure. In this file
-    that is Mode C and Mode E ONLY (RISK-MST-01, accepted). No other site has
-    an ANY-hotfix bypass.
+    that is Mode C ONLY (RISK-MST-01, accepted). No other site has an
+    ANY-hotfix bypass.
 
 BR-MST-02: with exactly one entry every mode produces byte-identical exit
 code, stdout, stderr and adherence.log line to the single-task hook. That is
@@ -58,9 +71,6 @@ import guard_models  # noqa: E402
 import guard_spec  # noqa: E402
 
 HOOK = "guard_provenance"
-
-LEDGER_REL = "company/state/provenance-ledger.json"
-MANIFEST_REL = "company/provenance.json"
 
 # FR-MST-25: every message below is in the ENTRY idiom - active-task.json
 # holds N entries, so an escape hatch has to say WHICH entry to change and
@@ -110,50 +120,6 @@ MODE_C_MSG = (
     "(logged, never silent)."
 )
 
-MODE_E_MSG1 = (
-    "BLOCKED: source edit on a feature/program task with no execution "
-    "decision.\n"
-    "Decide HOW task '<slugs>' executes and record it on YOUR entry in\n"
-    "company/state/active-task.json - targeted Edit, never a whole-file "
-    "rewrite\n"
-    "(add both fields to that entry, then retry the edit):\n"
-    "  \"execution\": \"delegated\", \"execution_why\": \"<one line>\"\n"
-    "      - the default: dispatch a tech-lead; developers build in "
-    "worktrees and\n"
-    "        verification comes free through the hierarchy.\n"
-    "  \"execution\": \"self\", \"execution_why\": \"<one line>\"\n"
-    "      - you build it; every self-authored commit then requires a fresh\n"
-    "        read-only auditor pass before it integrates (enforced at commit "
-    "and\n"
-    "        at task close).\n"
-    "Team on payroll: <roster>.\n"
-    "Worktree edits are never gated by this. Production emergency: set\n"
-    "\"type\": \"hotfix\" on YOUR entry in active-task.json (logged, never "
-    "silent)."
-)
-
-# The literal task/<slug> on the attribution line is documentation shown to
-# the reader, which is why this message interpolates <slugs> and never
-# <slug>.
-MODE_E_MSG2 = (
-    "BLOCKED: active-task.json records execution: \"delegated\" for task "
-    "'<slugs>',\n"
-    "but no dispatch has happened and this is a source edit in the main "
-    "checkout.\n"
-    "That contradicts your own written decision. Fix either side:\n"
-    "1) Dispatch first (Task tool, subagent_type: tech-lead) - after a "
-    "dispatch,\n"
-    "   main-checkout glue edits flow freely.\n"
-    "2) Or change the record: set \"execution\": \"self\" with a fresh\n"
-    "   \"execution_why\" - self-built work then pays the mandatory audit at "
-    "commit.\n"
-    "With more than one entry active, the spawn prompt must name task/<slug> "
-    "or\n"
-    "the dispatch is not attributed to this entry.\n"
-    "Production emergency: set \"type\": \"hotfix\" on YOUR entry (logged, "
-    "never silent)."
-)
-
 # FR-DE-15 tracking gate. Interpolate only <slugs> and <type>; the '...' and
 # '<n>' inside the body are literal text shown to the reader, not fields.
 A3_MESSAGE = (
@@ -195,6 +161,12 @@ def load_manifest(root):
 def roster(root):
     """Sorted union of manifest verifier+builder roles and models.json roles.
 
+    NOT dead code, despite having no caller left in this module. Deleting the
+    execution gate took away its in-module caller (the team-on-payroll line of
+    that gate's block message), but session_start.py imports this module and
+    calls gp.roster(root) twice to build the session digest's team line. It is
+    part of this module's surface, not an internal of the deleted gate.
+
     Never raises; returns [] on any trouble.
     """
     try:
@@ -226,38 +198,80 @@ def roster(root):
 def in_worktree_or_out_of_tree(path, root):
     """True if path is inside a worktree checkout OR outside the project root.
 
-    Relative paths resolve against root. Empty path -> False.
+    Derived, not spelled. This used to answer by matching the literal string
+    "/.claude/worktrees/" in the path while c.path_checkout answered the same
+    question from the `.git` marker that DEFINES a working-tree root. Two
+    implementations of one question is the class #107 fixed and #118 removed
+    everywhere else, and each half was wrong in its own direction: `git
+    worktree add` accepts any path, so a real worktree in /tmp/<slug> was not
+    exempt here, while any directory named .claude/worktrees/<x> was.
+
+    Both directions change, and the second one is a TIGHTENING: a
+    `.claude/worktrees/<x>/` directory with NO `.git` marker is not a checkout
+    and is no longer exempt. A fixture that fakes a worktree by making the
+    directory must now write a real `.git` marker. A real worktree at ANY path
+    is exempt.
+
+    Relative paths resolve against root. Empty path -> False. Any exception ->
+    False, unchanged: an exemption acts only on an affirmative yes, so an
+    unanswerable question leaves the gate armed.
     """
     if not path:
         return False
     try:
-        p = path
-        if not os.path.isabs(p):
-            p = os.path.join(root, p)
-        norm = os.path.normpath(p).replace(os.sep, "/")
-        if "/.claude/worktrees/" in norm:
+        target = path
+        if not os.path.isabs(target):
+            target = os.path.join(root, target)
+        # THE TRAP. path_checkout walks up from os.path.dirname(target), so a
+        # DIRECTORY handed in bare resolves to its PARENT - and a worktree ROOT
+        # (which is what payload["cwd"] is) would answer "main checkout", the
+        # exact opposite of the truth. Appending a child component makes the
+        # directory get probed as its own container.
+        if os.path.isdir(target):
+            target = os.path.join(target, "_")
+        tree, outside = c.path_checkout(root, target)
+        if outside:
             return True
-        root_norm = os.path.normpath(os.path.abspath(root)).replace(
-            os.sep, "/"
-        ).rstrip("/")
-        if norm == root_norm:
-            return False
-        if norm.startswith(root_norm + "/"):
-            return False
-        return True
+        return os.path.abspath(tree) != os.path.abspath(root)
     except Exception:
         return False
 
 
 def dirty_source_paths(root):
-    """Project-relative source paths that are dirty in git (excl. state)."""
-    out = c._git(
+    """(answered, paths) - dirty project-relative source paths (excl. state).
+
+    `answered` is whether git said anything at all, and it exists because this
+    is the ONE place in this file that fails CLOSED. That INVERTS the file's
+    usual fail-open posture and it is deliberate: "could not look" must never
+    read as "nothing to see". Mode C, the only caller, arms on `not answered`.
+
+    What this replaces: `out = c._git(...)` then `if not out: return []`.
+    _common distinguishes three outcomes and _git collapses them to two, so a
+    `git status` that timed out came back falsy and was indistinguishable from
+    a clean tree - the commit gate silently disarmed under load with nothing in
+    the log to say why. That is measured, not theoretical: on this machine a
+    sibling lane's ladder run took another lane's hooks suite from 40 seconds
+    to 217 on pure CPU contention, against a 5s default timeout.
+
+    So the timeout is GIT_SLOW_TIMEOUT, not the default. This is a whole-tree
+    question asked once per git-commit segment, and waiting 30 seconds for the
+    right answer is strictly better than getting a wrong one in 5.
+
+    GIT_REFUSED is a real NEGATIVE answer and does NOT arm the gate: git ran
+    and answered - not a repository, bad pathspec - and an exemption is allowed
+    to act on an affirmative negative. Only silence, where git never answered
+    at all, is treated as "assume the worst".
+    """
+    status, out = c.git_result(
         root,
         ["status", "--porcelain", "--untracked-files=all",
          "--", ".", ":(exclude)company/state"],
+        timeout=c.GIT_SLOW_TIMEOUT,
     )
-    if not out:
-        return []
+    if status == c.GIT_SILENT:
+        return False, []
+    if status != c.GIT_ANSWERED:
+        return True, []
     paths = []
     for line in out.splitlines():
         if len(line) <= 3:
@@ -273,7 +287,7 @@ def dirty_source_paths(root):
             continue
         if guard_spec.is_source(rel, os.path.basename(rel)):
             paths.append(rel)
-    return paths
+    return True, paths
 
 
 # --- FR-DE-15 tracking gate -----------------------------------------------
@@ -549,6 +563,37 @@ def write_ledger(root, ledger):
         pass
 
 
+def update_ledger(root, mutate):
+    """Read-modify-write the ledger under c.state_lock. Returns mutate's value.
+
+    THE ONLY ledger mutation path. Multi-session task entries shipped in
+    v0.2.6, so several Claude Code sessions against one working tree is the
+    normal operating mode here, and every one of them was doing an unlocked
+    read-modify-write on this file. A lost update is not cosmetic: it drops a
+    recorded audit, and Mode C then blocks a commit whose audit really did
+    happen, citing "no audit recorded" - a block that is both wrong and
+    unactionable, since the thing it asks for was already done.
+
+    The lock spans the READ as well as the write. Wrapping only the write
+    leaves the whole race intact.
+
+    `mutate(ledger)` gets the ledger to edit in place and MUST NOT exit - a
+    sys.exit inside the lock leaves the mutation half-applied and, in mode_a's
+    case, skips the write entirely. Anything the caller wants to do after the
+    ledger lands (log, emit, exit) is returned from mutate and done out here,
+    once the lock is released.
+
+    c.state_lock is itself fail-open in every direction - no fcntl, no state
+    dir, an exception, a 2s timeout all proceed UNLOCKED - so this degrades to
+    exactly the previous unlocked behavior and can never brick a session.
+    """
+    with c.state_lock(root):
+        ledger = read_ledger(root)
+        result = mutate(ledger)
+        write_ledger(root, ledger)
+    return result
+
+
 def fresh_audit(root, ledger):
     """True if some recorded audit covers the current tree and did not fail."""
     wh = c.work_hash(root)
@@ -744,48 +789,54 @@ def mode_a(root, ti):
     if not guard_spec.is_source(rel, os.path.basename(rel)):
         sys.exit(0)
 
-    ledger = read_ledger(root)
-    # self_authored is a property of the tree, so it stays GLOBAL; the nudge
-    # fingerprint names a slug, so it lives on that entry's record.
-    seen = any(
-        isinstance(e, dict) and e.get("path") == rel
-        for e in ledger["self_authored"]
-    )
-    if not seen:
-        ledger["self_authored"].append({"path": rel, "at": c.iso_now()})
-
-    nudge_entry = None
-    for task in tasks:
-        key = ledger_key(task)
-        record = task_record(ledger, key)
-        qualifies = (
-            bool(task.get("task"))
-            and task.get("type") in ("feature", "program")
-            and execution_decision(task) == "self"
-            and len(credited_dispatches(ledger, task, tasks)) == 0
+    def mutate(ledger):
+        # self_authored is a property of the tree, so it stays GLOBAL; the
+        # nudge fingerprint names a slug, so it lives on that entry's record.
+        seen = any(
+            isinstance(e, dict) and e.get("path") == rel
+            for e in ledger["self_authored"]
         )
-        if not qualifies:
-            if record.get("nudge_state"):
-                record["nudge_state"] = None
-            continue
-        armed = (
-            record.get("nudge_state") or {}
-        ).get("fingerprint") == "self-idle"
-        if armed or nudge_entry is not None:
-            continue
-        record["nudge_state"] = {"fingerprint": "self-idle", "at": c.iso_now()}
-        nudge_entry = task
+        if not seen:
+            ledger["self_authored"].append({"path": rel, "at": c.iso_now()})
 
+        nudge_entry = None
+        for task in tasks:
+            key = ledger_key(task)
+            record = task_record(ledger, key)
+            qualifies = (
+                bool(task.get("task"))
+                and task.get("type") in ("feature", "program")
+                and execution_decision(task) == "self"
+                and len(credited_dispatches(ledger, task, tasks)) == 0
+            )
+            if not qualifies:
+                if record.get("nudge_state"):
+                    record["nudge_state"] = None
+                continue
+            armed = (
+                record.get("nudge_state") or {}
+            ).get("fingerprint") == "self-idle"
+            if armed or nudge_entry is not None:
+                continue
+            record["nudge_state"] = {
+                "fingerprint": "self-idle", "at": c.iso_now()
+            }
+            nudge_entry = task
+        return nudge_entry
+
+    # The nudge entry comes back OUT of the lock rather than being acted on
+    # inside it: emit_nudge calls sys.exit, and exiting inside update_ledger
+    # would skip the write that arms the once-per-state fingerprint - so the
+    # same nudge would fire on every subsequent edit forever. This is still
+    # exactly ONE ledger write per invocation, as before.
+    nudge_entry = update_ledger(root, mutate)
     if nudge_entry is not None:
         slug = nudge_entry.get("task")
         c.adherence_log(
             root, HOOK, "NUDGE", slug,
             c.qualify_reason("self-idle", tasks, nudge_entry),
         )
-        write_ledger(root, ledger)
         emit_nudge(NUDGE_TEXT.replace("<slug>", slug))
-
-    write_ledger(root, ledger)
     sys.exit(0)
 
 
@@ -807,6 +858,29 @@ def mode_b_pre(root, ti):
     role = role_of(ti)
     builders = manifest.get("builder_roles") or []
     tasks = c.active_tasks(root)
+    if role in builders and not tasks:
+        # c.active_tasks returns [] for BOTH "no task in flight" and "the file
+        # exists but does not parse" - almost always a concurrent session
+        # mid-write, since a whole-file write is not atomic. Those are opposite
+        # facts. Treating the second as the first made the dispatch vanish
+        # entirely, and a vanished dispatch is what later produces a false
+        # "delegated but no dispatch" block with nothing anywhere for the
+        # blocked agent to read that would explain it. Record it unattributed.
+        if c.active_tasks_unreadable(root):
+            at = c.iso_now()
+
+            def mutate(ledger):
+                ledger["unattributed_dispatches"].append({
+                    "role": role, "at": at, "reason": "unreadable task state",
+                })
+
+            update_ledger(root, mutate)
+            c.adherence_log(
+                root, HOOK, "DISPATCH", role,
+                "builder spawn, unreadable task state",
+            )
+        # File absent is genuinely "no task in flight" - record nothing.
+        sys.exit(0)
     if role in builders and tasks:
         gated = c.entries_of_type(tasks, ("feature", "program"))
         untracked = [e for e in gated if tracking_untracked(root, e)]
@@ -827,30 +901,36 @@ def mode_b_pre(root, ti):
                 c.qualify_reason("hotfix mode", tasks, hotfix),
             )
 
-        ledger = read_ledger(root)
         at = c.iso_now()
         attributed = attributed_entries(tasks, ti)
-        if attributed:
-            for entry in attributed:
-                task_record(ledger, ledger_key(entry))["dispatches"].append(
+
+        def mutate(ledger):
+            if attributed:
+                for entry in attributed:
+                    task_record(
+                        ledger, ledger_key(entry)
+                    )["dispatches"].append({"role": role, "at": at})
+            else:
+                # FR-MST-18: a dispatch naming no active slug satisfies no
+                # entry's delegated requirement. Record it globally so the
+                # false negative is diagnosable rather than invisible.
+                ledger["unattributed_dispatches"].append(
                     {"role": role, "at": at}
                 )
+
+        update_ledger(root, mutate)
+        if attributed:
             c.adherence_log(
                 root, HOOK, "DISPATCH", role,
                 c.qualify_reason("builder spawn", tasks, attributed),
             )
         else:
-            # FR-MST-18: a dispatch naming no active slug satisfies no entry's
-            # delegated requirement. Record it globally and log it so the false
-            # negative is diagnosable rather than invisible.
-            ledger["unattributed_dispatches"].append({"role": role, "at": at})
             c.adherence_log(
                 root, HOOK, "DISPATCH", role,
                 c.qualify_reason(
                     "builder spawn attributed to no active task", tasks, tasks
                 ),
             )
-        write_ledger(root, ledger)
     sys.exit(0)
 
 
@@ -872,15 +952,18 @@ def mode_b_post(root, ti, payload):
             verdict = audit_verdict(response_text(resp))
         except Exception:
             verdict = "unknown"
-        ledger = read_ledger(root)
-        ledger["audits"].append({
+        audit = {
             "role": role,
             "at": c.iso_now(),
             "work_hash": c.work_hash(root),
             "verdict": verdict,
-        })
+        }
+
+        def mutate(ledger):
+            ledger["audits"].append(audit)
+
+        update_ledger(root, mutate)
         c.adherence_log(root, HOOK, "AUDIT", role, verdict)
-        write_ledger(root, ledger)
     sys.exit(0)
 
 
@@ -922,180 +1005,45 @@ def mode_c(root, ti, payload):
         if os.path.isfile(os.path.join(root, ".git", "MERGE_HEAD")):
             c.log_bypass(root, HOOK, "git commit", "merge conclusion")
             continue
-        dp = dirty_source_paths(root)
-        if not dp:
+        # FAIL CLOSED on silence, and only on silence. An affirmative clean
+        # tree allows; a tree git never reported on is treated as dirty,
+        # because a gate that stops gating under load - quietly - is worse
+        # than one that never gated. See dirty_source_paths.
+        answered, dp = dirty_source_paths(root)
+        if answered and not dp:
             continue
+        # Read-only: no state_lock. write_ledger replaces the file in one
+        # os.replace, so a read is never torn, and taking a 2s-timeout lock in
+        # front of every Bash command would be a real cost for no correctness
+        # gain.
         ledger = read_ledger(root)
         if fresh_audit(root, ledger):
             continue
         # No hotfix reached here, so every entry in flight is non-exempt.
         slugs_str = c.slug_list(tasks)
         reason = staleness_reason(root, ledger)
-        shown = dp[:5]
-        paths_str = ", ".join(shown)
-        if len(dp) > 5:
-            paths_str += ", ... and {} more".format(len(dp) - 5)
+        if not answered:
+            paths_str = (
+                "unknown - git did not answer; treating the tree as dirty"
+            )
+        else:
+            shown = dp[:5]
+            paths_str = ", ".join(shown)
+            if len(dp) > 5:
+                paths_str += ", ... and {} more".format(len(dp) - 5)
         msg = (
             MODE_C_MSG.replace("<slugs>", slugs_str)
             .replace("<reason>", reason)
             .replace("<paths>", paths_str)
         )
+        short = "self-authored, no fresh audit"
+        if not answered:
+            short += " (git silent)"
         c.block(
             root, HOOK, "git commit",
-            c.qualify_reason("self-authored, no fresh audit", tasks, tasks),
+            c.qualify_reason(short, tasks, tasks),
             msg,
         )
-    sys.exit(0)
-
-
-def mode_d(root, payload):
-    """Stop: the close gate. Mirrors stop_gate.py (prints a JSON decision).
-
-    FR-MST-21, and this is NOT an ANY-hotfix site. quick and hotfix are
-    exemption TYPES and FR-MST-23 makes exemptions PER ENTRY: the gate drops
-    the exempt entries and evaluates the rest, so [quick, feature] still
-    blocks. The exemption belongs to the quick entry, not to the tree.
-    """
-    if payload.get("stop_hook_active"):
-        sys.exit(0)
-    tasks = c.active_tasks(root)
-    if not tasks:
-        sys.exit(0)
-    gated = [
-        e for e in tasks if e.get("type") not in ("quick", "hotfix")
-    ]
-    if not gated:
-        sys.exit(0)
-    if load_manifest(root) is None:
-        sys.exit(0)
-    dp = dirty_source_paths(root)
-    ledger = read_ledger(root)
-    if dp and not fresh_audit(root, ledger):
-        # N == 1 keeps the two-argument .get verbatim so a `{}` entry still
-        # renders as (unknown).
-        if len(tasks) <= 1:
-            slug = tasks[0].get("task", "(unknown)")
-        else:
-            slug = c.slug_list(gated)
-        c.adherence_log(
-            root, HOOK, "BLOCK", slug,
-            c.qualify_reason("self-authored, no fresh audit", tasks, gated),
-        )
-        reason = (
-            "Active task '{}' has self-authored source changes in the main "
-            "checkout with no fresh independent audit. Dispatch the auditor "
-            "(Task tool, subagent_type: auditor) and commit the audited work, "
-            "or move it to a worktree task branch, before finishing."
-        ).format(slug)
-        # FR-HP-16: name the paths that armed the gate. self_authored is a
-        # property of the TREE, so the offending work may predate this
-        # session, and an unnamed block reads as an accusation the agent
-        # being blocked cannot check. Display only - it reaches no decision.
-        self_dirty = sorted(
-            {
-                e.get("path")
-                for e in (ledger.get("self_authored") or [])
-                if isinstance(e, dict)
-            }.intersection(dp)
-        )
-        if self_dirty:
-            shown = ", ".join(self_dirty[:5])
-            more = len(self_dirty) - 5
-            if more > 0:
-                shown += " (+{} more)".format(more)
-            reason += (
-                " Self-authored dirty paths (possibly from an earlier "
-                "session): {}.".format(shown)
-            )
-        print(json.dumps({"decision": "block", "reason": reason}))
-    sys.exit(0)
-
-
-def mode_e(root, ti):
-    """PreToolUse Edit|Write|MultiEdit: the execution gate.
-
-    FR-MST-22, and the ORDER is the point:
-      1. path and manifest checks
-      2. no entries -> allow
-      3. ANY hotfix -> logged bypass, allow (RISK-MST-01, accepted: one edit
-         touches one tree, and blocking a declared production emergency behind
-         an unrelated entry is the worse failure)
-      4. filter to the feature/program entries; none -> allow
-      5. ALL tracking      - block if ANY of them is untracked
-      6. ALL execution     - block if ANY of them lacks a decision
-      7. per-entry dispatch - block for any delegated entry with zero
-         dispatches OF ITS OWN
-    Steps 5-7 are ALL checks, so a second feature entry can only make this
-    gate block MORE. Step 7 goes through credited_dispatches (per-slug); a
-    whole-ledger dispatch count would let session B's dispatch vacuously
-    satisfy session A's delegated decision.
-    """
-    file_path = ti.get("file_path")
-    if not file_path:
-        sys.exit(0)
-    if in_worktree_or_out_of_tree(file_path, root):
-        sys.exit(0)
-    rel = c.rel_path(root, file_path)
-    if not guard_spec.is_source(rel, os.path.basename(rel)):
-        sys.exit(0)
-    if load_manifest(root) is None:
-        sys.exit(0)
-    tasks = c.active_tasks(root)
-    if not tasks:
-        sys.exit(0)
-
-    hotfix = c.hotfix_entry(tasks)
-    if hotfix is not None:
-        c.log_bypass(
-            root, HOOK, rel, c.qualify_reason("hotfix mode", tasks, hotfix)
-        )
-        sys.exit(0)
-
-    # OQ-DE-04 assumption: non-feature/program entries (quick, ideation, ...)
-    # are ungated here.
-    gated = c.entries_of_type(tasks, ("feature", "program"))
-    if not gated:
-        sys.exit(0)
-
-    # FR-DE-15: untracked entries are blocked before the execution-decision
-    # check, so an entry missing BOTH is told to track first.
-    untracked = [e for e in gated if tracking_untracked(root, e)]
-    if untracked:
-        c.block(
-            root, HOOK, rel,
-            c.qualify_reason(
-                "untracked feature/program task", tasks, untracked
-            ),
-            A3_MESSAGE
-            .replace("<slugs>", c.slug_list(untracked))
-            .replace("<type>", untracked[0].get("type") or "feature"),
-        )
-
-    undecided = [e for e in gated if execution_decision(e) is None]
-    if undecided:
-        c.block(
-            root, HOOK, rel,
-            c.qualify_reason("no execution decision", tasks, undecided),
-            MODE_E_MSG1
-            .replace("<slugs>", c.slug_list(undecided))
-            .replace("<roster>", ", ".join(roster(root))),
-        )
-
-    delegated = [e for e in gated if execution_decision(e) == "delegated"]
-    if delegated:
-        ledger = read_ledger(root)
-        starving = [
-            e for e in delegated
-            if len(credited_dispatches(ledger, e, tasks)) == 0
-        ]
-        if starving:
-            c.block(
-                root, HOOK, rel,
-                c.qualify_reason(
-                    "delegated but no dispatch", tasks, starving
-                ),
-                MODE_E_MSG2.replace("<slugs>", c.slug_list(starving)),
-            )
     sys.exit(0)
 
 
@@ -1108,6 +1056,14 @@ def main():
     root = c.project_root(payload)
     ti = payload.get("tool_input") or {}
 
+    # Stop and PreToolUse Edit|Write|MultiEdit are still WIRED to this hook in
+    # .claude/settings.json, and guard_models pins that wiring inventory, so
+    # the wiring is deliberate and stays. Both now fall through to the `else`
+    # and exit 0: the close gate (Stop) and the execution gate (PreToolUse
+    # Edit) were deleted unfired. The hole is not an oversight and is not an
+    # invitation - do NOT hang a new mode off either event to fill it. If one
+    # of those gates is ever wanted back, it comes back through a spec, not
+    # through the empty slot.
     try:
         if event == "PostToolUse" and tool in ("Edit", "Write", "MultiEdit"):
             mode_a(root, ti)
@@ -1117,10 +1073,6 @@ def main():
             mode_b_post(root, ti, payload)
         elif event == "PreToolUse" and tool == "Bash":
             mode_c(root, ti, payload)
-        elif event == "Stop":
-            mode_d(root, payload)
-        elif event == "PreToolUse" and tool in ("Edit", "Write", "MultiEdit"):
-            mode_e(root, ti)
         else:
             sys.exit(0)
     except SystemExit:
