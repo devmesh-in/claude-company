@@ -11,7 +11,23 @@ not running a company against an app.
 tracked `company/gates.config` keeps `CONFIGURE ME` placeholder gates on
 purpose - they are what a fresh install inherits before onboarding wires real
 commands. NEVER commit this repo's real gate commands into it. The suites that
-actually gate THIS repo are run directly, not through `run-gates.sh`:
+actually gate THIS repo are run directly, not through `run-gates.sh`.
+
+Which of them your change can break is a fact, not a judgment. Ask before you
+run anything:
+
+```bash
+python3 scripts/affected-suites.py             # this branch's diff -> the suites to run
+python3 scripts/affected-suites.py --commands | sh   # the same, run
+```
+
+It derives the suite list from `.github/workflows/ci.yml`, so it cannot drift
+from what CI runs, and it asks for EVERY suite whenever it cannot tell: a path
+no rule maps, a suite the workflow renamed under a rule, or a suite no rule
+claims. It errs toward running too much, which is why its answer can be trusted
+without re-deriving it by hand. Run what it names.
+
+A full run is these five, and nothing else:
 
 ```bash
 python3 -m unittest discover -s tests/hooks -q   # the hooks
@@ -21,8 +37,10 @@ bash tests/install/test_tui.sh                    # the install TUI
 bash tests/install/test_update.sh                 # update/rollout, incl. legacy field installs
 ```
 
-All five must be green before any commit, and CI runs all five plus the pack
-manifest, the readme check and the no-slop scan.
+Whatever the scoper names must be green before any commit. CI runs all five
+across six platforms regardless, plus the pack manifest, the readme check, the
+no-slop scan and the canon check - that backstop is the only reason narrowing
+the local run is safe. Never use the scoper to narrow what CI runs.
 
 **`npm test` is the CLI suite alone.** It does NOT run the installer, TUI or
 update suites - only `prepublishOnly` chains those. This file previously said
@@ -31,7 +49,9 @@ claims were wrong, and on 2026-08-13 that error reached three sealed briefs and
 cost a lane a full rebuild after CI caught a regression that two green local
 suites had missed. If you change anything under `company/run-gates.sh`,
 `install.sh`, `update.sh` or `lib/`, the installer suite is the one most likely
-to catch you, and it is the one nobody runs by habit.
+to catch you, and it is the one nobody runs by habit - which is exactly the
+pairing `scripts/affected-suites.py` encodes, so you no longer have to
+remember it.
 
 ## Layout
 
