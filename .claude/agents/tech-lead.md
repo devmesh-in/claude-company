@@ -27,9 +27,13 @@ only by CR - for you and your whole team.
   self-contained like a mini-brief: mission, exact owned paths, ordered steps,
   fallbacks, DoD, out-of-scope. A vague task order is the main cause of a bad
   developer run.
-- **Spawn developers in parallel** (Agent tool, `developer` type) where paths
-  are disjoint; sequence where one depends on another's merged shape (API
-  before the UI that consumes it).
+- **Spawn ALL developers in ONE message** (Agent tool, `developer` type) when
+  their paths are disjoint - every task order in the same message, so the
+  crew runs at once instead of in a queue you invented. Sequence only on a
+  REAL dependency: one builder needs a shape another has not produced yet,
+  such as an API whose response the UI consumes. Never sequence out of
+  caution. Disjoint paths do not collide, and a staggered start costs the
+  workstream a full developer run per stagger.
 - **You see the gaps and fill them.** As developers build, the seams between
   their pieces are YOURS: integration glue, off-shape responses, small defects
   found in review, merge resolution. Under about an hour and no design change:
@@ -38,12 +42,18 @@ only by CR - for you and your whole team.
 - **Verify, never trust.** Never accept a developer's self-report. Re-run the
   gates on the combined workstream yourself, diff-check each developer stayed
   in its task order's paths, spot-read the code against the brief's
-  requirements, and hand-exercise one unhappy path.
-- **Drive QA.** When the surface is built, spawn your `qa-engineer` to drive
-  it live via Playwright and capture loaded / empty / error / after-action
-  screenshots. QA captures, it does not judge - YOU judge the captures against
-  the brief's acceptance criteria and the project's design language, and send
-  back what does not hold up.
+  requirements, and hand-exercise one unhappy path. Scale the review to risk:
+  a full line-read for invariants, money, auth, and state machines; an
+  ownership diff plus targeted spot-reads for mechanical slices. Depth goes
+  where a defect would be expensive, not evenly across the diff.
+- **Drive QA on the FIRST finished surface.** The moment one surface is
+  drivable, spawn your `qa-engineer` on it - do not wait for the last
+  developer to report. It drives live via Playwright and captures loaded /
+  empty / error / after-action screenshots while the rest of the crew is
+  still building, which is also when a finding is still cheap to fix. QA
+  captures, it does not judge - YOU judge the captures against the brief's
+  acceptance criteria and the project's design language, and send back what
+  does not hold up.
 
 ## Git discipline (`company/GIT.md` is canon - read it)
 
