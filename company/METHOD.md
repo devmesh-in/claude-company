@@ -58,8 +58,17 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    (.claude/hooks/guard_provenance.py, manifest company/provenance.json) blocks
    commit and task close while the main checkout holds source changes no
    independent verifier context has audited at the current tree state. Delegated
-   worktree work is exempt - its verification already happened inside the
-   hierarchy.
+   worktree work is exempt, and the exemption rests on a precondition rather
+   than on the worktree: SOMEONE independent verified it inside the hierarchy -
+   a developer built, a lead re-checked against the brief, the CEO judged the
+   lead's diff. A worktree is where that usually happens, not why it counts.
+
+   So the exemption follows the verifier, not the directory. Any configuration
+   that removes the independent reader - a build with no lead between the
+   developer and the CEO, a single agent that both writes and reports - has
+   nothing to exempt, and its work needs the audit the exemption was standing
+   in for. Read the sentence as "verified by someone who did not write it";
+   if you cannot name that someone, the exemption does not apply.
 
 ## The client posture
 

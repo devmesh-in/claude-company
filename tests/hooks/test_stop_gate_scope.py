@@ -450,10 +450,16 @@ class LoopProtectionAndFailOpen(StopScopeBase):
         self.assertEqual(r.stdout, "")
         self.assertEqual(self.log_lines()[before:], [])
 
-    def test_malformed_active_task_json_fails_open(self):
-        """FR-HP-50: an unparseable state file must let the turn finish. A
-        hook that jammed every Stop on a corrupt JSON byte would be worse
-        than the red tree it is guarding.
+    def test_malformed_active_task_json_fails_open_but_says_so(self):
+        """FR-HP-50 plus the L1 kernel's active_tasks_unreadable. An
+        unparseable state file must let the turn finish - a hook that jammed
+        every Stop on a corrupt byte would be worse than the red tree it
+        guards, and the block recipe ("close YOUR entry") is unfollowable
+        against a file that does not parse.
+
+        But it must not pass SILENTLY: unreadable is not "no task in flight",
+        and a gate that quietly stops gating is the exact failure this lane
+        exists to remove. Exit 0, no decision, one WARN naming the file.
         """
         self.write("company/state/active-task.json", "{not json at all")
         self.green_stamp()
@@ -461,7 +467,29 @@ class LoopProtectionAndFailOpen(StopScopeBase):
         r = self.run_stop()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout, "")
-        self.assertNotIn("BLOCK", "\n".join(self.log_lines()))
+        lines = self.log_lines()
+        self.assertNotIn("BLOCK", "\n".join(lines))
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(
+            lines[0].startswith(
+                "stop_gate | WARN | company/state/active-task.json | "
+                "active-task.json does not parse after retries"),
+            lines[0])
+
+    def test_an_absent_state_file_stays_completely_silent(self):
+        """The negative half of the case above, and the reason it is a
+        separate test: an idle tree with no active-task.json at all is the
+        normal state of most sessions. It must produce no WARN, or the log
+        fills with noise on every turn of every session that has no task and
+        the one line that matters stops being findable.
+        """
+        self.green_stamp()
+        self.go_stale()
+        before = len(self.log_lines())
+        r = self.run_stop()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "")
+        self.assertEqual(self.log_lines()[before:], [])
 
     def test_unreadable_active_task_json_fails_open(self):
         """FR-HP-50: same contract when the file cannot be opened at all, not
@@ -478,7 +506,51 @@ class LoopProtectionAndFailOpen(StopScopeBase):
             os.chmod(path, 0o644)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout, "")
-        self.assertNotIn("BLOCK", "\n".join(self.log_lines()))
+        lines = self.log_lines()
+        self.assertNotIn("BLOCK", "\n".join(lines))
+        self.assertTrue(any("does not parse after retries" in ln
+                            for ln in lines), lines)
+
+
+class ContentBasedFreshnessDoesNotArmTheGate(StopScopeBase):
+    """The scenario that cost four ladder runs in one day: paperwork edits
+    staling a green stamp and blocking the session that made them.
+
+    L1's content-based work_hash excludes company/state, company/briefs and
+    company/specs, so writing a brief or a spec is no longer "work changed".
+    This asserts it end to end through the Stop hook rather than by reading
+    HASH_EXCLUDES, because the constant is not the promise - the gate not
+    arming is the promise.
+    """
+
+    def test_writing_a_brief_does_not_arm_the_stop_gate(self):
+        self.set_tasks({"task": "feat-x", "type": "feature"})
+        self.green_stamp()
+        self.write("company/briefs/brief-feat-x.md", "# BRIEF\n\nmission\n")
+        before = len(self.log_lines())
+        r = self.run_stop()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "", "a brief edit must not block a turn")
+        self.assertEqual(self.log_lines()[before:], [])
+
+    def test_writing_a_spec_does_not_arm_the_stop_gate(self):
+        self.set_tasks({"task": "feat-x", "type": "feature"})
+        self.green_stamp()
+        self.write("company/specs/spec-feat-x.md", "# SPEC\n\nFR-1\n")
+        r = self.run_stop()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "")
+
+    def test_a_source_edit_still_arms_it(self):
+        """The control. If everything stopped arming the gate the tests above
+        would pass for the wrong reason, and the gate would be decorative.
+        """
+        self.set_tasks({"task": "feat-x", "type": "feature"})
+        self.green_stamp()
+        self.write("src/app.py", "print('changed')\n")
+        r = self.run_stop()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, BLOCK_STDOUT)
 
 
 # --------------------------------------------------------------------------

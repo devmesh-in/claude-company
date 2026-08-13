@@ -59,6 +59,17 @@ This file is yours alone. Subagents do not read it; they read the project's
    (recover it) or an abandoned task (record in STATUS, then remove). If a
    session died mid-flight, check each worktree's git log before respawning
    anything - work may be complete on disk without a report.
+
+   **Then check this checkout is ON the integration line, before you trust any
+   verification you do today.** The hooks that enforce are the ones in THIS
+   working tree (`.claude/hooks/`, resolved through `CLAUDE_PROJECT_DIR`), not
+   the ones on `main`. A checkout parked on an old branch therefore runs stale
+   enforcement while `main` carries the fix, and every check you run confirms
+   code that is not the code doing the enforcing. Confirm with
+   `git merge-base --is-ancestor HEAD origin/main`, and move the checkout onto
+   the integration line before verifying anything. Merged is not the same as
+   in force: a fix on `main` and a checkout parked behind it means the guard
+   you just proved correct is not the guard that will run.
 1. **Classify the incoming request** (this decides ceremony, nobody hand-picks):
    - `ideation` - the ask is ideas or direction, or it is fuzzy enough that
      building now would mean converging on a guess. Run the brainstorm
@@ -252,6 +263,13 @@ Hazards learned the hard way:
   before respawning; a blind respawn double-writes.
 - Cap parallelism at the number of genuinely disjoint workstreams. Never split
   one workstream across two agents.
+- Spell the path out in `git -C <path> commit`: the commit guard reads the RAW
+  command text, so `git -C "$W" commit` leaves it looking at an unexpanded
+  variable, it falls back to the session's own directory, and it judges the
+  commit by the MAIN checkout's branch. From a session sitting on `main` that
+  is a block telling you to switch to a task branch you are already on - the
+  worst kind of wrong recipe, because following it does nothing. A literal path
+  is judged correctly. Three lanes hit this in one day.
 
 ## Parallel discipline
 
@@ -271,6 +289,24 @@ every individual step looks reasonable.
   integration costs minutes now, and it surfaces a seam mismatch while the
   other lanes can still absorb it. Barrier-waiting was only rational when
   integration was expensive.
+
+  Cost it honestly, because the merge side is not free the way the build side
+  is. Branch protection requires an up-to-date branch, so merging one lane
+  puts every other green lane BEHIND: each then needs `gh pr update-branch`
+  and a full CI matrix before it is allowed in. With N lanes green at once
+  that is N CI cycles, not one - a lane can sit at 9 of 9 green and still be
+  refused with `mergeStateStatus=BEHIND` because a sibling landed after it
+  rebased. Expect the cycles up front rather than discovering them on the
+  second merge.
+
+  It is still the right default: the hours are in build parallelism, and CI
+  cycles run while you do something else. Two escape hatches if it ever bites
+  harder than that. Batch several green lanes into ONE update-and-merge pass,
+  which trades a little seam-mismatch latency for a single cycle. Or relax the
+  up-to-date requirement for lanes whose ownership diffs are provably
+  disjoint - this company builds workstreams on disjoint directories by
+  construction, so "these two branches cannot conflict" is mechanically
+  checkable from the two diffs rather than a judgment call.
 - **CRs are interrupt-priority.** A lane blocked on a CR is a whole team
   idling on your queue. Check `company/change-requests/` at every natural
   pause - every lane notification, every integration - and arbitrate before

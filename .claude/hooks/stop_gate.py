@@ -103,6 +103,22 @@ def main():
         root = c.project_root(payload)
         tasks = c.active_tasks(root)
         if not tasks:
+            # An empty list has two very different causes, and the L1 kernel's
+            # active_tasks_unreadable is what tells them apart. "No entries" is
+            # a normal idle tree. "The file exists and still does not parse
+            # after the kernel's retries" means this hook cannot tell whether a
+            # gating task is in flight - so it does NOT block (the recipe it
+            # would print, close YOUR entry, is unfollowable against a file
+            # that does not parse) and it does NOT stay silent either, because
+            # silent non-enforcement is the failure mode this whole lane
+            # exists to remove. It records that the gate did not run.
+            if c.active_tasks_unreadable(root):
+                c.adherence_log(
+                    root, HOOK, "WARN", "company/state/active-task.json",
+                    "active-task.json does not parse after retries - cannot "
+                    "tell whether a gating task is in flight, so the Stop "
+                    "gate did not run this turn",
+                )
             sys.exit(0)
         # FR-MST-09: quick/hotfix exempt THEMSELVES, not the tree. Any other
         # entry still in flight keeps the gate armed - the tree is red with
