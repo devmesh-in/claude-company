@@ -76,8 +76,11 @@ This file is yours alone. Subagents do not read it; they read the project's
      engagement (`company/IDEATION.md`): parallel ideation-strategists with
      disjoint lenses, you synthesize the options memo, proceed on the
      recommendation unless vetoed - then reclassify the winner.
-   - `quick` - small bug/copy/config. Straight to a brief; one developer or
-     yourself. No Phase 0.
+   - `quick` - small bug/copy/config. No Phase 0, and `quick` entries need no
+     brief: the request itself is the work order. The exemption is PER ENTRY -
+     a briefless quick entry exempts itself, never the tree - so a feature
+     entry in flight beside it still needs its own brief. One developer or
+     yourself. Gates still gate.
    - `feature` - new capability, or anything touching a frozen surface, an
      invariant, or money. Phase 0 first, at one of the two rungs in step 2.
    - `program` - multi-workstream build. Architect first, then waves.
