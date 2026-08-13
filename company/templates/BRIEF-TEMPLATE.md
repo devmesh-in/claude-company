@@ -48,6 +48,14 @@ Universal DoD (every task) plus this task's specifics:
 - [ ] No edits outside owned directories; zero frozen surfaces patched locally
 - [ ] UI work: screen driven live, four states captured (loaded/empty/error/after-action)
 - [ ] Tests added for new behavior (tests are the oracle - never edited to pass)
+- [ ] Every test proves a falsifiable claim of its FR: it fails when that
+      behavior breaks, and you can name the break that fails it
+- [ ] No restating-implementation tests and no trivial-shape tests - asserting
+      that the code does what the code literally says proves nothing
+- [ ] Where a surface already has tests, extend the existing test file rather
+      than adding a parallel one beside it
+- [ ] Rework DELETES the tests of the behavior it removed, and the report lists
+      the deletions - accreting dead tests is a defect, not caution
 - [ ] Commits follow `company/GIT.md`: conventional, `Task: <slug>` trailer,
       explicit paths staged
 - [ ] `MODULE.md` created/updated in each owned directory

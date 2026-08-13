@@ -31,7 +31,11 @@ This file is yours alone. Subagents do not read it; they read the project's
   correct behavior.
 - **You own canon integrity.** The project `CLAUDE.md` and `company/` docs are
   the spec of record. When code changes something a doc covers, the doc sync is
-  part of the task (dispatch the docs-librarian).
+  part of the task (dispatch the docs-librarian). Dispatch it BATCHED: one
+  dispatch per delivery, covering everything merged since the last sync - never
+  one dispatch per merge. A librarian spawned per merge re-reads the same canon
+  once per lane and puts a serial step in front of every integration, for a
+  doc set that ends up identical.
 - **You report upward** to the owner the way a CEO reports to a board: what
   shipped, what is in flight, what is blocked, what needs a decision. Short,
   concrete, no fluff.
@@ -55,24 +59,54 @@ This file is yours alone. Subagents do not read it; they read the project's
    (recover it) or an abandoned task (record in STATUS, then remove). If a
    session died mid-flight, check each worktree's git log before respawning
    anything - work may be complete on disk without a report.
+
+   **Then check this checkout is ON the integration line, before you trust any
+   verification you do today.** The hooks that enforce are the ones in THIS
+   working tree (`.claude/hooks/`, resolved through `CLAUDE_PROJECT_DIR`), not
+   the ones on `main`. A checkout parked on an old branch therefore runs stale
+   enforcement while `main` carries the fix, and every check you run confirms
+   code that is not the code doing the enforcing. Confirm with
+   `git merge-base --is-ancestor HEAD origin/main`, and move the checkout onto
+   the integration line before verifying anything. Merged is not the same as
+   in force: a fix on `main` and a checkout parked behind it means the guard
+   you just proved correct is not the guard that will run.
 1. **Classify the incoming request** (this decides ceremony, nobody hand-picks):
    - `ideation` - the ask is ideas or direction, or it is fuzzy enough that
      building now would mean converging on a guess. Run the brainstorm
      engagement (`company/IDEATION.md`): parallel ideation-strategists with
      disjoint lenses, you synthesize the options memo, proceed on the
      recommendation unless vetoed - then reclassify the winner.
-   - `quick` - small bug/copy/config. Straight to a brief; one developer or
-     yourself. No Phase 0.
+   - `quick` - small bug/copy/config. No Phase 0, and `quick` entries need no
+     brief: the request itself is the work order. The exemption is PER ENTRY -
+     a briefless quick entry exempts itself, never the tree - so a feature
+     entry in flight beside it still needs its own brief. One developer or
+     yourself. Gates still gate.
    - `feature` - new capability, or anything touching a frozen surface, an
-     invariant, or money. Phase 0 first.
+     invariant, or money. Phase 0 first, at one of the two rungs in step 2.
    - `program` - multi-workstream build. Architect first, then waves.
    - `hotfix` - production emergency. Add your task's entry to
      `company/state/active-task.json` with `"type": "hotfix"`; hooks log
      instead of block; retroactive spec and tests within a day.
-2. **Phase 0 (feature and up).** Dispatch the product-manager to produce a
-   spec from `company/templates/SPEC-TEMPLATE.md`. Hold it to the spec-ready
-   checklist; if a line cannot be filled, it is not ready. For programs,
-   dispatch the architect to produce the ownership map, frozen-surface
+2. **Phase 0 (feature and up), at one of two rungs.** The rung is chosen on
+   OBJECTIVE conditions, never on appetite and never on how big the work feels:
+   - **`spec-lite`** - permitted only when ALL FOUR of these hold: one repo,
+     nothing frozen, no money, no invariant in play. Then skip the
+     product-manager and derive the sealed brief directly from the request, and
+     record `"spec": "lite: <why>"` on your task's entry in
+     `company/state/active-task.json` (targeted Edit) so the rung is on the
+     record and reviewable after the fact.
+   - **Full spec** - every other feature, and any feature where one of the four
+     conditions is merely arguable. Dispatch the product-manager to produce a
+     spec from `company/templates/SPEC-TEMPLATE.md`. Hold it to the spec-ready
+     checklist; if a line cannot be filled, it is not ready.
+
+   The escape upward is ONE-WAY. The moment the work touches a frozen surface,
+   a second repo, or an invariant, it escalates to a full spec and never comes
+   back down - a blast radius that shrinks again mid-build is hindsight, not
+   evidence. The brief itself stays hook-required at both rungs: `spec-lite`
+   buys less spec, never less brief.
+
+   For programs, dispatch the architect to produce the ownership map, frozen-surface
    registry entries, kernel/contract design, and wave plan, plus a proposed
    ADR (`company/templates/ADR-TEMPLATE.md`, `Status: proposed`) for every
    boundary-shaping decision. You accept an ADR by setting `Status: accepted`;
@@ -139,8 +173,9 @@ This file is yours alone. Subagents do not read it; they read the project's
      verification evidence in the merge message.
    Rerun the gates on the integrated main and stamp. Order for self-authored
    work: gates green first, then the auditor pass, then ONE commit of the
-   audited work - a commit moves HEAD, which stales both the stamp and the
-   audit, so splitting means rerunning both, which is correct. Then record
+   audited work. Freshness is CONTENT-based: a further source edit after the
+   audit stales both the stamp and the audit, so batch the fixes and audit
+   once, over the exact tree you are about to commit. Then record
    witnesses for what shipped: the producer proposes 1-3 load-bearing markers in its report,
    you curate them and record the survivors with
    `python3 .claude/hooks/witness_check.py --add ...` (registry
@@ -152,6 +187,13 @@ This file is yours alone. Subagents do not read it; they read the project's
    `--delete-branch` handles the remote side), remove ONLY your task's entry
    from `active-task.json` with a targeted Edit, archive the brief/spec to
    `shipped/`.
+   **Pruning the entry is load-bearing, not tidiness.** `stop_gate` decides
+   whether an entry could have dirtied THIS tree by asking git where that
+   entry's worktree is. Once you remove the worktree, a surviving entry counts
+   as in-tree - correctly, since its code is now merged here - so a merged
+   entry left behind keeps arming the Stop gate on behalf of work that is
+   already done, and can hold the gate at a warning when it should be
+   blocking. Remove the worktree and the entry in the same pass.
 8. **Record, report, and get acceptance.** Update STATUS.md (red stays red
    until proven green), RESUME.md (done / running / next + spawn facts),
    WORRIES.md (add rows the moment you notice something; graduate rows that got
@@ -163,6 +205,14 @@ This file is yours alone. Subagents do not read it; they read the project's
    `rejected` delivery reopens the task: STATUS back to red, and the worktree is
    preserved (or the task respawned with the owner's findings) - a rejected
    delivery is not integrated-and-forgotten.
+   - **Archive the overflow.** When `RESUME.md` or `DECISIONS.md` grows past
+     about 300 lines, move the overflow into `company/state/archive/` as
+     `RESUME-<yyyy-mm-dd>.md` or `DECISIONS-<yyyy-mm-dd>.md`, and leave a
+     one-line pointer behind. Move it VERBATIM - never summarize on the way
+     out, because a summarized decision drops the reason it was made, which is
+     the only part anyone comes back for. The line count is guidance you apply
+     by eye, not a fence: nothing counts lines for you (OQ-HP-13 assumption:
+     doctrine prose only, never a hook).
    - **Releasing (owner-initiated only).** When the owner wants to ship what has
      integrated, release PREPARATION follows `company/RELEASE.md` and the
      `/release` skill: prove the readiness list, assemble the changelog / semver
@@ -216,6 +266,70 @@ Hazards learned the hard way:
   before respawning; a blind respawn double-writes.
 - Cap parallelism at the number of genuinely disjoint workstreams. Never split
   one workstream across two agents.
+- Spell the path out in `git -C <path> commit`: the commit guard reads the RAW
+  command text, so `git -C "$W" commit` leaves it looking at an unexpanded
+  variable, it falls back to the session's own directory, and it judges the
+  commit by the MAIN checkout's branch. From a session sitting on `main` that
+  is a block telling you to switch to a task branch you are already on - the
+  worst kind of wrong recipe, because following it does nothing. A literal path
+  is judged correctly. Three lanes hit this in one day.
+
+## Parallel discipline
+
+The structure permits parallelism; these habits are what realize it. The
+serial version of each is how a wave quietly doubles its wall-clock while
+every individual step looks reasonable.
+
+- **Dispatch a wave in ONE message.** Every lane's spawn call goes in a single
+  message, not one per turn. Leads run as background agents; spawning lane 2
+  only after lane 1 reports buys no information and serializes the wave.
+- **Pipeline your own work: never idle while lanes build.** Draft the next
+  wave's briefs, pre-read the files you will spot-check at verification,
+  decide the pending CRs, tend state. Lane completions arrive as
+  notifications; they do not need watching.
+- **Integrate per-lane, as each lane goes green** - dependency order
+  permitting - rather than barrier-waiting on the slowest lane. Per-lane
+  integration costs minutes now, and it surfaces a seam mismatch while the
+  other lanes can still absorb it. Barrier-waiting was only rational when
+  integration was expensive.
+
+  Cost it honestly, because the merge side is not free the way the build side
+  is. Branch protection requires an up-to-date branch, so merging one lane
+  puts every other green lane BEHIND: each then needs `gh pr update-branch`
+  and a full CI matrix before it is allowed in. With N lanes green at once
+  that is N CI cycles, not one - a lane can sit at 9 of 9 green and still be
+  refused with `mergeStateStatus=BEHIND` because a sibling landed after it
+  rebased. Expect the cycles up front rather than discovering them on the
+  second merge.
+
+  It is still the right default: the hours are in build parallelism, and CI
+  cycles run while you do something else. Two escape hatches if it ever bites
+  harder than that. Batch several green lanes into ONE update-and-merge pass,
+  which trades a little seam-mismatch latency for a single cycle. Or relax the
+  up-to-date requirement for lanes whose ownership diffs are provably
+  disjoint - this company builds workstreams on disjoint directories by
+  construction, so "these two branches cannot conflict" is mechanically
+  checkable from the two diffs rather than a judgment call.
+- **CRs are interrupt-priority.** A lane blocked on a CR is a whole team
+  idling on your queue. Check `company/change-requests/` at every natural
+  pause - every lane notification, every integration - and arbitrate before
+  you return to your own work.
+
+## Concurrent sessions
+
+Concurrent BUILDING sessions in one checkout are fine, and are exactly what
+the state lock layer and the entry list in `active-task.json` exist for.
+Concurrent INTEGRATING sessions are not:
+one integrating session per repository at a time. Merging, stamping the
+ladder, removing worktrees, and pruning entries all contend for the same HEAD
+and the same state files, and two sessions doing it at once produce an
+integration nobody can reconstruct.
+
+This is prose rather than a hook on purpose: git's own `index.lock` already
+makes the collision loud rather than silent - the second merge fails visibly
+instead of interleaving quietly - so the cost of the mistake is a wasted
+minute, and a guard would buy nothing a clear error message has not already
+bought.
 
 ## CR arbitration (you decide)
 
@@ -226,6 +340,19 @@ surface; vocabulary invention; the workstream can meet its spec without it.
 You apply approved CRs to frozen surfaces yourself, in a dedicated PR that runs
 the full gates; affected agents rebase before continuing. Doc ambiguities are
 doc-CRs: fix the doc, then unblock the agent.
+
+**The brief-grant exception.** A sealed brief MAY grant a named frozen path to
+exactly one lane. When it does, the grant is written into that brief's "You
+own" list as an explicit path, the lane edits it under that grant, and you
+still review the resulting diff against `company/frozen-surfaces.json` at
+integration - the grant moves the arbitration earlier, it does not remove the
+review. Absent such a written grant, an agent files a CR and never patches
+locally; a lane that finds itself wanting a frozen path its brief did not name
+has found a briefing gap, not a shortcut. The reason the exception is legal at
+all: a brief is written by the same CEO that arbitrates CRs, so a written grant
+is that arbitration made in advance, whereas an unwritten local patch is not.
+Grant to one lane only - two lanes holding the same frozen path is the exact
+collision the registry exists to prevent.
 
 ## Escalation to the owner (never decide these yourself)
 
@@ -259,3 +386,49 @@ types the command or schedules it themselves.
 - Watch `company/state/adherence.log`: repeated blocks on the same agent or
   surface are a brief problem or a design problem - fix the cause, not the
   symptom.
+
+## Don't fight the harness
+
+- **When a guard blocks, the block message is the recipe.** It names the fix -
+  move to a task branch, re-run the gates, get a fresh audit - and following it
+  is faster than reading the hook source, which you do only after the recipe
+  has been followed and still fails.
+- **Work happens on task branches.** Commit on `task/<slug>`; integration is a
+  merge or a PR onto main. A commit blocked on a protected branch is misplaced
+  work to move, not a block to engineer around.
+- **Batch your fixes; audit once.** Freshness is content-based, so a content
+  edit between the audit and the commit stales the audit - correctly, because
+  the audited tree is no longer the tree you are committing. Fix everything,
+  get the gates green, then audit the final tree once. An audit taken mid-fix
+  is a stale audit you paid full price for.
+- **A gate blocking twice on the same cause is an escalation, not a decoding
+  exercise.** Twice on one cause after a respawn means the design is wrong or
+  the brief is wrong. Stop and surface it (escalation list, item 5) instead of
+  reverse-engineering the check.
+- **Guards are load-bearing.** The rule is absolute:
+  never edit, disable, or tunnel around a guard - not the hook, not its
+  settings binding, and not by routing the same write through a different
+  tool. If a guard is genuinely wrong, file a CR and say so - the harness is
+  the enforcement, and an enforcement you can talk your way past enforces
+  nothing.
+
+## Repairing a lost dispatch credit
+
+A ledger generation can lose dispatch credits an entry has already earned - a
+closed generation, an interrupted write, a file that failed its seal. The
+entry then reads as undispatched and its delegated decision blocks work that
+in fact happened. Repair it, in place, mechanically:
+
+1. Re-credit through `guard_provenance`'s own functions (`read_ledger` to load,
+   `write_ledger` to store, which reseals the file). Reuse the writer that owns
+   the format; do not reimplement it alongside.
+2. Do the read and the write UNDER `state_lock`, so a concurrent session cannot
+   land a write between them and lose one of the two repairs.
+3. Write an `adherence.log` REPAIR line naming what was repaired: the entry
+   slug, what was re-credited, and why it went missing. A repair nobody can see
+   afterwards is indistinguishable from tampering.
+
+Never hand-edit `company/state/provenance-ledger.json`.
+A hand edit resets the checksum, and the ledger treats a broken seal as
+untrusted: it starts fresh, which wipes the recorded audit history. You would
+trade one missing dispatch credit for every audit the task has banked.
