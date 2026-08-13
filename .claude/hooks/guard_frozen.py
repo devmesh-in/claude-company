@@ -39,6 +39,14 @@ ALWAYS_DEFAULTS = [
     "company/state/costs.log",
     "company/state/.cost-cursor.json",
     "company/state/provenance-ledger.json",
+    # CR-UPD-1 repair (CR-2): these two were added to the registry in
+    # company/frozen-surfaces.json and never mirrored here, so they have been
+    # unprotected on every EXISTING install since that CR landed - the exact
+    # half-landing the note below exists to prevent. tests/hooks/
+    # test_gate_runner.py::FrozenBaselineAgreement pins the two copies
+    # together so a third instance cannot happen quietly.
+    "company/state/install-manifest.json",
+    "company/state/.update-backups/**",
     # FR-HP-23: the gate runner's own machine-written run records. Single
     # writer is company/run-gates.sh; a hand edit forges the evidence the
     # company answers "did the ladder run, and what did it print" with.
