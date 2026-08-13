@@ -18,6 +18,8 @@ import datetime
 import hashlib
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -54,6 +56,17 @@ def iso_now():
     )
 
 
+def adherence_log_path(root):
+    """The project's single audit trail.
+
+    Always the PROJECT's, never an acting tree's: a linked worktree is
+    gitignored and pruned at task close, so a block recorded only inside one
+    is evidence that deletes itself. Hooks decide from the acting tree and log
+    here.
+    """
+    return os.path.join(root, "company", "state", "adherence.log")
+
+
 def adherence_log(root, hook_name, action, target, reason):
     """Append one line to company/state/adherence.log. Never raises."""
     try:
@@ -64,7 +77,7 @@ def adherence_log(root, hook_name, action, target, reason):
         line = "{} | {} | {} | {} | {}\n".format(
             iso_now(), hook_name, action, target, reason
         )
-        with open(os.path.join(state_dir, "adherence.log"), "a") as f:
+        with open(adherence_log_path(root), "a") as f:
             f.write(line)
     except Exception:
         pass
@@ -387,16 +400,188 @@ def rel_path(root, file_path):
     return norm.lstrip("/")
 
 
-def _git(root, args):
+def owning_checkout(root, file_path):
+    """The checkout that OWNS file_path, or None when it is outside the tree.
+
+    The path half of the acting-tree rule: a hook judges the tree that
+    contains the thing being acted on. For a file in a linked worktree that is
+    the worktree; for a file in the main checkout it is `root`; for a path
+    that is not under the project at all - a scratchpad under /private/tmp,
+    somebody's home directory - it is None, and None means "not this
+    project's business", never "treat it as project source".
+
+    Derived from `_enclosing_checkout`, so it is convention-free: a worktree
+    is a directory holding a `.git` entry, not a directory whose path happens
+    to contain `.claude/worktrees`. `git worktree add` accepts any path.
+
+    Filesystem stats only, and every failure degrades to `root` rather than to
+    a block - the same fail-open contract rel_path holds.
+    """
+    if not file_path:
+        return root
+    norm = file_path.replace("\\", "/")
+    try:
+        root_norm = os.path.abspath(root).replace("\\", "/").rstrip("/")
+        if norm.startswith("/"):
+            candidate = norm
+        else:
+            candidate = root_norm + "/" + norm
+        candidate = os.path.normpath(candidate).replace("\\", "/")
+        if candidate == root_norm:
+            return root_norm
+        if not candidate.startswith(root_norm + "/"):
+            return None
+        return _enclosing_checkout(candidate, root_norm) or root_norm
+    except Exception:
+        return root
+
+
+def _enclosing_checkout_anywhere(candidate):
+    """The nearest git working-tree root at or above `candidate`, unbounded by
+    any project root, or None. Filesystem stats only, bounded walk.
+    """
+    directory = os.path.dirname(candidate)
+    for _ in range(64):
+        if os.path.exists(os.path.join(directory, ".git")):
+            return directory
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            return None
+        directory = parent
+    return None
+
+
+def path_checkout(root, file_path):
+    """(tree, outside) - the checkout that GOVERNS file_path.
+
+    `owning_checkout` stops at the project root, which is the right answer for
+    a scratchpad file and the wrong one for a worktree. `git worktree add`
+    accepts any path, so a lane building in /tmp/<slug> is writing this
+    project's source no less than one building under `.claude/worktrees/` -
+    exempting it would hand any lane unbriefed, ungated source writes just by
+    choosing where to put its worktree.
+
+    So a path outside the root is checked ONE step further: if some checkout
+    encloses it and that checkout shares this repository's object store, it
+    governs the file and `outside` is False. `outside` is True only when the
+    path belongs to no checkout of this project at all - the scratchpad case,
+    which is genuinely none of this project's business.
+
+    The extra work is two git calls, and it runs ONLY for paths outside the
+    root. Everything inside stays pure filesystem stats, which matters because
+    this sits in front of every Edit and Write.
+    """
+    tree = owning_checkout(root, file_path)
+    if tree is not None:
+        return tree, False
+    try:
+        norm = file_path.replace("\\", "/")
+        candidate = os.path.normpath(norm).replace("\\", "/")
+        external = _enclosing_checkout_anywhere(candidate)
+        # `is not False`: only an AFFIRMATIVE "different repository" exempts a
+        # path that some checkout owns. True and None (git did not answer)
+        # both keep it gated, because the cost of exempting project source by
+        # mistake is unbriefed, ungated writes, and the cost of gating a
+        # stranger's file by mistake is one clear, self-serve block.
+        if external and same_repository(external, root) is not False:
+            return external, False
+    except Exception:
+        pass
+    return root, True
+
+
+def task_state_root(root, tree):
+    """The checkout whose company/state/active-task.json governs `tree`.
+
+    Task state is untracked and lives wherever a session put it. A worktree
+    that keeps its OWN active-task.json is self-describing and is read from
+    there; a worktree that does not - the common case in this repo, where the
+    file is untracked and only the main checkout has one - falls back to
+    `root`, which is where the CEO maintains it.
+
+    Presence, not content, decides. A tree that has the file but lists no
+    entries is stating that no task is in flight there, and that statement is
+    the acting tree's to make.
+    """
+    try:
+        if tree and os.path.exists(active_tasks_path(tree)):
+            return tree
+    except Exception:
+        pass
+    return root
+
+
+# What git said, and whether it said anything at all. THREE outcomes, because
+# two of them used to share one return value.
+GIT_ANSWERED = "answered"   # exit 0. text is stdout, possibly "" - a real
+                            # answer meaning "nothing to report".
+GIT_REFUSED = "refused"     # git ran and exited non-zero. A real NEGATIVE
+                            # answer: not a repository, no such ref, bad path.
+GIT_SILENT = "silent"       # git never answered: timed out, or could not run.
+
+GIT_TIMEOUT = 5             # hot-path calls (rev-parse), unchanged
+GIT_SLOW_TIMEOUT = 30       # whole-tree questions worth waiting on
+
+
+def git_result(root, args, timeout=GIT_TIMEOUT):
+    """(status, text) - what git said, and whether it said anything.
+
+    THE DISTINCTION IS LOAD-BEARING. `_git` collapses REFUSED and SILENT to
+    None, and an ANSWERED-but-empty to "", so a caller writing `if not out`
+    cannot tell "the tree is clean" from "git did not answer in time". Those
+    are OPPOSITE facts sharing one falsy value, and every arming condition
+    built on the falsy test silently disarmed whenever git was slow - with
+    nothing in the log to say why.
+
+    That is reachable in normal operation, not just on a pathological box: on
+    this machine a sibling lane running its own ladder took another lane's
+    hooks suite from 40 seconds to 217 on pure CPU contention, and the default
+    timeout here is 5. A security gate that stops gating under load, quietly,
+    is worse than one that never gated.
+
+    Use this wherever the difference decides anything. `_git` stays for the
+    calls where a negative answer and an unanswered question lead to the same
+    place - `rev-parse --is-inside-work-tree` on a directory that is not a
+    work tree, say, where both mean "do not resolve to it".
+
+    A SILENT result leaves one breadcrumb in the project's adherence log. It
+    reaches no decision; it just means silence is never invisible again.
+    """
     try:
         result = subprocess.run(
-            ["git", "-C", root] + args, capture_output=True, timeout=5
+            ["git", "-C", root] + args, capture_output=True, timeout=timeout
+        )
+    except Exception as exc:
+        _log_git_silence(root, args, exc)
+        return GIT_SILENT, ""
+    if result.returncode != 0:
+        return GIT_REFUSED, ""
+    return GIT_ANSWERED, result.stdout.decode("utf-8", "replace")
+
+
+def _log_git_silence(root, args, exc):
+    """One SILENT line when git does not answer. Never raises, never decides."""
+    try:
+        target = os.environ.get("CLAUDE_PROJECT_DIR") or root
+        adherence_log(
+            target, "timing", "GIT-SILENT",
+            os.path.basename(os.path.abspath(root)) or str(root),
+            "git {} did not answer ({})".format(
+                " ".join(args[:2]), type(exc).__name__
+            ),
         )
     except Exception:
-        return None
-    if result.returncode != 0:
-        return None
-    return result.stdout.decode("utf-8", "replace")
+        pass
+
+
+def _git(root, args, timeout=GIT_TIMEOUT):
+    """stdout on success, None when git refused OR did not answer.
+
+    Kept for callers where those two lead to the same place. When they do
+    not - when silence could read as safety - use git_result instead.
+    """
+    status, text = git_result(root, args, timeout=timeout)
+    return text if status == GIT_ANSWERED else None
 
 
 def current_branch(root):
@@ -405,6 +590,197 @@ def current_branch(root):
     if out is None:
         return None
     return out.strip() or None
+
+
+# --- the acting tree, for a Bash command ----------------------------------
+# This is THE tree-resolution implementation for command-gated hooks, and it
+# lives here so there is exactly one of it. guard_secrets is the cautionary
+# tale: under FR-HP-12 it adopted guard_commit's PARSER and not its TREE
+# RESOLUTION, kept reading its staged diff from CLAUDE_PROJECT_DIR, and every
+# delegated commit in the repo's history went unscanned for secrets. A hook
+# that resolves its own tree is how that returns, so callers import from here
+# and re-export at most an alias - never a second copy.
+
+
+# FR-HP-10: global options that carry a SEPARATED argument. Skipping one token
+# each leaves the argument to be read as the subcommand, so `git -C sub commit`
+# parses as subcommand "sub" and the whole segment goes unseen by every
+# Bash-gated check. Attached forms (-Cdir, --git-dir=x) carry their argument in
+# the same token and consume one token only.
+ARG_OPTS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace",
+            "--exec-path")
+
+
+def segments(command):
+    """A compound shell command split into its individual command segments."""
+    parts = re.split(r"&&|\|\||;|\|", command or "")
+    return [p.strip() for p in parts if p.strip()]
+
+
+def tokens(segment):
+    """shlex tokens, degrading to a whitespace split on unbalanced quotes.
+
+    Public because guards outside the git parsers need it: guard_tests reads a
+    plain `rm` segment, which is not a git command, and a second local shlex
+    block there is the same duplication this module exists to end.
+    """
+    try:
+        return shlex.split(segment)
+    except Exception:
+        return segment.split()
+
+
+def git_subcmd(segment):
+    """Return (subcommand, args) for a `git ...` segment, else (None, []).
+
+    Only tokens BEFORE the subcommand are scanned: `git commit -C HEAD~1` is
+    --reuse-message, where HEAD~1 is a commit ref and not a path.
+    """
+    toks = tokens(segment)
+    if not toks or toks[0] != "git":
+        return None, []
+    i = 1
+    while i < len(toks) and toks[i].startswith("-"):
+        i += 2 if toks[i] in ARG_OPTS else 1
+    if i >= len(toks):
+        return None, []
+    return toks[i], toks[i + 1:]
+
+
+def seg_c_path(segment):
+    """The `-C` argument of a git segment AS WRITTEN, or None.
+
+    Returned unexpanded on purpose. A hook sees raw command text, so
+    `git -C "$WT" commit` yields the literal `$WT`, which no filesystem call
+    can resolve - and a block message that pretends otherwise sends the reader
+    to fix the wrong thing. Callers use this to SAY what they could not
+    resolve; they never treat it as a path.
+    """
+    toks = tokens(segment)
+    path = None
+    i = 1
+    while i < len(toks) and toks[i].startswith("-"):
+        if toks[i] == "-C" and i + 1 < len(toks):
+            path = toks[i + 1]
+        elif toks[i].startswith("-C") and len(toks[i]) > 2:
+            path = toks[i][2:]
+        i += 2 if toks[i] in ARG_OPTS else 1
+    return path
+
+
+def git_cwd(payload, root):
+    """The directory a git command without -C actually runs in (#26).
+
+    A commit issued from a worktree checkout of a task branch must be judged
+    by that worktree, even when CLAUDE_PROJECT_DIR (and thus root) points at
+    the main checkout on a protected branch. Prefer the payload's cwd when it
+    is present and inside a git work tree; otherwise fall back to root.
+    """
+    if isinstance(payload, dict):
+        cwd = payload.get("cwd")
+        if cwd:
+            out = _git(cwd, ["rev-parse", "--is-inside-work-tree"])
+            if out is not None and out.strip() == "true":
+                return cwd
+    return root
+
+
+def _common_dir(directory):
+    """(status, absolute shared .git dir). See git_result for the statuses."""
+    status, text = git_result(directory, ["rev-parse", "--git-common-dir"])
+    if status != GIT_ANSWERED:
+        return status, None
+    out = text.strip()
+    if not out:
+        return GIT_REFUSED, None
+    if not os.path.isabs(out):
+        out = os.path.join(directory, out)
+    try:
+        return GIT_ANSWERED, os.path.realpath(out)
+    except Exception:
+        return GIT_REFUSED, None
+
+
+def git_common_dir(directory):
+    """The absolute shared .git directory behind `directory`, or None.
+
+    A main checkout and every linked worktree of it share ONE object store, so
+    this value is the identity of the REPOSITORY rather than of the checkout.
+    Nothing here reads a path convention.
+    """
+    return _common_dir(directory)[1]
+
+
+def same_repository(a, b):
+    """True / False / None - are these checkouts of the SAME repository?
+
+    The line run-gates.sh draws for itself, made reusable: a cwd that merely
+    happens to sit inside SOME other git repository must not redirect a run,
+    while a linked worktree of the project must. Distinguishing the two needs
+    the shared object store, not the path.
+
+    THREE-VALUED ON PURPOSE. None means git did not answer, which is not the
+    same fact as "different repository" and must never be read as one - that
+    collapse is exactly how a gate disarms under load. Callers decide which
+    way to lean and say so:
+
+      - a caller REDIRECTING somewhere on the strength of this (scan_branch)
+        acts only on True, so silence leaves it where it was.
+      - a caller EXEMPTING something on the strength of this (path_checkout)
+        acts only on False, so silence keeps the path gated.
+
+    Both stay conservative under silence, in opposite directions, which is
+    only possible because the third value exists.
+    """
+    if not a or not b:
+        return False
+    status_a, dir_a = _common_dir(a)
+    if status_a == GIT_SILENT:
+        return None
+    status_b, dir_b = _common_dir(b)
+    if status_b == GIT_SILENT:
+        return None
+    if status_a != GIT_ANSWERED or status_b != GIT_ANSWERED:
+        return False
+    return dir_a == dir_b
+
+
+def acting_tree(segment, payload, root):
+    """(directory, unresolved) - the tree a single git SEGMENT acts on.
+
+    FR-HP-11: `git -C <path> commit` lands the commit on the tree that -C
+    names, so that tree is what every check on the segment must be judged by.
+    Resolved PER SEGMENT, so a -C in one segment cannot decide another. The
+    LAST -C wins, which is git's own semantics. A relative path resolves
+    against the payload cwd when present, else root.
+
+    `unresolved` is the -C argument as written when a -C was present and could
+    not be confirmed as a work tree, else None. That happens most often
+    because the argument is a shell variable the hook never sees expanded, and
+    a caller that reports "you are not on a task branch" without saying the -C
+    target was unresolvable hands the reader a recipe for a tree it is not
+    talking about.
+
+    OQ-HP-12 assumption: accept the candidate only when git itself answers
+    `true` there. Any other answer - missing directory, not a repo, git
+    error - falls through to git_cwd, which falls back to root. Fail open,
+    never fail hard.
+    """
+    path = seg_c_path(segment)
+    if path:
+        base = payload.get("cwd") if isinstance(payload, dict) else None
+        base = base or root
+        cand = path if os.path.isabs(path) else os.path.join(base, path)
+        out = _git(cand, ["rev-parse", "--is-inside-work-tree"])
+        if out is not None and out.strip() == "true":
+            return cand, None
+        return git_cwd(payload, root), path
+    return git_cwd(payload, root), None
+
+
+def seg_git_dir(segment, payload, root):
+    """The directory a git segment acts on. `acting_tree` without the note."""
+    return acting_tree(segment, payload, root)[0]
 
 
 def is_git_tracked(file_path):

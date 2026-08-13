@@ -4,11 +4,17 @@
 Two modes in one file, Python 3.8 stdlib only, fail OPEN on internal error.
 
 Mode 1 - PreToolUse (Bash) hook (default, reads JSON on stdin):
-  When a Bash command contains a `git commit`, scan the ADDED lines of the
-  staged diff (`git diff --cached -U0`) for high-signal secret patterns. On
-  the first hit, BLOCK (exit 2) with a file:line locator, the pattern name,
-  and a 3-step remediation recipe. No commit segment, nothing staged, or no
-  hit -> allow (exit 0).
+  For each `git commit` segment in a Bash command, scan the ADDED lines of
+  THAT SEGMENT'S ACTING TREE staged diff (`git diff --cached -U0`, run in the
+  tree the commit writes to) for high-signal secret patterns. On the first
+  hit, BLOCK (exit 2) with a file:line locator, the pattern name, and a 3-step
+  remediation recipe. No commit segment, nothing staged, or no hit -> allow
+  (exit 0).
+
+  The acting tree is resolved by `_common.seg_git_dir`, per segment, exactly
+  as guard_commit resolves the branch. Reading the diff from the project root
+  instead is what made this hook inert for every delegated commit; see the
+  comment in run_hook.
 
 Mode 2 - `--scan-branch <base>` CLI (wave 2 reuses this):
   Scan the added lines of `git diff -U0 <base>...HEAD`, print a human table of
@@ -68,27 +74,33 @@ PATTERNS = [
 ]
 
 
-# --- command parsing (copied idiom from guard_commit.py) ------------------
-def segments(command):
-    parts = re.split(r"&&|\|\||;|\|", command)
-    return [p.strip() for p in parts if p.strip()]
+# --- command parsing (shared, never copied) -------------------------------
+# FR-HP-12: the subcommand parser lives in _common and is reached through
+# guard_commit, which is looked up as a module attribute at call time. A
+# byte-identical copy here is what let `git -C sub commit` escape this scan
+# after guard_commit was fixed - one parser, one behavior.
+segments = c.segments
 
 
-def has_commit(command):
-    """True when any segment of `command` is a `git commit`.
+def commit_segments(command):
+    """Every segment of `command` that is a `git commit`, in order.
 
-    FR-HP-12: the subcommand parser lives in guard_commit and is looked up on
-    that module at call time. A byte-identical copy here is what let `git -C
-    sub commit` escape this scan after guard_commit was fixed - one parser,
-    one behavior. Delegating changes WHICH commands are scanned and nothing
-    else: this guard still never reads active-task.json, never honors hotfix
-    mode, and never yields.
+    The tree resolution below is per SEGMENT, so this returns the segments
+    themselves rather than a bare boolean: two commits in one compound command
+    can target two different working trees, and a clean one must not launder a
+    dirty one.
     """
+    found = []
     for seg in segments(command):
         sub, _ = guard_commit.git_subcmd(seg)
         if sub == "commit":
-            return True
-    return False
+            found.append(seg)
+    return found
+
+
+def has_commit(command):
+    """True when any segment of `command` is a `git commit`."""
+    return bool(commit_segments(command))
 
 
 # --- diff parsing + scanning (shared by both modes) -----------------------
@@ -167,20 +179,107 @@ def scan_diff(diff_text):
 
 
 # --- mode 1: PreToolUse Bash hook -----------------------------------------
-def block_message(hit):
+def block_message(hit, tree=None, root=None):
+    """The block text. `tree` is the acting tree whose index was scanned.
+
+    The unstage step carries an explicit `-C <tree>` whenever the acting tree
+    is not the project root, because a recipe run from the reader's own cwd
+    would unstage a file in the wrong checkout - or, more often, nothing at
+    all - and leave the secret exactly where it was.
+    """
+    unstage = "git restore --staged {}".format(hit["file"])
+    where = ""
+    if tree and root and os.path.abspath(tree) != os.path.abspath(root):
+        unstage = "git -C {} restore --staged {}".format(tree, hit["file"])
+        where = "\nThe secret is staged in {}, not in the project root.".format(
+            tree
+        )
     return (
         "BLOCKED: guard_secrets found a likely {pattern} at {file}:{line} in "
-        "your staged diff.\n"
+        "your staged diff.{where}\n"
         "A secret must never be committed. To fix:\n"
-        "  1. Unstage the file:   git restore --staged {file}\n"
+        "  1. Unstage the file:   {unstage}\n"
         "  2. Move the value to an environment variable / secret store "
         "(never a tracked file).\n"
         "  3. Commit a placeholder or a .example file instead.\n"
         "If this is a false positive, add the literal `secret-ok:` to the "
         "line, or move the value under a tests/ or fixtures/ path or a "
         ".example/.sample/.template file.".format(
-            pattern=hit["pattern"], file=hit["file"], line=hit["line"])
+            pattern=hit["pattern"], file=hit["file"], line=hit["line"],
+            unstage=unstage, where=where)
     )
+
+
+def unscannable_message(tree):
+    return (
+        "BLOCKED: guard_secrets could not read the staged index in {tree} - "
+        "git did not answer within {slow}s, so the commit could not be "
+        "scanned for secrets.\n"
+        "This is almost always CPU contention (a parallel gate ladder), not a "
+        "broken repository. To fix:\n"
+        "  1. Retry the commit - a second attempt normally answers "
+        "immediately.\n"
+        "  2. If it keeps timing out, check the tree is healthy:   "
+        "git -C {tree} status\n"
+        "This guard blocks rather than allows here on purpose: an unscanned "
+        "commit is how a credential ships, and 'could not look' must never "
+        "read as 'nothing to see'.".format(tree=tree, slow=c.GIT_SLOW_TIMEOUT)
+    )
+
+
+def scan_commit_segments(payload, root, command):
+    """Scan each commit segment's ACTING TREE. Exits 2 on the first hit.
+
+    The staged diff must be read from the tree the commit actually writes to,
+    resolved per segment the way guard_commit resolves the branch. This hook
+    adopted guard_commit's PARSER under FR-HP-12 and did NOT adopt its TREE
+    RESOLUTION: it kept reading `git diff --cached` from CLAUDE_PROJECT_DIR,
+    which the harness pins to the main checkout, while every delegated commit
+    happens in a worktree. Main's index is almost always empty, so the scan
+    found nothing and returned before scanning anything - and an inert scanner
+    over a clean repo looks exactly like a working one. Zero guard_secrets
+    lines in 324 adherence-log entries over five weeks was the only symptom.
+    Every delegated commit in this repo's history went unscanned for secrets.
+
+    Separated from the stdin plumbing so the decision path is reachable from a
+    test without a subprocess - the git-silence branch below cannot be driven
+    any other way.
+    """
+    for seg in commit_segments(command):
+        tree = c.seg_git_dir(seg, payload, root)
+        status, diff = c.git_result(tree, ["diff", "--cached", "-U0"])
+        if status == c.GIT_SILENT:
+            # Git did not answer. "I could not look" must never read as
+            # "nothing to see" - that exact collapse is what made this
+            # hook inert for five weeks. Give it a longer window first,
+            # since the usual cause is CPU contention from a sibling
+            # lane's ladder, not a broken repo.
+            status, diff = c.git_result(
+                tree, ["diff", "--cached", "-U0"],
+                timeout=c.GIT_SLOW_TIMEOUT,
+            )
+        if status == c.GIT_SILENT:
+            # DELIBERATE INVERSION of this file's fail-open posture, and
+            # the only block in it that is not a found secret. This guard
+            # already refuses to yield to hotfix mode because a leaked
+            # credential is the worst outcome in the system; an unreadable
+            # index is the one state where allowing the commit means
+            # shipping unscanned. The block costs a retry and says so.
+            c.block(
+                root, HOOK, tree, "index unreadable",
+                unscannable_message(tree),
+            )
+        if status != c.GIT_ANSWERED or not diff:
+            continue
+        hits, _ = scan_diff(diff)
+        if not hits:
+            continue
+        hit = hits[0]
+        # The BLOCK line stays in the PROJECT's adherence log, not the
+        # acting tree's: one audit trail per project is what makes "zero
+        # guard_secrets lines in 324 entries" a readable signal at all.
+        c.block(root, HOOK, "{}:{}".format(hit["file"], hit["line"]),
+                hit["pattern"], block_message(hit, tree, root))
 
 
 def run_hook():
@@ -196,19 +295,7 @@ def run_hook():
         sys.exit(0)
 
     try:
-        if not has_commit(command):
-            sys.exit(0)
-        # c._git applies a 5s timeout and returns None on failure/nonzero.
-        diff = c._git(root, ["diff", "--cached", "-U0"])
-        if not diff:
-            sys.exit(0)
-        hits, _ = scan_diff(diff)
-        if not hits:
-            sys.exit(0)
-        hit = hits[0]
-        # c.block logs the BLOCK line and exits 2.
-        c.block(root, HOOK, "{}:{}".format(hit["file"], hit["line"]),
-                hit["pattern"], block_message(hit))
+        scan_commit_segments(payload, root, command)
     except SystemExit:
         raise
     except Exception:
@@ -233,7 +320,28 @@ def print_table(hits):
 
 
 def scan_branch(base):
+    # The acting tree again, in CLI form. `<base>...HEAD` is meaningless
+    # except against the tree whose HEAD is meant, and HEAD is per-worktree:
+    # resolving from CLAUDE_PROJECT_DIR would scan the main checkout's branch
+    # for someone standing in a worktree, silently reporting on code they are
+    # not shipping.
+    #
+    # The redirect is deliberately narrow - ANOTHER CHECKOUT OF THIS SAME
+    # REPOSITORY, never just any git work tree. run-gates.sh draws exactly
+    # this line for itself (a cwd that merely happens to sit inside some other
+    # repository must not redirect the run), and the wide version of this
+    # change hijacked a fixture's scan to whatever repo the test runner was
+    # standing in.
     root = c.project_root(None)
+    try:
+        cwd = os.getcwd()
+        # `is True` only: a redirect acts on an affirmative answer, so git
+        # silence leaves the scan where it already was rather than moving it
+        # somewhere on a guess.
+        if c.same_repository(cwd, root) is True:
+            root = cwd
+    except Exception:
+        pass
     diff = c._git(root, ["diff", "-U0", base + "...HEAD"])
     if diff is None:
         diff = ""
