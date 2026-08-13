@@ -397,22 +397,36 @@ def _git_env(root, args, env):
     return result.stdout.decode("utf-8", "replace")
 
 
-# Paths that never participate in the fingerprint. Exactly one entry, and it
-# earns its place: company/state holds the gate stamp, the adherence log and
-# the ledgers, so leaving it in would self-invalidate the hash the instant a
-# hook wrote a line - the stamp would be stale before it was read.
+# Paths that never participate in the fingerprint. The line this tuple draws is
+# INPUTS versus SHIPPED BEHAVIOR, and it will look inconsistent to anyone who
+# reads it as "prose in or prose out", so read the distinction before editing:
 #
-# Do NOT extend this by copying a downstream fork. A fork of this kernel that
-# gates an application also drops *.md and *.txt on the argument that prose
-# decides no gate outcome. That is true there and FALSE here: markdown IS this
-# product. The agent definitions, the skills, ORCHESTRATOR.md and the doctrine
-# are all markdown, no_slop and trace_check and guard_models all gate them, and
-# a shipped install is mostly prose. Excluding it would mean a doctrine rewrite
-# stales nothing - a green stamp would survive replacing every role in the
-# company. If some path genuinely reaches no verdict, add one line here with
-# the reason it cannot.
+#   - company/state is machine-written OUTPUT: the gate stamp, the adherence
+#     log, the ledgers. Leaving it in would self-invalidate the hash the
+#     instant a hook wrote a line - the stamp would be stale before it was
+#     read.
+#   - company/briefs and company/specs are build INPUTS. They say what to
+#     build; they are not the thing built, they ship in no install
+#     (package.json excludes both), and no hook reads them to reach a verdict.
+#     A brief edit invalidating a green gate result is a re-run that proves
+#     nothing, and it cost this program two full ladder runs before the
+#     exclusion landed (owner-authorized, 2026-08-13).
+#
+# Everything else stays IN, and that is not an oversight to be tidied up. A
+# downstream fork of this kernel drops *.md and *.txt wholesale on the argument
+# that prose decides no gate outcome. True there, FALSE here: markdown IS this
+# product. ORCHESTRATOR.md, company/METHOD.md, .claude/agents/** and
+# .claude/skills/** are executable product, no_slop and trace_check and
+# guard_models all gate them, and a shipped install is mostly prose. Excluding
+# doctrine would mean a green stamp survives replacing every role in the
+# company.
+#
+# So: adding a path here needs the argument "this is an input to the build",
+# not "this is only documentation". If it ships or a hook reads it, it counts.
 HASH_EXCLUDES = (
     "company/state",
+    "company/briefs",
+    "company/specs",
 )
 
 

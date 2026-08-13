@@ -44,17 +44,32 @@ hashes identically no matter where it sits in history, so staging, committing,
 merging and rebasing stale neither a gate stamp nor an audit, while any real
 content change still does.
 
-`HASH_EXCLUDES` is exactly `("company/state",)` (FR-HP-06). Prose stays INSIDE
-the fingerprint here. The implementation this kernel was ported from also
-excludes `*.md` and `*.txt`, on the sound argument that in a product application
-no doc edit can change a gate outcome. That argument inverts in this repository:
-markdown is the product. The agent definitions, the skills, `ORCHESTRATOR.md`,
-`company/METHOD.md` and the rest of the doctrine are shipped artifacts, and
-`no_slop`, `trace_check` and `guard_models` all gate them. Excluding prose would
-mean a doctrine rewrite stales nothing and ships behind a green stamp that never
-saw it. `company/state` is excluded for the opposite and mechanical reason: the
-stamp and the logs live there and would self-invalidate the hash the moment they
-were written.
+`HASH_EXCLUDES` is `("company/state", "company/briefs", "company/specs")`
+(FR-HP-06), and the line it draws is BUILD INPUTS versus SHIPPED BEHAVIOR, not
+code versus prose:
+
+- `company/state` is machine-written output - the stamp, the logs, the ledgers -
+  and would self-invalidate the hash the moment a hook wrote a line.
+- `company/briefs` and `company/specs` are inputs to the build. They say what to
+  build, they are not the thing built, `package.json` ships neither into an
+  install, and no hook reads them to reach a verdict. A brief edit invalidating
+  a green code gate is a re-run that proves nothing, and it cost the
+  harness-port program two full ladder runs before this exclusion landed
+  (owner-authorized, 2026-08-13).
+
+Everything else stays INSIDE the fingerprint, doctrine prose emphatically
+included. The implementation this kernel was ported from excludes `*.md` and
+`*.txt` wholesale, on the sound argument that in a product application no doc
+edit can change a gate outcome. That argument inverts here: markdown is the
+product. The agent definitions, the skills, `ORCHESTRATOR.md` and
+`company/METHOD.md` are executable artifacts that ship, and `no_slop`,
+`trace_check` and `guard_models` all gate them. Excluding doctrine would mean a
+green stamp survives replacing every role in the company.
+
+The test for this asserts both halves, because a reader who takes the tuple for
+"documentation is excluded" will otherwise correct the apparent inconsistency in
+one direction or the other. Adding a path here requires the argument "this is an
+input to the build" - never "this is only documentation".
 
 The mechanism fails open. On any git trouble the hash falls back to the legacy
 HEAD-plus-status-plus-diff digest - which is STRICTER, so a degraded git costs
@@ -84,10 +99,16 @@ nothing at all.
   the hash format changes from a bare sha256 digest to `tree:<oid>`. One ladder
   re-run per checkout clears it. Nothing downstream parses the hash - every
   consumer compares it for equality - so no other code changes.
-- Prose edits keep staling stamps and audits in this repository, deliberately. A
-  future reader who ports the fork's `HASH_EXCLUDES` verbatim would silently
-  disarm gating for most of what this product ships, so the constant carries the
-  reason in a comment and a test pins the tuple.
+- Doctrine edits keep staling stamps and audits in this repository,
+  deliberately, while brief and spec edits no longer do. A future reader who
+  ports the fork's `HASH_EXCLUDES` verbatim would silently disarm gating for
+  most of what this product ships, so the constant carries the distinction in a
+  comment and a test pins both halves of it.
+- Cost accepted: a spec or brief can now change under a green stamp without
+  anything noticing. That is the intended trade - those files reach no verdict
+  and ship nowhere - but it does mean the stamp no longer says anything about
+  the paperwork a build was run against. Provenance of a brief belongs to the
+  ledger and the commit, not to the work hash.
 - The throwaway index is load-bearing safety, not an implementation detail. A
   content hash built in the real index would corrupt a developer's staged state
   on every hook invocation, so a test asserts the real index is byte-identical

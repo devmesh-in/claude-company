@@ -745,18 +745,27 @@ class TestRealWorktreeIndex(unittest.TestCase):
 
 
 class TestHashExcludes(HashBase):
-    def test_excludes_is_exactly_company_state_fr_hp_06(self):
-        """One entry, and nothing may be added without a reason.
+    def test_excludes_are_state_and_build_inputs_fr_hp_06(self):
+        """Three entries, and the line between them is inputs vs behavior.
 
-        The kernel this was ported from also excludes *.md and *.txt on the
-        argument that prose reaches no gate verdict. That is false here:
-        markdown IS this product. ORCHESTRATOR.md, the agent definitions, the
-        skills and the doctrine are all markdown, and no_slop, trace_check and
-        guard_models all gate them. Excluding prose would mean a green stamp
-        survived rewriting every role in the company. Anyone widening this
-        tuple to match the upstream fork is the failure this asserts against.
+        company/state is machine-written output and would self-invalidate the
+        hash. company/briefs and company/specs are build INPUTS: they ship in
+        no install and no hook reads them for a verdict, so a brief edit
+        staling a code gate result is a re-run that proves nothing
+        (owner-authorized, 2026-08-13).
+
+        Everything else stays in, and the tests below are the other half of
+        this assertion. The kernel this was ported from drops *.md and *.txt
+        wholesale on the argument that prose reaches no gate verdict. False
+        here: markdown IS this product. ORCHESTRATOR.md, METHOD.md, the agent
+        definitions and the skills are executable product, and no_slop,
+        trace_check and guard_models all gate them. Widening this tuple toward
+        the fork, in either direction, is the failure this asserts against.
         """
-        self.assertEqual(_common.HASH_EXCLUDES, ("company/state",))
+        self.assertEqual(
+            _common.HASH_EXCLUDES,
+            ("company/state", "company/briefs", "company/specs"),
+        )
 
     def test_editing_orchestrator_md_moves_the_hash_fr_hp_06(self):
         before = self.hash()
@@ -767,6 +776,44 @@ class TestHashExcludes(HashBase):
         before = self.hash()
         self.write(".claude/agents/auditor.md", "# Auditor\n\nRewritten.\n")
         self.assertNotEqual(self.hash(), before)
+
+    def test_editing_doctrine_prose_moves_the_hash_fr_hp_06(self):
+        """METHOD.md is doctrine, and doctrine is behavior in this product."""
+        self.write("company/METHOD.md", "# Method\n\nRewritten doctrine.\n")
+        self.commit("track doctrine")
+        before = self.hash()
+        self.write("company/METHOD.md", "# Method\n\nRewritten again.\n")
+        self.assertNotEqual(self.hash(), before)
+
+    def test_brief_and_spec_edits_do_not_move_the_hash_fr_hp_06(self):
+        """The other half: build inputs are outside the fingerprint.
+
+        Asserted for a tracked-then-edited file, a brand-new untracked file
+        and a deletion, because `add -A` seeds the throwaway index from HEAD
+        and each of those three reaches the index by a different route.
+        """
+        self.write("company/briefs/brief-thing.md", "# Brief\n\nOriginal.\n")
+        self.write("company/specs/spec-thing.md", "# Spec\n\nOriginal.\n")
+        self.commit("track a brief and a spec")
+        before = self.hash()
+
+        self.write("company/briefs/brief-thing.md", "# Brief\n\nRewritten.\n")
+        self.assertEqual(self.hash(), before, "tracked brief edit moved it")
+
+        self.write("company/specs/spec-thing.md", "# Spec\n\nRewritten.\n")
+        self.assertEqual(self.hash(), before, "tracked spec edit moved it")
+
+        self.write("company/briefs/brief-new.md", "# New\n\nUntracked.\n")
+        self.assertEqual(self.hash(), before, "new brief moved it")
+
+        os.remove(os.path.join(self.root, "company", "specs",
+                               "spec-thing.md"))
+        self.assertEqual(self.hash(), before, "deleting a spec moved it")
+
+        # The control: same directory tree, a path that is NOT excluded.
+        self.write("company/METHOD.md", "# Method\n\nDoctrine.\n")
+        self.assertNotEqual(self.hash(), before,
+                            "company/ is excluded wholesale - too wide")
 
     def test_company_state_writes_do_not_move_the_hash_fr_hp_06(self):
         """The stamp and the log live here and must not self-invalidate."""
