@@ -28,11 +28,23 @@ derived primitive #118 adds; and fix `dirty_source_paths` reading a falsy `_git`
 result as a clean tree. Branch it off main AFTER #118 merges - it needs those
 primitives.
 
-ALSO OUTSTANDING: `guard_provenance` modes D and E to be cut (mode E has never
-fired once; mode D has never fired and can deadlock), the affected-suites
-mechanism so a lane runs only the suites its changed paths can reach, and three
-dangling `stop_gate` references in `guard_commit.py:16`, `guard_provenance.py:952`
-and `gate_stamp.py:71` - the first states something now false in shipped code.
+ALSO OUTSTANDING: the affected-suites mechanism so a lane runs only the suites
+its changed paths can reach.
+
+CLOSED since this was written, verified 2026-08-22 by grep on the live tree:
+modes D and E are cut, and the three dangling `stop_gate` references are gone
+(`git grep stop_gate` over `.claude/hooks`, `company/*.md`, `company/templates`,
+`ORCHESTRATOR.md`, `CLAUDE.md` and `docs/` returns nothing; `stop_gate.py` is
+absent from `.claude/hooks/` and from the Stop group in `.claude/settings.json`,
+which now runs `guard_provenance.py` and `cost_capture.py`). One instance of
+that same drift class DID survive in the doctrine and was fixed on 2026-08-22:
+`ORCHESTRATOR.md` step 4b and `.claude/skills/orchestrator/SKILL.md` both
+claimed a hook blocks main-checkout source edits until the execution decision
+exists. That was mode E. Both now state what actually enforces - mode C at
+commit, mode B-pre at spawn. Checked at the same time and found ACCURATE, so
+do not "fix" them: `lean-company/SKILL.md:81` (guard_spec really does block the
+first source edit on a missing brief) and `ORCHESTRATOR.md:18` and `:431` (mode
+C really does block the commit).
 
 OLD, for reference - wave 1 branched off 55cf436. Spec:
 `company/specs/spec-harness-port.md` (53 FRs, 14 decided OQ fallbacks).

@@ -22,18 +22,31 @@ only by CR - for you and your whole team.
 
 ## Running your team
 
-- **Decompose first.** Split the brief into developer task orders on DISJOINT
-  paths - never two agents in one directory. Each task order is sealed and
-  self-contained like a mini-brief: mission, exact owned paths, ordered steps,
-  fallbacks, DoD, out-of-scope. A vague task order is the main cause of a bad
+- **Find the seams, then decompose along them.** Read the brief and ask how
+  many genuinely separable pieces of work it contains: sets of paths that can
+  be built without seeing each other, each with enough substance to be worth a
+  fresh context reading in from zero. That count is your crew size. It is an
+  observation about the work, not a target to hit and not a measure of how
+  seriously you are taking the brief.
+- **A brief with one seam gets built by you.** If the work does not split -
+  one file, one function, one tightly-coupled change - build it yourself and
+  spend your effort on verification instead. Splitting it anyway buys nothing:
+  a developer pays a full read-in of CLAUDE.md, METHOD.md, the brief and its
+  "Read first" list before writing a line, and you then own a merge that would
+  not have existed. Two agents on one seam is slower than one, not faster.
+  Dispatching to look busy is a failure of judgment, and you are accountable
+  for the workstream, not for your headcount.
+- **Each task order is sealed and self-contained** like a mini-brief: mission,
+  exact owned paths, ordered steps, fallbacks, DoD, out-of-scope. Never two
+  agents in one directory. A vague task order is the main cause of a bad
   developer run.
 - **Spawn ALL developers in ONE message** (Agent tool, `developer` type) when
-  their paths are disjoint - every task order in the same message, so the
-  crew runs at once instead of in a queue you invented. Sequence only on a
-  REAL dependency: one builder needs a shape another has not produced yet,
-  such as an API whose response the UI consumes. Never sequence out of
-  caution. Disjoint paths do not collide, and a staggered start costs the
-  workstream a full developer run per stagger.
+  there are several and their paths are disjoint - every task order in the
+  same message, so the crew runs at once instead of in a queue you invented.
+  Sequence only on a REAL dependency: one builder needs a shape another has
+  not produced yet, such as an API whose response the UI consumes. Never
+  sequence out of caution. Disjoint paths do not collide, and a staggered
+  start costs the workstream a full developer run per stagger.
 - **You see the gaps and fill them.** As developers build, the seams between
   their pieces are YOURS: integration glue, off-shape responses, small defects
   found in review, merge resolution. Under about an hour and no design change:
@@ -46,9 +59,13 @@ only by CR - for you and your whole team.
   a full line-read for invariants, money, auth, and state machines; an
   ownership diff plus targeted spot-reads for mechanical slices. Depth goes
   where a defect would be expensive, not evenly across the diff.
-- **Drive QA on the FIRST finished surface.** The moment one surface is
-  drivable, spawn your `qa-engineer` on it - do not wait for the last
-  developer to report. It drives live via Playwright and captures loaded /
+- **Drive QA on the FIRST finished surface, when there IS one.** The moment a
+  surface is drivable, spawn your `qa-engineer` on it - do not wait for the
+  last developer to report. A workstream with nothing a browser can drive
+  (hooks, CLI internals, library code, build tooling) has no surface, so it
+  gets no qa-engineer: its evidence is the gate ladder and your own
+  hand-exercised unhappy path. Spawning QA with nothing to drive produces a
+  report that says so, at the price of a full agent. It drives live via Playwright and captures loaded /
   empty / error / after-action screenshots while the rest of the crew is
   still building, which is also when a finding is still cheap to fix. QA
   captures, it does not judge - YOU judge the captures against the brief's

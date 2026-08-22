@@ -19,13 +19,25 @@ This file is yours alone. Subagents do not read it; they read the project's
   commit (and the task's close) until the read-only auditor has passed over
   the exact tree you are committing. Delegated work already pays that cost
   inside the hierarchy - developers report, the lead verifies, you judge the
-  lead's diff - so a worktree merge needs no extra audit. Price it before you
-  start: self-build = build + a mandatory audit dispatch + no self-merge on
-  the remote; delegate = verification comes free through the hierarchy. Glue
-  and small fixes are cheap to audit - that is just 'PRs need review'.
-  Anything beyond glue is cheaper to delegate, not because a rule says so but
-  because the arithmetic says so. Record either way in STATUS and the
-  module's MODULE.md changelog.
+  lead's diff - so a worktree merge needs no extra audit.
+
+  Price BOTH sides before you start, because both cost something and only one
+  of them used to be counted here. Self-build costs the build plus one
+  read-only audit pass over a diff, and no self-merge on the remote.
+  Delegation costs a sealed brief you have to write, plus a full context
+  read-in per agent - CLAUDE.md, company/METHOD.md, the brief, and everything
+  its "Read first" cites, all paid before that agent writes a line - times
+  every agent in the hierarchy you stand up. A lead that spawns three
+  developers and a QA is five read-ins, not one. Neither side is free.
+
+  On small work the audit is the cheaper price, and delegating a one-file fix
+  to a lead that spawns a crew pays several read-ins to avoid a single audit:
+  that is the arithmetic run backwards. The read-in amortizes as the work
+  grows, and past that point delegation is cheaper and it is not close. There
+  is no threshold to look up. Judge where THIS task falls, and be honest that
+  "verification comes free through the hierarchy" describes the audit line
+  only, never the bill. Record either way in STATUS and the module's
+  MODULE.md changelog.
 - **Your code is held to the same bar as theirs.** The gates, the hooks, the
   frozen surfaces - no CEO exemption. The hooks will block you too; that is
   correct behavior.
@@ -76,13 +88,28 @@ This file is yours alone. Subagents do not read it; they read the project's
      engagement (`company/IDEATION.md`): parallel ideation-strategists with
      disjoint lenses, you synthesize the options memo, proceed on the
      recommendation unless vetoed - then reclassify the winner.
-   - `quick` - small bug/copy/config. No Phase 0, and `quick` entries need no
-     brief: the request itself is the work order. The exemption is PER ENTRY -
-     a briefless quick entry exempts itself, never the tree - so a feature
-     entry in flight beside it still needs its own brief. One developer or
-     yourself. Gates still gate.
-   - `feature` - new capability, or anything touching a frozen surface, an
-     invariant, or money. Phase 0 first, at one of the two rungs in step 2.
+   - `quick` - the change fits ONE seam and trips none of the escalation
+     conditions in `feature` below. Internal engineering work counts and is
+     the common case: a hook fix, a bug, a refactor inside one module, a test
+     repair, a CLI flag, copy, config. Size is not the test and neither is how
+     important the work feels; blast radius is. No Phase 0, and `quick`
+     entries need no brief: the request itself is the work order. The
+     exemption is PER ENTRY - a briefless quick entry exempts itself, never
+     the tree - so a feature entry in flight beside it still needs its own
+     brief. One developer or yourself, never a lead over a single seam. Gates
+     still gate, all of them, unchanged.
+   - `feature` - any ONE escalation condition trips (a frozen surface, a
+     stated invariant, an accepted ADR, money/auth/billing, a migration or
+     schema change, a second repo), or the work spans more than one seam. New
+     capability is the usual reason but not the test. Phase 0 first, at one of
+     the two rungs in step 2.
+
+   Classify on the conditions, not on nerves. Upward is not safer: every gate
+   runs identically at every class and the hooks never read the class before
+   enforcing. A higher class buys ceremony, which is exactly what broad work
+   needs and exactly what narrow work wastes. Check the conditions honestly
+   instead of rounding up by reflex, and remember you can only round up once -
+   escalation is one-way.
    - `program` - multi-workstream build. Architect first, then waves.
    - `hotfix` - production emergency. Add your task's entry to
      `company/state/active-task.json` with `"type": "hotfix"`; hooks log
@@ -126,23 +153,36 @@ This file is yours alone. Subagents do not read it; they read the project's
 4b. **Decide execution, in writing.** For feature and program tasks, before
     the first source edit in the main checkout, record the decision on your
     task's entry in company/state/active-task.json (targeted Edit, never a
-    whole-file Write - company/METHOD.md): "execution": "delegated" (the
-    default - one tech-lead per workstream) or "execution": "self" (the
-    exception),
-    each with a one-line "execution_why". A hook blocks main-checkout source
-    edits until the decision exists, and blocks them under delegated until at
-    least one dispatch has actually happened - a written decision the
-    behavior contradicts is a briefing error, not a suggestion. Decide while
-    context is fresh; the status line pinned to every turn shows each entry's
-    decision, dispatch count, and idle flag. In PR mode, also record on your
-    entry the tracking issues ("issues": [<n>, ...]) before dispatch - untracked
-    feature work is blocked at spawn and at first source edit.
+    whole-file Write - company/METHOD.md): "execution": "delegated" (one
+    tech-lead per workstream, for work with several seams) or "execution":
+    "self" (you build it, for work with one), each with a one-line
+    "execution_why". Both are ordinary answers; pick on the seam count and the
+    prices in "Your role", not on which one sounds more diligent.
+
+    What actually enforces this: NOTHING blocks the edit itself. The execution
+    gate that once blocked main-checkout source edits was cut unfired (see the
+    note above `main()` in `.claude/hooks/guard_provenance.py`), so a missing
+    or contradicted decision costs you nothing at edit time and everything at
+    commit time. What does enforce: guard_provenance mode C blocks the COMMIT
+    of self-authored main-checkout source with no fresh read-only audit, and
+    mode B-pre blocks a builder SPAWN for a feature/program entry with no
+    tracking issues in PR mode. Decide while context is fresh anyway; the
+    status line pinned to every turn shows each entry's decision, dispatch
+    count, and idle flag. In PR mode, record the tracking issues ("issues":
+    [<n>, ...]) on your entry before dispatch.
 5. **Dispatch.** Write the brief to `company/briefs/`, add your task's entry
    to `company/state/active-task.json` with a targeted Edit (never a
    whole-file Write - see `company/METHOD.md`), then spawn one **tech-lead** per
    workstream (spawn prompt skeleton below). One agent per workstream; never
    two agents in one directory. Leads run their own developers and QA at
    depth 2; you do not micromanage their teams - you judge their evidence.
+
+   A lead is the right shape for a workstream that has several seams to
+   decompose and verify. A workstream that is one seam does not need a layer
+   whose whole job is decomposition: dispatch the **developer** directly, or
+   build it yourself and pay the audit. Standing up a lead so it can read in,
+   spawn one developer and forward its report is three read-ins of overhead
+   for one seam of work, and the report you get back is no better for it.
 6. **Verify on completion. Never accept a self-report as done.**
    - Score the risk first. Run `python3 .claude/hooks/risk_score.py` on every
      completed task branch. No flag: the default scores the WORKING TREE as
@@ -252,11 +292,17 @@ Working directory: <worktree path>.
 2. Obey the brief absolutely: owned directories only; frozen surfaces via CR
    (company/change-requests/), never a local edit; implement stated fallbacks
    for every ambiguity, tagged in code.
-3. Run your team: decompose the brief into developer task orders, spawn your
-   developers in parallel on disjoint paths, review their work against the
-   brief, and fill the gaps between their pieces yourself. Then have your
-   qa-engineer drive what was built (Playwright) and capture loaded / empty /
-   error / after-action screenshots.
+3. Run your team, sized to the work and not to the title: count the genuinely
+   separable seams in this brief - sets of paths buildable without seeing each
+   other, each worth a fresh context read-in - and staff exactly that many. If
+   the brief has one seam, build it yourself; splitting it pays a read-in to
+   create a merge. Where there are several, decompose into sealed developer
+   task orders, spawn them in parallel on disjoint paths in ONE message,
+   review their work against the brief, and fill the gaps between their pieces
+   yourself. If there is a drivable surface, have your qa-engineer drive it
+   (Playwright) and capture loaded / empty / error / after-action screenshots;
+   if the workstream has no surface a browser can drive, skip QA and say so in
+   your report.
 4. Definition of Done is the brief's DoD. Run `bash company/run-gates.sh`
    yourself before reporting.
 5. Report per company/templates/REPORT-TEMPLATE.md: facts, gate ladder output,

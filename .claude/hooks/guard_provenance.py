@@ -89,9 +89,12 @@ NUDGE_TEXT = (
     "is idle while you build. That is allowed and recorded, and the standing "
     "price applies - every self-authored commit needs a fresh read-only "
     "auditor pass before it integrates (one Task call, subagent_type: "
-    "auditor). If this work is growing beyond glue, a tech-lead dispatch is "
-    "cheaper: verification comes free through the hierarchy. This note fires "
-    "once per state per entry; it will not repeat."
+    "auditor). Neither shape is the favoured one. If this work has grown a "
+    "second seam - paths that can be built without seeing each other - a lead "
+    "is the cheaper shape from here, because the audit no longer covers the "
+    "spread. If it is still one seam, self is the correct decision and this "
+    "note is not an instruction to dispatch. This note fires once per state "
+    "per entry; it will not repeat."
 )
 
 MODE_C_MSG = (
