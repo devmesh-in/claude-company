@@ -38,8 +38,8 @@ DRIFT_SEGMENT = " iss=0"
 IDLE_SEGMENT = " idle"
 HOTFIX_SEGMENT = " HOTFIX"
 IDLE_LINE = (
-    "[company] team idle - no execution decision yet, or one with no "
-    "dispatch behind it; decide self or delegated on the seam count"
+    "[company] team idle - no execution decision yet, or a delegated one "
+    "with no dispatch behind it; decide on the seam count"
 )
 
 # Display truncation ONLY. This number never reaches a block/allow decision -
@@ -73,7 +73,13 @@ def single_pin(root, tasks):
         # recorded (PR mode, feature/program, no valid issues).
         if gp.tracking_untracked(root, task):
             line1 += DRIFT_SEGMENT
-        drifty = decision is None or disp == 0
+        # Drift is an UNDECIDED task, or a delegated one that never
+        # dispatched. It is NOT a task deliberately decided "self" with no
+        # dispatches - that is the correct end state for one-seam work, and
+        # nagging it every turn is the same one-directional pressure this pin
+        # was rewritten to stop applying. Mode A's once-per-state nudge already
+        # covers the self case without repeating.
+        drifty = decision is None or (decision == "delegated" and disp == 0)
     else:
         # OQ-DE-04 assumption: ideation treated like quick - no exec, no
         # iss, no idle line.
@@ -103,7 +109,7 @@ def entry_line(root, ledger, entry):
             line += DRIFT_SEGMENT
         # The idle marker rides THIS entry's line: at N > 1 a standalone line
         # cannot name the team that is idle.
-        if decision is None or disp == 0:
+        if decision is None or (decision == "delegated" and disp == 0):
             line += IDLE_SEGMENT
     else:
         line = "{} {} {} disp={}".format(PREFIX, slug, ttype, disp)

@@ -18,3 +18,4 @@ company/state/adherence.log
 company/state/gates.status
 company/state/gates.log
 company/state/gate-output/
+company/state/.state.lock

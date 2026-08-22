@@ -106,6 +106,40 @@ class TestContextPin(PinBase):
         self.assertNotIn("team idle", r.stdout)
         self.assertBudget(r.stdout)
 
+    def test_self_with_no_dispatch_is_not_idle(self):
+        """A deliberate `self` decision with zero dispatches is CORRECT.
+
+        The pin used to fire on `disp == 0` regardless of the decision, so a
+        one-seam task correctly built by the CEO was told its team was idle on
+        every single turn - the same one-directional pressure toward spawning
+        that the pin's wording was rewritten to stop applying. Mode A's
+        once-per-state nudge already covers the self case without repeating.
+        """
+        self.set_manifest()
+        self.feature_task(execution="self",
+                          execution_why="one seam, no second builder")
+        r = self.pin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = self.lines(r.stdout)
+        self.assertEqual(len(lines), 1, r.stdout)
+        self.assertIn("exec=self", lines[0])
+        self.assertNotIn("team idle", r.stdout)
+        self.assertBudget(r.stdout)
+
+    def test_delegated_with_no_dispatch_is_still_idle(self):
+        # The other half of the same condition: a written `delegated` decision
+        # that never dispatched IS drift - the behavior contradicts the record.
+        self.set_manifest()
+        self.feature_task(execution="delegated",
+                          execution_why="three seams, one lead each")
+        r = self.pin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = self.lines(r.stdout)
+        self.assertEqual(len(lines), 2, r.stdout)
+        self.assertIn("exec=delegated", lines[0])
+        self.assertIn("team idle", lines[1])
+        self.assertBudget(r.stdout)
+
     def test_quick_task_no_exec_segment(self):
         self.set_manifest()
         self.set_task({"task": "q", "type": "quick"})
