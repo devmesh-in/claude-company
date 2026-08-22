@@ -129,10 +129,24 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 | Class | What | Path |
 |---|---|---|
 | `ideation` | The ask is ideas/direction, or too fuzzy to build without guessing | Brainstorm engagement per `company/IDEATION.md`: parallel strategists diverge, CEO converges, client gets an options memo; the winner reclassifies as quick/feature/program. |
-| `quick` | Small bug, copy change, config tweak | No Phase 0, and a quick entry needs no brief - the request is the work order. The exemption is PER ENTRY: a briefless quick entry exempts itself and never the tree, so a feature entry beside it still needs its brief. One developer or the CEO itself. Gates still gate. |
-| `feature` | New user-visible capability, or anything touching a frozen surface, an invariant, or money | Phase 0 at one of two rungs, chosen on objective conditions and never on appetite. `spec-lite`: permitted only when ALL FOUR hold - one repo, nothing frozen, no money, no invariant in play - and the CEO derives the sealed brief straight from the request, recording the rung on the task's entry. Otherwise a full Phase 0 spec -> spec-ready gate. The escape upward is ONE-WAY: the moment the work touches a frozen surface, a second repo, or an invariant it becomes a full spec and never comes back down. Then brief (required at both rungs) -> one tech lead + team -> QA evidence -> verify -> integrate. |
+| `quick` | The change fits ONE seam and trips none of the escalation conditions below. Internal engineering work counts and is the common case: a hook fix, a bug, a refactor inside one module, a test repair, a CLI flag, a copy or config change. Size is not the test and neither is how important the work feels - blast radius is. | No Phase 0, and a quick entry needs no brief - the request is the work order. The exemption is PER ENTRY: a briefless quick entry exempts itself and never the tree, so a feature entry beside it still needs its brief. One developer or the CEO itself; a tech-lead over a one-seam task is a layer that reads in and delegates to itself. Gates still gate - every one of them, unchanged. |
+| `feature` | Any ONE of the escalation conditions is tripped - a frozen surface, a stated invariant, an accepted ADR, money/auth/billing, a migration or schema change, a second repo - or the work spans more than one seam. New user-visible capability is the usual reason but not the test. | Phase 0 at one of two rungs, chosen on objective conditions and never on appetite. `spec-lite`: permitted only when ALL FOUR hold - one repo, nothing frozen, no money, no invariant in play - and the CEO derives the sealed brief straight from the request, recording the rung on the task's entry. Otherwise a full Phase 0 spec -> spec-ready gate. The escape upward is ONE-WAY: the moment the work touches a frozen surface, a second repo, or an invariant it becomes a full spec and never comes back down. Then brief (required at both rungs) -> one tech lead + team -> QA evidence -> verify -> integrate. |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |
 | `hotfix` | Production is on fire | Declared by the CEO on that task's entry in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day, and no hotfix closes without a postmortem (`company/templates/POSTMORTEM-TEMPLATE.md`) filed next to its retroactive spec in `company/specs/shipped/` as `postmortem-<slug>.md`. The CEO checks its prevention line at close: the postmortem must name a real mechanical change that prevents recurrence (a new witness, a new gate, a new frozen pattern) or state why none is possible. |
+
+**Classify on the conditions, not on nerves.** The escalation conditions are
+objective: read them off the work and the class falls out. There is no tie to
+break "safely" upward, because upward is not safer - every gate in the ladder
+runs identically on a `quick` entry and a `program`, the hooks do not check
+the class before enforcing, and tests are never editable to pass at any class.
+What a higher class actually buys is ceremony: a spec, a brief, a lead layer,
+an evidence bundle. On work that needs it, that ceremony is what makes the
+result trustworthy. On work that does not, it is a spec nobody reads and a
+hierarchy that reads in from zero to change one file, and it makes the ladder
+neither greener nor faster. Escalating still stays ONE-WAY once a condition
+genuinely trips; the discipline is to check the conditions honestly at the
+start rather than to round up by reflex.
+
 
 ## The context discipline
 

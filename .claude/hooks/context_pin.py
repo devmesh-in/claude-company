@@ -37,7 +37,10 @@ UNDECIDED = "undecided"
 DRIFT_SEGMENT = " iss=0"
 IDLE_SEGMENT = " idle"
 HOTFIX_SEGMENT = " HOTFIX"
-IDLE_LINE = "[company] team idle - decide execution / dispatch a tech-lead"
+IDLE_LINE = (
+    "[company] team idle - no execution decision yet, or one with no "
+    "dispatch behind it; decide self or delegated on the seam count"
+)
 
 # Display truncation ONLY. This number never reaches a block/allow decision -
 # nothing here blocks, and no entry is dropped from any count because of it.
