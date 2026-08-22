@@ -17,6 +17,13 @@ keyed on (hook_event_name, tool_name):
      its verdict against the current work_hash. NEVER blocks.
   C) PreToolUse Bash - the commit gate: a git commit carrying dirty
      self-authored source in the main checkout with no fresh audit BLOCKS.
+  F) PreToolUse Bash - the integration gate (FR-ARB-03): an integration
+     (`git merge` or `gh pr merge`) whose tree scores in risk_score's HIGH
+     band with no fresh audit BLOCKS. This is the top half of DECISIONS #19's
+     risk-scaled audit; the narrowing shipped without it, so the worry it was
+     accepted against stayed open. Low and medium are silent. It runs BEFORE
+     mode C on the same event and RETURNS rather than exiting, so a merge
+     segment does not swallow the commit gate.
 
 Two further modes shipped and were deleted unfired. A Stop close gate that
 never fired and could deadlock - Mode B-post returns early for a worktree cwd
@@ -61,6 +68,7 @@ and names the responsible entries only at N > 1.
 import json
 import os
 import re
+import shlex
 import sys
 import tempfile
 
@@ -95,6 +103,37 @@ NUDGE_TEXT = (
     "spread. If it is still one seam, self is the correct decision and this "
     "note is not an instruction to dispatch. This note fires once per state "
     "per entry; it will not repeat."
+)
+
+MODE_F_MSG = (
+    "BLOCKED: this integration scores in the HIGH risk band (<score>) and no\n"
+    "fresh auditor pass is on record for this checkout.\n"
+    "\n"
+    "Integrand: <ref>\n"
+    "Top signals: <signals>\n"
+    "Entries in flight: <slugs>\n"
+    "Why the audit does not count: <reason>\n"
+    "\n"
+    "This is DECISIONS #19's compensating control. The audit demand was\n"
+    "narrowed at the bottom on the explicit trade that the high band would add\n"
+    "rigor at the top; this gate is that half.\n"
+    "\n"
+    "Self-serve fix - one Task call, subagent_type: auditor, over the diff you\n"
+    "are about to integrate. Record nothing by hand: the ledger is\n"
+    "checksum-sealed and the hook writes the record itself.\n"
+    "\n"
+    "Be aware of what this gate can and cannot check, so the recipe above is\n"
+    "not read as more than it is. The record is keyed to THIS checkout, not to\n"
+    "the integrand, so an auditor pass taken over other work satisfies it too\n"
+    "(OQ-ARB-05, open). And the record is written when the auditor is\n"
+    "DISPATCHED, not when it reports, so no verdict is verified (see the P0 in\n"
+    "company/state/WORRIES.md). What is actually enforced here is: an auditor\n"
+    "was dispatched and this checkout has not changed since. Read the report\n"
+    "yourself; the gate cannot.\n"
+    "\n"
+    "Not a judgment on the work. The band is derived from risk_score.py's\n"
+    "existing signals and its 25/50 cuts; nothing here invents a threshold.\n"
+    "See python3 .claude/hooks/risk_score.py for the per-signal breakdown.\n"
 )
 
 MODE_C_MSG = (
@@ -970,6 +1009,396 @@ def mode_b_post(root, ti, payload):
     sys.exit(0)
 
 
+# `git merge` subcommands that CONCLUDE or CANCEL a merge rather than start
+# one, and the gh flag that does the same. Blocking these strands an operator
+# mid-conflict: resolving conflicts edits the tree, which stales work_hash and
+# therefore the audit, after which neither --continue nor --abort is available
+# and the block message asks for an audit of a half-merged tree. mode_c
+# anticipated this class with its MERGE_HEAD exemption; mode F mirrors it.
+# `git merge` options that consume the NEXT token as their value.
+#
+# ONLY separate-argument options belong here. git's `-S[<keyid>]`,
+# `--gpg-sign[=<keyid>]` and `--log[=<n>]` take an OPTIONAL, ATTACHED value, so
+# listing them made `git merge --no-ff -S task/x` swallow the ref and allow a
+# high-band integration - three fresh bypasses created by the fix for one.
+# Signed merges are an ordinary integration command, so that regression was
+# live for any repo using them. An option whose value may be attached needs no
+# entry here: the `"=" not in a` branch already handles the attached form.
+MERGE_VALUE_OPTS = (
+    "-m", "--message", "-F", "--file", "-s", "--strategy",
+    "-X", "--strategy-option", "--into-name", "--cleanup",
+)
+
+# `gh pr merge` options that consume the NEXT token as their value.
+GH_VALUE_OPTS = (
+    "-b", "--body", "-t", "--subject", "-F", "--body-file",
+    "--match-head-commit", "--author-email",
+)
+
+NON_INTEGRATION_FLAGS = (
+    "--abort", "--continue", "--quit", "--skip", "--disable-auto",
+)
+
+
+def checkout_root(directory):
+    """The work-tree ROOT containing `directory`, or None.
+
+    risk_score joins repo-relative paths onto whatever root it is handed and
+    runs `git ls-files` there, so handing it a SUBDIRECTORY silently scores a
+    truncated tree - a valid `low` with no INFO line, which is the quietest
+    possible way for a gate to stop gating. Always resolve to the top level.
+    """
+    out = c._git(directory, ["rev-parse", "--show-toplevel"])
+    if out is None:
+        return None
+    return out.strip() or None
+
+
+def quoted_segments(command):
+    """Command segments split on shell operators, HONOURING quotes.
+
+    Scans CHARACTERS, tracking quote state. Two earlier attempts failed here
+    and both failures were silent, so the reasoning is written down:
+
+    `_common.segments` is a regex split on the operator characters. It catches
+    every spacing, but it is blind to quoting, so a `;` or `|` inside a merge
+    message tears the command in half and neither half parses as a ref. That
+    matters because ORCHESTRATOR.md prescribes putting verification evidence in
+    the merge message, and evidence is prose.
+
+    Splitting `shlex` TOKENS instead fixed the quoted message and broke
+    something worse: shlex only emits a bare `;` token when the operator has
+    whitespace on BOTH sides, so `git fetch; git merge ...` - the ordinary way
+    anyone writes it - produced one unsplit segment whose subcommand read
+    `fetch;`, and mode F never looked at it. No block, and not even an INFO
+    line, because the gate returns before logging when no segment matches.
+
+    So: character scan, quote-aware, whitespace-independent. Operators are
+    recognised where they actually are, and a quoted operator is just text.
+    `_common.segments` is deliberately left alone - guard_commit, guard_secrets
+    and mode C all consume it, and changing that contract changes three gates.
+    """
+    text = command or ""
+    segs, cur = [], []
+    quote = None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            cur.append(ch)
+            if ch == "\\" and quote == '"' and i + 1 < len(text):
+                cur.append(text[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            cur.append(ch)
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < len(text):
+            cur.append(ch)
+            cur.append(text[i + 1])
+            i += 2
+            continue
+        two = text[i:i + 2]
+        if two in ("&&", "||"):
+            segs.append("".join(cur))
+            cur = []
+            i += 2
+            continue
+        if ch in (";", "|", "&", "\n"):
+            segs.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(ch)
+        i += 1
+    segs.append("".join(cur))
+    return [seg.strip() for seg in segs if seg.strip()]
+
+
+def scan_merge_args(args):
+    """(flags, ref_candidates) walking `git merge` args in POSITION order.
+
+    Position matters. Scanning every token for a flag means
+    `git merge -m "--abort" task/x` sees "--abort" inside the merge MESSAGE and
+    skips the gate; a value is not a flag just because it is spelled like one.
+
+    ALL non-flag tokens come back, not just the first. `-S` takes an optional
+    ATTACHED value, so `git merge -S mykey task/x` is git's octopus form with
+    two refs, and stopping at the first candidate returned a non-ref and
+    declined. The caller validates in order and takes the first real ref.
+    Octopus merges are therefore scored on their first resolvable ref only -
+    a declared simplification, and it errs toward scoring rather than skipping.
+    """
+    flags = []
+    candidates = []
+    skip = False
+    for a in args:
+        if skip:
+            skip = False
+            continue
+        if a.startswith("-"):
+            flags.append(a.split("=", 1)[0])
+            if "=" not in a and a in MERGE_VALUE_OPTS:
+                skip = True
+            continue
+        candidates.append(a)
+    return flags, candidates
+
+
+def integration_refs(seg, tree):
+    """EVERY ref `seg` would integrate, resolvable ones only. [] if none.
+
+    All of them, not the first. `git merge main task/x` is an octopus merge,
+    and taking the first resolvable ref scored `main` against itself - an empty
+    diff, band `low`, and mode F fell through its `band != "high"` branch with
+    no block AND no log line. That is the same silent failure the candidate
+    validation was written to end, arriving through a different door. The
+    caller scores each and takes the WORST, which is the only direction a
+    safety gate may round.
+
+    THE SUBJECT IS THE INTEGRAND, not the tree the integrating session happens
+    to stand in (OQ-ARB-03 as amended). Scoring the local tree was the first
+    implementation and it was wrong in the only case that mattered: a CEO
+    integrating a lane from a clean `main` checkout scored merge-base(main,
+    HEAD) == HEAD, an empty diff, `low`, silent - on exactly the large clean
+    delegated build DECISIONS #19 commissioned this gate for.
+    """
+    toks = c.tokens(seg)
+    sub, args = guard_commit.git_subcmd(seg)
+    if sub == "merge":
+        flags, _cands = scan_merge_args(args)
+        if any(f in NON_INTEGRATION_FLAGS for f in flags):
+            return []
+    elif any(t in NON_INTEGRATION_FLAGS for t in toks[3:]):
+        return []
+    if sub == "merge":
+        # git_subcmd only consumes valued options BEFORE the subcommand, so
+        # nothing here skips a merge option's VALUE. Taking the first non-flag
+        # token was wrong in the most important way available: ORCHESTRATOR.md
+        # prescribes local integration as `git merge --no-ff task/<slug>` with
+        # the verification evidence in the merge message, and an agent supplies
+        # that only via -m or -F. So `git merge --no-ff -m "gates green" task/x`
+        # read the ref as "gates", scored nothing, and ALLOWED - the gate was
+        # defeated by the exact command the doctrine asks for.
+        _flags, candidates = scan_merge_args(args)
+        if not candidates:
+            return []
+        # Validate rather than trust. A candidate that is not a ref means the
+        # parse is wrong, and scoring the wrong thing is worse than declining:
+        # `--into-name main` used to yield `main`, whose diff against itself is
+        # empty, so the band came back `low` and the gate allowed with NO log
+        # line at all - the quietest possible failure (FR-ARB-11).
+        return [cand for cand in candidates
+                if c._git(tree, ["rev-parse", "--verify", "--quiet",
+                                 cand + "^{commit}"])]
+    if toks[:3] != ["gh", "pr", "merge"]:
+        return []
+    # `gh pr merge` with no PR argument merges the CURRENT branch's PR, so the
+    # integrand is HEAD. With an explicit number the head branch lives on the
+    # forge; refs/pull/<n>/head is consulted only if it was already fetched.
+    # Nothing here reaches the network: a hook that blocks on a network call
+    # blocks the session when the network is slow.
+    skip = False
+    for a in toks[3:]:
+        if skip:
+            skip = False
+            continue
+        if a.startswith("-"):
+            # gh's own valued flags. `-b "<evidence>"` is the natural way to
+            # put verification evidence in a squash commit, which the runbook
+            # asks for, and not skipping its value dropped the whole command
+            # to unresolvable.
+            if "=" not in a and a in GH_VALUE_OPTS:
+                skip = True
+            continue
+        if a.isdigit():
+            ref = "refs/pull/{}/head".format(a)
+            if c._git(tree, ["rev-parse", "--verify", "--quiet", ref]):
+                return [ref]
+            return []
+        if c._git(tree, ["rev-parse", "--verify", "--quiet",
+                         a + "^{commit}"]):
+            return [a]
+        return []
+    return ["HEAD"]
+
+
+def risk_band(tree, ref):
+    """(band, score, signals) for what `ref` would bring into `tree`.
+
+    (None, None, {}) means unscorable - a THIRD outcome, distinct from every
+    band, on which the caller allows and logs. FR-ARB-01, FR-ARB-02: this
+    CONSUMES risk_score's signals and its 25/50 cuts and re-derives nothing.
+
+    Known limitation, declared rather than hidden: the secrets signal is only
+    scored when the integrand is HEAD, because guard_secrets --scan-branch is
+    HEAD-relative. For any other ref that signal fails open to 0 with a note,
+    which is risk_score's own documented per-signal posture. It can only make
+    the band lower, never higher, so it cannot manufacture a block.
+    """
+    try:
+        import risk_score
+    except Exception:
+        return None, None, {}
+    try:
+        base = c._git(tree, ["merge-base", "main", ref])
+        base = (base or "").strip()
+        if not base:
+            return None, None, {}
+        rng = base + "..." + ref
+        rows = risk_score.parse_numstat(
+            c._git(tree, ["diff", "--numstat", rng])
+        )
+        paths = risk_score.parse_names(
+            c._git(tree, ["diff", "--name-only", rng])
+        )
+        if ref == "HEAD":
+            secrets = lambda: risk_score.run_secret_scan(base)  # noqa: E731
+        else:
+            secrets = lambda: None  # noqa: E731
+        subject = risk_score.Subject("integrand", rows, paths, secrets)
+        signals, _notes, _bn = risk_score.build_report(
+            tree, base, None, subject
+        )
+        score = sum(signals.values())
+        band, _rec = risk_score.band_of(score)
+        return band, score, signals
+    except Exception:
+        return None, None, {}
+
+
+def integration_segment(seg):
+    """True when `seg` STARTS an integration: `git merge` or `gh pr merge`.
+
+    FR-ARB-04, FR-ARB-05. `git_subcmd` returns (None, []) unless the first
+    token is literally `git`, so `gh pr merge` is invisible to every gate built
+    on it - which is why this recognizer exists instead of a one-word widening
+    of `git_subcmd`. That function is consumed by guard_commit, guard_secrets
+    and this file; changing its contract changes three gates at once.
+
+    Recording the consequence rather than fixing it (RISK-ARB-02): guard_commit's
+    OWN merge gate is built on git_subcmd and is therefore already blind to
+    `gh pr merge`. That is a pre-existing hole, out of scope here, and this
+    recognizer deliberately does not inherit it.
+    """
+    toks = c.tokens(seg)
+    sub, args = guard_commit.git_subcmd(seg)
+    if sub == "merge":
+        # Flags are read in POSITION, never scanned across every token: a
+        # merge MESSAGE that happens to read "--abort" is a value, not a flag.
+        flags, _cands = scan_merge_args(args)
+        return not any(f in NON_INTEGRATION_FLAGS for f in flags)
+    if len(toks) < 3 or toks[:3] != ["gh", "pr", "merge"]:
+        return False
+    return not any(t in NON_INTEGRATION_FLAGS for t in toks[3:])
+
+
+def top_signals(signals, limit=3):
+    """The highest-scoring signals, rendered for the block message (FR-ARB-06)."""
+    scored = [(v, k) for k, v in (signals or {}).items() if v]
+    scored.sort(reverse=True)
+    if not scored:
+        return "none individually dominant"
+    return ", ".join("{} {}".format(k, v) for v, k in scored[:limit])
+
+
+def mode_f(root, ti, payload):
+    """PreToolUse Bash: the high-band integration gate. Returns, or blocks.
+
+    FR-ARB-03: arms at INTEGRATION, not at commit. Commit-time arming is the
+    shape of the deleted mode D - a worktree lane commits continuously while
+    building and would block mid-build waiting on an auditor that cannot
+    usefully read unfinished work (OQ-ARB-01).
+
+    Unlike the other modes this one RETURNS instead of exiting, because
+    PreToolUse Bash also runs mode C and a merge segment must not swallow it.
+    """
+    command = ti.get("command") or ""
+    segs = [seg for seg in quoted_segments(command)
+            if integration_segment(seg)]
+    if not segs:
+        return
+    if load_manifest(root) is None:
+        return
+    tasks = c.active_tasks(root)
+    if not tasks:
+        return
+    hotfix = c.hotfix_entry(tasks)
+    if hotfix is not None:
+        c.log_bypass(
+            root, HOOK, "integration",
+            c.qualify_reason("hotfix mode", tasks, hotfix),
+        )
+        return
+    for seg in segs:
+        # THE canonical resolution, imported not re-derived. _common says it
+        # outright: "a hook that resolves its own tree is how [the guard_secrets
+        # bug] returns". The first implementation of this gate kept its own
+        # copy, inverted, and scored the wrong tree in every worktree.
+        tree, _unresolved = c.acting_tree(seg, payload, root)
+        tree = checkout_root(tree) or root
+        if os.path.isfile(os.path.join(tree, ".git", "MERGE_HEAD")):
+            c.log_bypass(root, HOOK, "integration", "merge conclusion")
+            continue
+        refs = integration_refs(seg, tree)
+        # Score EVERY ref and keep the worst. An octopus merge brings all of
+        # them in, and rounding a safety gate toward the lower band is how the
+        # `--into-name main` silence happened.
+        ref, band, score, signals = None, None, None, {}
+        for cand in refs:
+            cb, cs, csig = risk_band(tree, cand)
+            if cb is None:
+                continue
+            if score is None or cs > score:
+                ref, band, score, signals = cand, cb, cs, csig
+        if not refs:
+            c.adherence_log(
+                root, HOOK, "INFO", "integration",
+                "integrand unresolvable - allowed",
+            )
+            continue
+        if band is None:
+            # FR-ARB-10 / FR-ARB-11: unscorable allows, but never silently -
+            # an inert gate has to be visible in the log or it becomes mode E.
+            c.adherence_log(
+                root, HOOK, "INFO", "integration",
+                "risk band unscorable - allowed",
+            )
+            continue
+        if band != "high":
+            # FR-ARB-08: low and medium are completely silent.
+            continue
+        ledger = read_ledger(root)
+        if fresh_audit(root, ledger):
+            c.adherence_log(
+                root, HOOK, "INFO", "integration",
+                "high band score={} - auditor dispatch on record for this "
+                "checkout (verdict NOT verified, OQ-ARB-05)".format(score),
+            )
+            continue
+        msg = (
+            MODE_F_MSG.replace("<slugs>", c.slug_list(tasks))
+            .replace("<score>", str(score))
+            .replace("<ref>", ref)
+            .replace("<signals>", top_signals(signals))
+            .replace("<reason>", staleness_reason(root, ledger))
+        )
+        c.block(
+            root, HOOK, "integration",
+            c.qualify_reason(
+                "high band ({}) with no fresh audit".format(score),
+                tasks, tasks,
+            ),
+            msg,
+        )
+
+
 def mode_c(root, ti, payload):
     """PreToolUse Bash: the commit gate.
 
@@ -1059,6 +1488,9 @@ def main():
     root = c.project_root(payload)
     ti = payload.get("tool_input") or {}
 
+    # mode_f (the FR-ARB-03 high-band integration gate) hangs off PreToolUse
+    # Bash, which is mode C's own live event - NOT off either empty slot below.
+    #
     # Stop and PreToolUse Edit|Write|MultiEdit are still WIRED to this hook in
     # .claude/settings.json, and guard_models pins that wiring inventory, so
     # the wiring is deliberate and stays. Both now fall through to the `else`
@@ -1075,6 +1507,20 @@ def main():
         elif event == "PostToolUse" and tool in ("Task", "Agent"):
             mode_b_post(root, ti, payload)
         elif event == "PreToolUse" and tool == "Bash":
+            # FR-ARB-03: the integration gate runs BEFORE mode C, so a blocked
+            # merge leaves no commit-path telemetry behind it. mode_f returns
+            # rather than exiting precisely so mode C still gets its turn.
+            # F6: fail-open is this file's posture, but it is PER GATE. An
+            # exception inside the new gate must never take the commit gate
+            # with it - a compound segment carrying both an integration and a
+            # commit would go from block to allow, which is the BR-ARB-01
+            # direction this change is forbidden to move in.
+            try:
+                mode_f(root, ti, payload)
+            except SystemExit:
+                raise
+            except Exception:
+                pass
             mode_c(root, ti, payload)
         else:
             sys.exit(0)

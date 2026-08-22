@@ -325,7 +325,25 @@
       "regex": false,
       "why": "Succeeds W-006. The branch and stamp checks must be judged against the tree the commit actually targets, not the project root. Reverting it re-blocks every worktree commit as a protected-branch violation (issue 26) AND lets a lane be gated on a stamp describing somebody else's tree (CR-HP-2, filed independently by three lanes).",
       "added_at": "2026-08-13T13:12:45Z"
+    },
+    {
+      "id": "W-041",
+      "task": "arm-risk-band",
+      "file": ".claude/hooks/guard_provenance.py",
+      "must_contain": "if two in (\"&&\", \"||\"):",
+      "regex": false,
+      "why": "A BODY line of the character-scanning splitter, deliberately not its signature - the previous W-039 pinned the signature and a rewrite back to the broken design left it green. Two splitter designs shipped before this one and both went silent on ordinary commands: a regex split blind to quotes tore merge messages, and a shlex-TOKEN split missed unspaced operators entirely because shlex emits a bare separator token only when whitespace surrounds it. Scanning characters with quote state is the only design that handles both. If this line is gone, check what replaced it against the unspaced-operator cases before trusting it.",
+      "added_at": "2026-08-22T18:13:23Z"
+    },
+    {
+      "id": "W-042",
+      "task": "arm-risk-band",
+      "file": ".claude/hooks/guard_provenance.py",
+      "must_contain": "if len(toks) < 3 or toks[:3] != [\"gh\", \"pr\", \"merge\"]:",
+      "regex": false,
+      "why": "The gh branch of the is-integration predicate - the line that decides whether mode F looks at a segment at all. git_subcmd only matches a leading git token, so without this mode F is wired and inert in every PR-mode install, which is the mode E failure DECISIONS #19 exists to avoid. Pinned HERE rather than on the bare token list, which occurs twice: the resolver copy would have kept the old pin green while the predicate was deleted.",
+      "added_at": "2026-08-22T18:24:43Z"
     }
   ],
-  "checksum": "f0b3ecc3684350e1160415c71580d729bc831cbc241062f4222ca52d829c2c4c"
+  "checksum": "495ccafcbfa1ed81d3cfd981373a20901b4a8bea55323edf75a22c59ef285b05"
 }

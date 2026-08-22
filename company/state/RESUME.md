@@ -5,7 +5,161 @@ every spawn, merge, CR decision, and agent report. If a session died mid-flight,
 check each worktree's git log before respawning - work may be complete on disk
 without a report._
 
-## 0. IN FLIGHT RIGHT NOW - 2026-08-13, SECOND HALF (enforcement repair)
+## 0. IN FLIGHT RIGHT NOW - 2026-08-22 (read this before anything else)
+
+**Two PRs merged tonight. One feature is HALTED and NOT merged. 0.3.1 was NOT
+published, deliberately.** The owner asked for issue -> PR -> merge -> publish
+autonomously while asleep, on the standing rule that a HALT verdict stops the
+merge. SIX independent audits ran; five returned HALT and the sixth cleared only a
+three-file documentation delta. The rule held.
+
+Read this next part before deciding anything: audit 3 found that the fix for
+audit 2's ref-parsing finding had itself introduced THREE new bypasses of the
+same gate (`-S`, `--gpg-sign` and `--log` take optional ATTACHED values in git,
+so listing them as value-consuming made `git merge --no-ff -S task/x` swallow
+the ref and allow a high-band merge - live for any repo signing its merges).
+That is fixed and regression-tested now. But the pattern is the finding: this
+gate has been remediated three times and each round has surfaced defects in the
+previous round's fix. It needs fresh eyes, not another pass from the same
+context at 1am.
+
+### Merged and done
+
+| PR | What |
+|---|---|
+| #128 | Delegation doctrine. The harness priced delegation at zero and nagged toward it every turn; six one-directional pressures rebalanced. `quick` widened to cover internal engineering work (34 shipped briefs and not one task ever classified quick). Also fixed the live mode E doc drift. |
+| #129 | Cleared the CR queue (three CRs read PROPOSED while all three were already resolved in code) and re-verified two stale worry rows against main. |
+
+### HALTED, on branch `task/arm-risk-band`, NOT merged
+
+Issue #130. Spec `company/specs/spec-arm-risk-band.md` (Status: HALT).
+Arms DECISIONS #19's compensating control as `guard_provenance` mode F: a
+high-band integration with no fresh audit blocks.
+
+FIVE independent audits, all HALT. Audit 1: it scored the local tree instead
+of the integrand, so a lane integrated from a clean `main` scored an empty diff
+and the gate was silent on exactly the delegated build it exists for. Fully
+remediated and confirmed by audit 2. Audit 2 found the blocker below plus seven
+others. Audit 3 confirmed five of those eight closed, and found that the fix
+for one had introduced three regressions. The blocker:
+
+**THE BLOCKER - OQ-ARB-05, needs an owner decision.** The risk subject is the
+integrand but the EVIDENCE subject is still the local checkout. `fresh_audit`
+keys on `work_hash(root)`, so an audit of lane A satisfies the gate for merging
+lane B. Reproduced: an unaudited 84-point lane integrated silently, logged as
+"satisfied by fresh audit". It cannot be patched in place because of the P0
+below - there is no point in the current substrate where the integrand's
+identity and an auditor's real verdict are both available. Three candidate
+answers are costed in the spec; (c) is the only one that also closes the P0.
+
+FIXED and regression-tested across the three rounds: the integrand subject;
+valued merge flags eating the ref (the `-m "<evidence>"` form this runbook
+prescribes was ALLOWING); the three optional-argument flags that fix broke;
+quote-blind segmentation, now split by a CHARACTER scan that tracks quote
+state - NOT shlex tokens, which was the second attempt and shipped broken
+(shlex emits a bare `;` only when it has whitespace on both sides, so
+`git fetch; git merge <lane>` never split and the gate went silent). Do not
+"restore" a shlex split; W-041 pins a BODY line of the scanner to make that
+deliberate; tree resolution
+through `_common.acting_tree` plus a checkout-root normaliser; merge
+conclusion/cancel; fault isolation so mode F cannot disarm mode C; positional
+flag scanning; block-message wording that no longer claims a verdict was
+verified; brief and doctrine accuracy. 27 tests in the new file.
+
+AUDIT 5's JUDGMENT, which is the one to act on: **keep the code, do not merge
+it, respec the EVIDENCE half and not the parsing half.** It drove ~60 command
+shapes through mode F and found no new operator or ref-parsing bypass - that
+half is finally solid, and reverting it would throw away the only part that is.
+What no patch round can fix is the gate's VALUE: this repo integrates via
+`gh pr merge <n>`, which is always unscorable without a pull refspec, and the
+evidence side records launches rather than verdicts. The next move is a spec
+decision about where evidence lives (CI? the PR?), not another pass over the
+splitter.
+
+STILL OPEN, recorded and deliberately NOT fixed - the fix cycle was stopped
+after four rounds each of which introduced a defect in the previous round's fix:
+
+- **NEW FALSE POSITIVE, mine.** The character scanner splits on `\n`, which
+  `_common.segments` never did, so a heredoc that WRITES a merge command into a
+  document now trips the gate: `cat > runbook.md <<'EOF'` containing a merge
+  line blocks with an unactionable recipe. Any agent documenting an integration
+  hits it. Nothing ships (this branch is not merging) but fix before it does.
+- **The recognizer only matches a segment whose FIRST token is `git` or `gh`.**
+  So `(git merge x)`, `{ git merge x; }`, `sudo`/`env`/`time`/`nohup` prefixes,
+  `bash -c '...'`, `$(...)`, backticks and loop bodies all pass silently with no
+  log line. `_common.git_subcmd` shares this, so guard_commit has it too.
+  ORCHESTRATOR.md's NOT-COVERED list does not name these and reads exhaustive.
+- The `acting_tree` half of tree resolution survives deletion across the suite;
+  only `checkout_root` is mutation-covered.
+- `context_pin`'s N>1 path (`entry_line:112`) has the same edit as the
+  single-task path with no test.
+- The `MERGE_HEAD` exemption is structurally DEAD in a linked worktree, where
+  `.git` is a file - and worktrees are the delegated shape this gate is for.
+  `mode_c` has the identical bug; the fix belongs in `_common` on
+  `rev-parse --git-dir`.
+- Scoring uses the acting tree; freshness uses the project root. For a
+  `git -C <worktree>` merge those differ, and `acting_tree`'s `unresolved`
+  marker is discarded rather than reported.
+- Three tests assert silence as "no 'risk band' in the log", which the
+  `integrand unresolvable` line also satisfies - so total failure of ref
+  resolution would leave them green.
+- `import shlex` is now dead; the `NON_INTEGRATION_FLAGS` comment sits above
+  `MERGE_VALUE_OPTS`; the module docstring says mode F "RETURNS rather than
+  exiting" which is true only on the allow path.
+- **The gate stamp names only two gates** (`hooks`, `tests` = the CLI suite
+  alone). A green stamp on this tree certifies hooks + CLI, NOT installer, TUI
+  or update - those were run by hand tonight and are green, but nothing on disk
+  records that.
+
+Earlier carry-overs, from audit 3:
+- the `acting_tree` half of the tree-resolution fix survives deletion across
+  the whole suite - only the `checkout_root` half is mutation-covered
+- FIXED, do not re-do: the inert-witness defect. It recurred three times, in
+  W-039 (pinned a signature) and W-040 (pinned a string occurring twice). The
+  live pins are W-041 on a BODY line of the splitter and W-042 on the unique
+  gh predicate line, and both were verified to FAIL a revert of what they
+  guard. The lesson worth keeping: a witness must pin something that only the
+  correct implementation contains, and "does the pin survive the regression it
+  names" is the only check that catches it
+- `context_pin`'s N>1 path (`entry_line`) has the same edit as the single-task
+  path with no test
+- the FR-ARB-13 MERGE_HEAD exemption is blind in a linked worktree, where
+  `.git` is a file
+- `git pull` is not recognised as an integration at all (still true; verified)
+
+### TWO NEW WORRY ROWS - one P0, one P1, both pre-existing, both found tonight
+
+1. **The audit ledger records DISPATCHES, never verdicts.** Every AUDIT row
+   written since the verdict parser was corrected reads `verdict: unknown` -
+   9 of the 14 on record. The only 5 carrying a real verdict are that old
+   parser's own July false positives, all `do-not-ship`. PostToolUse Task
+   fires at agent LAUNCH, so the parsed text is the launch acknowledgement, and
+   `fresh_audit` accepts anything that is not literally "do-not-ship". Every
+   audit gate - mode C included - is cleared by the ACT of dispatching an
+   auditor. The parser is correct; it simply never sees a report any more.
+   The naive fix deadlocks; see the row.
+2. **(P1) `guard_commit`'s merge gate is blind to `gh pr merge`.** `git_subcmd`
+   returns None unless the first token is literally `git`, so every PR-mode
+   integration has bypassed the stamp check. Its merge branch has plausibly
+   never fired in this repo's history.
+
+### 0.3.1 release: PREPARED, NOT SHIPPED
+
+Readiness was re-run after #129. R1 green (ladder stamped), R2 green (38/38),
+R4 green, R8 green (queue cleared). R3 stays red and got WORSE: trace_check
+exits 1 with 13 orphan requirement IDs from this task alone (the behaviours
+are tested, the FR IDs just are not cited in the test docstrings; cheap fix),
+on top of the 20 already there (
+the condition accepted at v0.2.6). R7 is now WORSE, not better: the original
+P0 is still open because the gate that would close it is halted, plus the new
+P0 and P1 above. Publishing on that board was not a defensible autonomous call,
+so it was not done. Registry latest remains 0.3.0.
+
+### The decision waiting for you
+
+OQ-ARB-05 in the spec. Everything else is either merged or teed up behind it.
+
+## 1. OLDER - 2026-08-13, SECOND HALF (enforcement repair)
 
 The harness-port program (wave 1 and 2) is MERGED. What follows it is a second
 program the owner ordered after the port exposed the enforcement layer fighting

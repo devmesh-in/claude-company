@@ -191,12 +191,61 @@ This file is yours alone. Subagents do not read it; they read the project's
      `low`. `--base <sha>` is the committed-only mode, kept for the rare
      non-main integration base; the default base is `merge-base main HEAD`,
      which IS that base in the common case. A fix no caller reaches is not a
-     fix, and this line is the tool's only caller in the repo. It returns a
-     band (`low` / `medium` / `high`) that
-     sets how hard you verify - and only ever raises the bar, never lowers it:
-     `high` makes the read-only **auditor** dispatch MANDATORY, not a judgment
-     call; `medium` means extra spot-reads beyond the two or three below. The
-     score escalates verification; it never waives a gate or a check.
+     fix. It returns a band (`low` / `medium` / `high`) that sets how hard you
+     verify - and only ever raises the bar, never lowers it: `high` makes the
+     read-only **auditor** dispatch MANDATORY, not a judgment call; `medium`
+     means extra spot-reads beyond the two or three below. The score escalates
+     verification; it never waives a gate or a check.
+
+     `high` is ENFORCED at integration as well as instructed here, but read
+     the limits before you rely on it - three independent audits HALTed this
+     gate, twice for claiming more than it did. `guard_provenance` mode F
+     scores THE INTEGRAND - what the merge would bring in, not the tree you
+     are standing in - and blocks a high-band integration with no auditor
+     dispatch on record.
+
+     It does NOT verify that an audit passed, and it does not check that the
+     audit covered the integrand. The record is keyed to your checkout and is
+     written when the auditor is DISPATCHED, not when it reports (OQ-ARB-05
+     and the P0 in WORRIES.md, both open). What it enforces is: an auditor was
+     dispatched and your checkout has not changed since. You still read the
+     report; the gate cannot.
+
+     Know exactly what it does and does not cover, because the first version
+     of this paragraph overstated it and an audit HALTed the change for that
+     alone. COVERED: `git merge <ref>` including the `--no-ff -m "<evidence>"`
+     shape this runbook prescribes below, chained after other commands, with
+     operators inside the quoted message, and with signing or strategy flags;
+     and `gh pr merge` with no PR argument (the integrand is HEAD). NOT
+     recognised at all: `git pull` (a fetch plus a merge), and `git merge -`
+     (the dash is read as a flag, so no ref resolves). Both log
+     `integrand unresolvable` or simply do not match; neither blocks.
+
+     An octopus merge is scored on ALL its refs and the WORST band wins.
+
+     NOT COVERED, and this is the common case in PR mode: `gh pr merge <n>`.
+     The head branch of a numbered PR lives on the forge, no hook here reaches
+     the network, and a default clone does NOT fetch `refs/pull/*` - check with
+     `git config remote.origin.fetch`, which on a stock remote returns only
+     `+refs/heads/*:refs/remotes/origin/*`. So unless you have configured a
+     pull refspec, the numbered form is ALWAYS unscorable: it logs
+     `integrand unresolvable - allowed` and lets the merge through. Merging
+     from the PR's own branch with a bare `gh pr merge` is covered; passing the
+     number is not.
+
+     ALSO NOT COVERED: an install whose trunk is not called `main`. The
+     integrand is measured against `main` (as `risk_score` itself is), so on a
+     `master` or `develop` trunk every call is unscorable and the gate is inert.
+
+     Read the adherence log if you want to know which you got - every allow on
+     an unscorable integrand is logged, never silent.
+
+     So keep running the CLI yourself. It is still the only thing that covers
+     the uncovered case, and it shows you the per-signal breakdown before the
+     gate says no. DECISIONS #19 adopted the band as the compensating control
+     for narrowing the audit demand, and for two releases only the narrowing
+     shipped; this closes most of that gap, not all of it. Low and medium are
+     silent by design; see `company/specs/spec-arm-risk-band.md`.
    - Re-run `bash company/run-gates.sh` yourself on the integrated result.
      Treat the lead's numbers as claims; trust integrated-main gates over
      worktree self-reports.
