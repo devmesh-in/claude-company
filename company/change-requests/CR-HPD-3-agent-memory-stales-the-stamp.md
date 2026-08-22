@@ -1,7 +1,7 @@
 # CR-HPD-3: agent memory is a build INPUT and must not stale the gate stamp
 
 _Requesting agent/task: tech-lead, task/hp-doctrine (L6, issue #102). Date: 2026-08-13._
-_Status: PROPOSED_
+_Status: APPLIED_
 
 ## Surface affected
 
@@ -90,3 +90,22 @@ disables a shipped feature to protect a hash.
 
 ---
 _CEO decision and remarks:_
+
+**APPROVED and already APPLIED, via the CR's own stated alternative.
+Verified on main 2026-08-22.**
+
+The CR offered two remedies: add `.claude/agent-memory/` to `HASH_EXCLUDES` in
+`_common.py`, or gitignore it. The gitignore route was taken and is on disk,
+carrying the CR's own reasoning as its comment: "untracked files that are NOT
+ignored land in the content work_hash, so every agent that jotted a note stale
+the gate stamp for every session in the tree."
+
+That route is equivalent, not weaker. `_content_tree_hash` builds the hash with
+`git add -A` into a throwaway index, and an ignored path is never added, so
+agent memory no longer contributes to the work_hash at all. `HASH_EXCLUDES`
+stays at its three entries (`company/state`, `company/briefs`, `company/specs`)
+and needed no change.
+
+Accepted consequence, recorded: agent memory is now local-only and does not
+survive a fresh clone. That is correct for a build INPUT of this kind and
+matches the DECISIONS #19 (c) treatment of paperwork.
