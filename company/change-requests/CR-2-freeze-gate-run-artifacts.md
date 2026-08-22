@@ -2,7 +2,7 @@
 
 _Requesting agent/task: tech-lead, task hp-runner (spec
 company/specs/spec-harness-port.md, tracking issue #97). Date: 2026-08-13._
-_Status: PROPOSED_
+_Status: APPLIED_
 
 ## Frozen surface affected
 
@@ -135,6 +135,23 @@ entry leaves the run log in `git status` and eventually in a commit.
 ---
 _CEO decision and remarks:_
 
+**Application VERIFIED on main 2026-08-22.** The APPROVED decision above
+was recorded on 2026-08-13 but the status header was never advanced, so the
+queue kept reading this as undecided. All four landing spots confirmed present:
+
+- `company/frozen-surfaces.json` `always` carries `company/state/gates.log` and
+  `company/state/gate-output/**`.
+- `guard_frozen.ALWAYS_DEFAULTS` carries the same two, plus the CR-UPD-1 repair
+  (`company/state/install-manifest.json`, `company/state/.update-backups/**`).
+- The registry `always` list and `ALWAYS_DEFAULTS` are now set-equal in both
+  directions (checked programmatically, 17 patterns, zero drift either way) -
+  the half-landing this CR was filed to prevent cannot recur silently.
+- `.gitignore` carries `gates.status`, `gates.log` and `gate-output/`.
+- `tests/hooks/test_gate_runner.py::FrozenBaselineAgreement` exists and pins
+  the two baselines together.
+
+Remark 1 above (briefs granting frozen surfaces) remains open doctrine work and
+is NOT closed by this verification.
 **APPROVED 2026-08-13.** Additive protection of two new single-writer machine
 records, weakening no existing guarantee, on the CR-UPD-1 precedent. The
 all-three-landing-spots argument is the right one and is the reason this CR

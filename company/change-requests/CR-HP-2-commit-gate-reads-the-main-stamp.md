@@ -1,7 +1,7 @@
 # CR-HP-2: commit gate reads the main checkout's stamp, never the worktree's
 
 _Requesting agent/task: tech-lead / hp-writers (L4). Date: 2026-08-13._
-_Status: PROPOSED_
+_Status: APPLIED_
 
 ## Frozen surface affected
 
@@ -130,3 +130,22 @@ tree being committed. The one-line fix below is still open.
 
 ---
 _CEO decision and remarks:_
+
+**APPROVED and already APPLIED. Verified on main 2026-08-22.**
+
+The CR was correct and the change shipped in PR #118 (task acting-tree)
+without its status ever being flipped here. What the CR asked for is on disk:
+`guard_commit.py:316` now reads `c.check_stamp(branch_dir)`, and `branch_dir`
+comes from `c.acting_tree(seg, payload, root)` at :213 - the same resolution
+the branch check uses, which is exactly the "judge the stamp by the tree being
+committed" the CR argued for. The comment at :282 records that `gates_config`
+deliberately stays on `root`.
+
+Tree resolution was additionally lifted into `_common.acting_tree` so the two
+checks cannot drift apart again, and witness W-038 pins it, naming this CR:
+"lets a lane be gated on a stamp describing somebody else's tree (CR-HP-2,
+filed independently by three lanes)."
+
+No further action. This entry exists so the queue stops carrying a decided,
+shipped item as undecided - which is what made R8 read red at 0.3.1 readiness
+prep.
