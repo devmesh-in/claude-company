@@ -46,6 +46,24 @@ jobs:
       - name: Hook tests
         run: bash tests/hooks/run_tests.sh
 
+      # The harness suite runs the REAL opencode binary and has no skip path,
+      # deliberately. It is also reached a SECOND time here, implicitly, by
+      # npm's prepublishOnly during the publish step below - so without this
+      # install the publish job dies rather than skipping a check.
+      #
+      # This step exists because the suite was wired into ci.yml and
+      # prepublishOnly and missed here. Third instance of the same class:
+      # W-030 (CI exec'd a test file directly and dropped 121 hook tests) and
+      # the test_update.sh gap (139 cases reachable only through
+      # prepublishOnly, so they never ran on a PR). Every suite must run on
+      # every path that can ship code.
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+      - name: Harness tests
+        run: bash tests/harness/run_tests.sh
+
       - name: Verify release tag matches package.json version
         run: |
           set -euo pipefail
