@@ -85,6 +85,9 @@ process.stdout.write("\nthe audit verdict reaches guard_provenance (F1)\n")
     { tool: "task", sessionID: "s1", args: { subagent_type: "auditor", prompt: "audit" } },
     { title: "audit", output: HALT, metadata: {} })
 
+  // FR-HA-07 / BR-HA-02: these payloads were captured by a REAL python3 guard
+  // the adapter spawned. If the adapter ever decided a verdict itself instead
+  // of executing a guard, nothing would be captured here at all.
   const posts = p.captured().filter((c) => c.hook_event_name === "PostToolUse")
   is("a PostToolUse payload reached the guard", posts.length === 1,
      "got " + posts.length)
@@ -173,6 +176,9 @@ process.stdout.write("\nfail-closed wiring (FR-HA-10, FR-HA-11, F4)\n")
     await h["tool.execute.before"]({ tool: "write", sessionID: "s1" },
                                    { args: { filePath: "a.txt", content: "x" } })
   } catch (e) { msg = e.message }
+  // BR-HA-03: same state, same verdict as Claude Code, where the missing hook
+  // script makes python3 exit 2. A harness may differ in mechanism, never in
+  // verdict.
   is("a company project with no .claude/hooks blocks, rather than going quiet",
      msg !== null && msg.includes(".claude/hooks is missing"))
 

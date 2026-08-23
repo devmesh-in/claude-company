@@ -114,6 +114,10 @@ function trace(event) {
 // contention - wedges the tool call with no recovery and no log line.
 const GUARD_TIMEOUT_MS = 60000
 
+// FR-HA-07, BR-HA-02: the guards are EXECUTED, not reimplemented. This spawns
+// the same .claude/hooks/*.py Claude Code spawns, over the same stdin payload.
+// Nothing in this adapter decides whether an edit is legal - it decides only
+// which guards run and what they are told.
 function runScript(scriptPath, payload, cwd) {
   return new Promise((resolve) => {
     let child

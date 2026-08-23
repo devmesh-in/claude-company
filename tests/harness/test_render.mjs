@@ -170,8 +170,9 @@ process.stdout.write("\nthe Claude side is never written (FR-HA-01)\n")
 process.stdout.write("\ndrift gate (FR-HA-05)\n")
 
 {
-  // The committed tree must equal what the source renders to, or the review
-  // that approved .opencode/ approved something else.
+  // BR-HA-01: the committed tree must equal what the source renders to, or the
+  // review that approved .opencode/ approved something else. This gate IS the
+  // no-hand-edits rule; without it the rule is only a comment.
   let code = 0
   try {
     execFileSync(process.execPath,
