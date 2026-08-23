@@ -11,7 +11,8 @@ machinery, not `company/` canon (the dual-nature rule does not apply here).
 | `install-tui.js` | The `install` subcommand: interactive TUI + plain driver. A front end over `install.sh` (the engine). Exports `run`, `helpText`, and `_shared` (preflight `PROBES`, `validateTarget`, `expandUser`, exit codes) reused by `update.js`. |
 | `update.js` | The `update` subcommand driver: a self-update currency check, then preflight + target validation (reused from `install-tui._shared`) + win32 guard + flag parsing, then execs `../update.sh`. Owns the CLI contract (flags, exit codes, report framing); the engine owns file dispositions. |
 | `manifest.py` | python3 3.8 stdlib. Single sha256 hashing / manifest read-write authority. Shared by `install.sh` (emit `company/state/install-manifest.json`) and `update.sh` (read baseline, rebuild post-apply). No timestamp or env-varying field - the manifest must be byte-identical across two installs (the bin-vs-bare parity tripwire). |
-| `payload_paths.sh` | bash 3.2. `cc_overwrite_relpaths <SRC_ROOT>` prints the project-relative paths of the overwrite set - exactly what `install.sh` copies in place. The single enumeration both install emission and update planning consume, so they can never drift. |
+| `payload_paths.sh` | bash 3.2. `cc_overwrite_relpaths <SRC_ROOT> [HARNESSES]` prints the project-relative paths of the overwrite set - exactly what `install.sh` copies in place. The single enumeration both install emission and update planning consume, so they can never drift. `HARNESSES` defaults to `claude`; the `.opencode/` tree joins the set only when opencode is selected, so the manifest describes what was actually installed. |
+| `render-opencode.js` | node, no dependencies. Generates `.opencode/` from `.claude/` (FR-HA-02, FR-HA-03). `--check` is the drift gate. NEVER writes to `.claude/` - that one-way direction is what makes the Claude side impossible to regress through this path, and `tests/harness/test_render.mjs` asserts it by fingerprinting `.claude/` around a render. |
 
 ## Contracts that must not drift
 
@@ -42,3 +43,7 @@ machinery, not `company/` canon (the dual-nature rule does not apply here).
 
 - Added `update.js`, `manifest.py`, `payload_paths.sh`; exported `_shared` from
   `install-tui.js` for the `update` subcommand (workstream cli-update).
+- 2026-08-23 (#133): added `render-opencode.js`; `cc_overwrite_relpaths` gained
+  an optional `HARNESSES` argument. The default stays `claude`, so an existing
+  scripted install produces byte-for-byte the tree it produced before opencode
+  support existed.

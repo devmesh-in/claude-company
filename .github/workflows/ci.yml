@@ -44,6 +44,33 @@ jobs:
       - name: Syntax check bin and lib
         run: node --check bin/claude-company.js && node --check lib/install-tui.js
 
+  harness:
+    name: harness suite (opencode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      # The harness suite runs the REAL opencode binary. That is the point of
+      # it: the logic tests prove the adapter decides correctly, and only the
+      # binary can prove opencode still CALLS the adapter the way we think.
+      # It caught "Plugin export is not a function", where every logic test
+      # passed while enforcement did nothing at all.
+      #
+      # Its own job, not a matrix entry: one opencode install proves the
+      # integration, and repeating it across three node versions and two
+      # operating systems would buy nothing but download time.
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+      - name: Harness tests
+        # No skip path: a missing binary is a failure. A suite that skips
+        # itself when its subject is absent reports green for a machine where
+        # nothing was tested.
+        run: bash tests/harness/run_tests.sh
+
   pack:
     name: pack manifest and size budget
     runs-on: ubuntu-latest

@@ -51,6 +51,7 @@ function helpText() {
     bold("Usage"),
     "  claude-company install [target] [flags...]   install into a project",
     "  claude-company update [target] [flags...]    refresh an installed project",
+    "  claude-company render [target] [--check]     regenerate .opencode/ from .claude/",
     "  claude-company --version                      print the version",
     "  claude-company --help                         show this help",
     "",
@@ -135,6 +136,25 @@ async function main(argv) {
     }
     const updater = require(path.join(ROOT, "lib", "update.js"));
     return await updater.run(args.slice(1));
+  }
+
+  if (first === "render") {
+    // Regenerate .opencode/ from .claude/ in an INSTALLED project.
+    //
+    // This subcommand exists because the renderer never reaches a user's
+    // project: it is repo tooling in lib/, not payload. The docs used to tell
+    // people to run `node lib/render-opencode.js`, a path that does not exist
+    // for them, so a customized role stayed customized on Claude Code and
+    // shipped-stock on opencode, permanently and silently. Shipping a second
+    // copy of the renderer would have been the other option; one file invoked
+    // through the CLI beats two files that can drift.
+    const renderer = require(path.join(ROOT, "lib", "render-opencode.js"));
+    const rest = args.slice(1);
+    const target = rest.find((a) => !a.startsWith("-")) || ".";
+    const check = rest.indexOf("--check") !== -1;
+    const argv = ["--root", path.resolve(target)];
+    if (check) argv.push("--check");
+    return renderer.main(argv);
   }
 
   // Unknown subcommand.

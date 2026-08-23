@@ -78,8 +78,6 @@ Each role is one markdown file in `.claude/agents/`. The file's frontmatter sets
 
   Two pieces of advice from how we run it: give the CEO the strongest model you have - it does the judgment work (verification, arbitration, judging evidence) - and keep workers on `opus`. On a tighter budget, downshift roles in the manifest to `sonnet`: developers tolerate it best, the auditor worst. Check agreement anytime with `python3 .claude/hooks/guard_models.py --check`.
 
-  The same file carries a `pricing` map (USD per million tokens) that `cost_capture.py` reads to estimate spend in `company/state/costs.log` and the `/standup` Spend line. Update it when your rates differ; leave a model out of it and the standup reports raw token counts for that model instead of dollars. The numbers are estimates for visibility, never a bill.
-
 - **Arm or disarm the delegation enforcer**: `company/provenance.json` is the switch. A fresh install ships it, so the enforcer is armed by default; delete it to disarm every provenance mode (same rollout posture as `company/models.json`). An `update` never creates it - if a project lacks the file, update prints a one-line notice and leaves the enforcement regime unchanged, so refreshing the payload never silently arms a project.
 
 Two roles are load-bearing; change them carefully. `tech-lead` is the only agent allowed to spawn other agents, and `developer` carries the working rules every builder inherits.
@@ -103,6 +101,34 @@ Three surfaces the company keeps to hold its own history honest. Each is a plain
 - **Architecture decisions** live in `company/adr/`, one file per decision, written from `company/templates/ADR-TEMPLATE.md`. An ADR marked `Status: accepted` is frozen by a guard: you supersede it with a new record rather than editing it. The index in `company/adr/README.md` lists every decision and the next free number.
 
 - **Release readiness** is the checklist in `company/RELEASE.md`: the criteria that must all be green before `/release` prepares anything. Edit that list to match your project's bar - add a rung, tighten a criterion - and `/release` enforces the new version. It never tags or publishes; that stays yours.
+
+## Run on opencode instead of, or alongside, Claude Code
+
+The company is harness-agnostic. Pick your harnesses at install time:
+
+```bash
+npx claude-company install --harness=claude,opencode /path/to/project
+```
+
+In the interactive installer it is a checkbox on the Options screen, pre-checked when an `opencode` binary is found.
+
+**What every harness shares.** `.claude/hooks/` and `.claude/skills/` install no matter what you select. The guards are one implementation - the opencode adapter shells out to the same Python scripts rather than reimplementing a single rule - and opencode reads `.claude/skills/` natively, so your skills work there with no copy. `CLAUDE.md` is your canon on both.
+
+**What opencode adds.** `.opencode/` holds the adapter plus a generated view of your roles and skills: `agent/*.md` mirror `.claude/agents/` with the frontmatter translated, and `command/*.md` give each skill a `/slash` affordance. All of it is generated - edit the source under `.claude/` and re-render with `npx claude-company render`. Do that after any change to a role or a skill, or the two harnesses drift: your customized role on Claude Code, the shipped one on opencode.
+
+**Two differences worth knowing.**
+
+Models: on Claude Code, roles are pinned per role in `company/models.json` and a hook blocks drift. On opencode, every role inherits whatever model you launched the session with, and the adapter blocks any role that tries to pin one. Same principle - no role reasons at a different level than another - enforced by the absence of a pin rather than by a manifest.
+
+Canon: opencode reads `CLAUDE.md` only when there is no `AGENTS.md`. If your project has both, opencode silently ignores `CLAUDE.md` and your canon never reaches the session. The installer warns when it sees this; the fix is to have `AGENTS.md` point at `CLAUDE.md`.
+
+If something is not being enforced, trace it rather than guessing:
+
+```bash
+COMPANY_HARNESS_DEBUG=/tmp/harness.log opencode run --agent build "..."
+```
+
+That logs plugin load, every tool decision, and every guard chain. A harness that silently does nothing looks exactly like one that is working, which is the failure mode this flag exists for.
 
 ## Change the enforcement itself
 
