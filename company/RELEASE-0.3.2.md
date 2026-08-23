@@ -1,6 +1,6 @@
 # RELEASE 0.3.2 - harness-agnostic
 
-_Prepared: 2026-08-23. Target commit: `5679c96` on `main`. Prepared by: CEO._
+_Prepared: 2026-08-23. Target commit: `a209cfc` on `main`. Prepared by: CEO._
 _Status: PROPOSED - awaiting owner. The company prepares; the owner ships._
 
 ## Readiness
@@ -144,7 +144,7 @@ The company does not run these. Documentation of what the owner runs:
 
 ```bash
 # OWNER-ONLY - the company never runs these
-git tag -a v0.3.2 5679c96 -m "v0.3.2"
+git tag -a v0.3.2 a209cfc -m "v0.3.2"
 git push origin v0.3.2
 npm publish            # from a clean clone of the tag, AUTHORIZED=1
 ```
