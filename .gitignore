@@ -9,8 +9,6 @@ __pycache__/
 # Machine-written runtime state. company/state is hash-excluded so these do not
 # stale a stamp, but they are still never committable. Supersedes PR #73, which
 # proposed the same set on 2026-07-15 and went stale before it merged.
-company/state/costs.log
-company/state/.cost-cursor.json
 company/state/provenance-ledger.json
 company/state/active-task.json
 company/state/.update-backups/

@@ -176,7 +176,6 @@ All under `company/state/`, all owned by the CEO:
 | `gates.log` | One line per ladder run - the run history, oldest first. Written only by the gate runner. |
 | `gate-output/` | The latest full output of each gate, one file per gate, replaced on every run. Written only by the gate runner. |
 | `adherence.log` | Every hook block and bypass, one line each. Proof the system enforces. |
-| `costs.log` | One line per agent stop: token usage and an estimated spend, appended by the cost_capture hook. Estimates only, not billing. |
 
 ### active-task.json holds a list
 

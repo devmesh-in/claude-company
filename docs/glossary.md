@@ -341,7 +341,6 @@ All under `company/state/`, all owned by the CEO.
 | `provenance-ledger.json` | Audit and dispatch records for the task in flight, written only by the provenance hook. |
 | `gates.status` | The stamped gate result, written only by the gate runner. |
 | `adherence.log` | Every hook block and bypass, one line each. |
-| `costs.log` | One line per agent stop: token use and an estimated spend. Estimates for visibility, never a bill. |
 
 The board is `STATUS.md`: when a doc says the board is green, it means every
 active task's gates pass and nothing red is outstanding.

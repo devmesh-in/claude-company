@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Concurrency tests for the two state writers: witness_check and cost_capture.
+"""Concurrency tests for the state writer: witness_check.
 
-FR-HP-30 (witness registry), FR-HP-31 (cost cursor), FR-HP-33 (no non-atomic
-JSON write left behind).
+FR-HP-30 (witness registry) and FR-HP-33 (no non-atomic JSON write left
+behind). FR-HP-31 covered the cost cursor, which went with the cost ledger
+in #134.
 
 Every race here is a REAL two-process race driven through subprocess. Threads
 inside one interpreter never exercise flock between processes, so a threaded
@@ -52,7 +53,6 @@ NEUTERED_LOCK = (
 LOCK_DEF = 'def state_lock(root, timeout=2.0):  # OQ-HP-11 assumption\n'
 
 WITNESS_WIDEN_ANCHOR = "        witnesses.append(witness)\n"
-CURSOR_WIDEN_ANCHOR = "            cursor = c.read_json_file(cursor_path)\n"
 
 
 def sha256(path):
@@ -209,125 +209,6 @@ class TestRegistryRace(FixtureCase):
         self.assert_real_registry_untouched()
 
 
-# --- FR-HP-31: the cursor race ------------------------------------------
-class TestCursorRace(FixtureCase):
-    """Delete this class and two sessions stopping at once go back to dropping
-    each other's cursor entry, which double-counts the loser's next delta."""
-
-    MODEL = "claude-opus-4-20250101"
-
-    def race(self, unlock):
-        hooks = build_hooks_copy(
-            self.root,
-            widen_anchor=("cost_capture.py", CURSOR_WIDEN_ANCHOR),
-            unlock=unlock)
-        hook = os.path.join(hooks, "cost_capture.py")
-        env = fixture_env(self.root)
-        sessions = ["aaaaaaaa-1111-2222-3333-444444444444",
-                    "bbbbbbbb-5555-6666-7777-888888888888"]
-        procs = []
-        handles = []
-        for i, session in enumerate(sessions):
-            transcript = self.write(
-                "t{}.jsonl".format(i),
-                assistant_line(self.MODEL, 100 * (i + 1), 200) + "\n")
-            payload = {"hook_event_name": "Stop", "cwd": self.root,
-                       "transcript_path": transcript, "session_id": session}
-            # Payload on a file handle rather than a PIPE: both processes must
-            # be running before either is waited on, or there is no race.
-            stdin_file = self.write("p{}.json".format(i), json.dumps(payload))
-            handle = open(stdin_file)
-            handles.append(handle)
-            procs.append(subprocess.Popen(
-                [sys.executable, hook], stdin=handle,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                env=env))
-        outs = [p.communicate() for p in procs]
-        codes = [p.returncode for p in procs]
-        for handle in handles:
-            handle.close()
-        cursor_path = os.path.join(self.root, "company", "state",
-                                   ".cost-cursor.json")
-        with open(cursor_path) as f:
-            return json.load(f), codes, outs, sessions
-
-    def test_locked_arm_keeps_both_session_keys(self):
-        # What breaks without this: one session's byte offset is lost, so its
-        # whole transcript is re-counted on the next stop.
-        cursor, codes, outs, sessions = self.race(unlock=False)
-        self.assertEqual(codes, [0, 0], outs)
-        self.assertEqual(sorted(cursor.keys()), sorted(sessions), cursor)
-        for session in sessions:
-            self.assertGreater(cursor[session]["offset"], 0, cursor)
-        self.assert_real_registry_untouched()
-
-    def test_unlocked_arm_actually_loses_a_session_key(self):
-        # The negative control for the cursor. Same rule as the registry one:
-        # if this stops failing, say so rather than deleting it.
-        cursor, codes, outs, sessions = self.race(unlock=True)
-        self.assertEqual(codes, [0, 0], outs)
-        self.assertLess(
-            len(cursor), 2,
-            "UNLOCKED arm kept both session keys ({}): the race window did "
-            "not open, so the locked arm is not evidence".format(cursor))
-
-
-class TestCursorWriteFailureLogsNoLine(FixtureCase):
-    """Delete this and a failed cursor write starts double-counting.
-
-    costs.log is appended AFTER the locked section, so it is only safe to
-    append when the cursor actually moved. While the cursor write was a bare
-    open() a failure RAISED and the outer except swallowed it before any line
-    was written; write_json_atomic reports failure by returning False instead,
-    so the hook has to check it. Without that check the line is appended while
-    the cursor stays put, and the next stop re-reads the same byte range and
-    appends the identical delta again - the exact double-count this module's
-    docstring calls its hard invariant.
-    """
-
-    MODEL = "claude-opus-4-20250101"
-    SESSION = "cccccccc-9999-0000-1111-222222222222"
-
-    def run_hook(self):
-        hooks = build_hooks_copy(self.root)
-        transcript = self.write(
-            "t.jsonl", assistant_line(self.MODEL, 500, 700) + "\n")
-        payload = {"hook_event_name": "Stop", "cwd": self.root,
-                   "transcript_path": transcript, "session_id": self.SESSION}
-        return subprocess.run(
-            [sys.executable, os.path.join(hooks, "cost_capture.py")],
-            input=json.dumps(payload), capture_output=True, text=True,
-            env=fixture_env(self.root))
-
-    def costs_log(self):
-        path = os.path.join(self.root, "company", "state", "costs.log")
-        if not os.path.exists(path):
-            return ""
-        with open(path) as f:
-            return f.read()
-
-    def test_control_a_writable_cursor_does_log_a_line(self):
-        # The control. Without it, the assertion below would also pass if the
-        # hook had simply stopped logging altogether.
-        result = self.run_hook()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(self.MODEL, self.costs_log())
-
-    def test_a_failed_cursor_write_appends_no_costs_line(self):
-        # Sabotage: the cursor path is a DIRECTORY, so the atomic replace at
-        # the end of the locked section cannot land and returns False. The
-        # makedirs and the lock both still succeed, which is what isolates the
-        # failure to the write itself.
-        os.makedirs(
-            os.path.join(self.root, "company", "state", ".cost-cursor.json"))
-        result = self.run_hook()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.costs_log(), "",
-            "a costs.log line was appended although the cursor never moved - "
-            "the next stop will append the same delta again")
-
-
 # --- FR-HP-30: behaviour identity ---------------------------------------
 class TestCheckUnchanged(FixtureCase):
     """Delete this and --check's stdout contract (the WITNESS_JSON line last)
@@ -475,7 +356,7 @@ class TestLockFailsOpen(FixtureCase):
         self.assertNotIn("added W-", r.stdout)
 
 
-# --- FR-HP-31 / FR-HP-33: source assertions -----------------------------
+# --- FR-HP-33: source assertions -----------------------------
 class TestSourceShape(unittest.TestCase):
     """Delete this and the two patterns this lane exists to remove can walk
     straight back in on the next refactor."""
@@ -494,22 +375,12 @@ class TestSourceShape(unittest.TestCase):
     def test_no_non_atomic_json_write_remains(self):
         # FR-HP-33. A whole-file open(...,"w") + json.dump pair is exactly the
         # torn read another session sees mid-write.
-        for filename in ("witness_check.py", "cost_capture.py"):
+        for filename in ("witness_check.py",):
             offenders = self.scan(filename)
             self.assertEqual(
                 offenders, [],
                 "non-atomic JSON write still present - route it through "
                 "c.write_json_atomic:\n" + "\n".join(offenders))
-
-    def test_cost_capture_never_enters_the_lock_by_hand(self):
-        # FR-HP-31. The reference implementation this was ported from called
-        # state_lock's __enter__ / __exit__ by hand and leaked the file
-        # descriptor whenever the body raised. Only a real `with` block
-        # releases in a finally, so a manual __enter__ is banned outright.
-        src = read_text(os.path.join(HOOKS_DIR, "cost_capture.py"))
-        self.assertNotIn("__enter__", src)
-        self.assertNotIn("__exit__", src)
-        self.assertIn("with c.state_lock(root):", src)
 
     def test_witness_writer_is_locked_and_atomic(self):
         # --add and --remove each hold one lock; --check is a pure reader and

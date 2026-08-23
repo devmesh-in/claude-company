@@ -19,10 +19,16 @@ npm test                                          # CLI ONLY - tests/cli/test_cl
 bash tests/install/run_tests.sh                   # installer + the run-gates.sh runner
 bash tests/install/test_tui.sh                    # the install TUI
 bash tests/install/test_update.sh                 # update/rollout, incl. legacy field installs
+bash tests/harness/run_tests.sh                   # the opencode adapter, renderer, drift gate
 ```
 
-All five must be green before any commit, and CI runs all five plus the pack
+All six must be green before any commit, and CI runs all six plus the pack
 manifest, the readme check and the no-slop scan.
+
+`tests/harness/run_tests.sh` REQUIRES the `opencode` binary on PATH and does
+not skip without it - a suite that skips itself when its subject is absent
+reports green for a machine where nothing was tested. Install opencode the
+same way you installed Claude Code.
 
 **`npm test` is the CLI suite alone.** It does NOT run the installer, TUI or
 update suites - only `prepublishOnly` chains those. This file previously said
@@ -41,6 +47,7 @@ to catch you, and it is the one nobody runs by habit.
 | `.claude/hooks/` | The enforcement hooks (Python) and their CLIs |
 | `.claude/skills/` | Slash commands (`/orchestrator`, `/release`, `/standup`, ...) |
 | `.claude/agents/` | The role definitions the CEO dispatches |
+| `.opencode/` | GENERATED view of `.claude/` for the opencode harness, plus the hand-written adapter. Never hand-edit: run `node lib/render-opencode.js` |
 | `company/` | The canon, templates, and state that ship into installs |
 | `tests/` | `tests/hooks/` (Python) and `tests/cli`, `tests/install` (bash) |
 | `docs/` | Client-facing guides |

@@ -12,15 +12,6 @@
       "added_at": "2026-07-09T18:03:38Z"
     },
     {
-      "id": "W-002",
-      "task": "wave1-enforcement",
-      "file": ".claude/hooks/cost_capture.py",
-      "must_contain": "max(0, file_total[k] - prev_cum[k])",
-      "regex": false,
-      "why": "compaction clamp prevents double-counting tokens after a transcript shrink",
-      "added_at": "2026-07-09T18:03:38Z"
-    },
-    {
       "id": "W-003",
       "task": "wave1-enforcement",
       "file": ".claude/hooks/guard_secrets.py",
@@ -327,5 +318,5 @@
       "added_at": "2026-08-13T13:12:45Z"
     }
   ],
-  "checksum": "f0b3ecc3684350e1160415c71580d729bc831cbc241062f4222ca52d829c2c4c"
+  "checksum": "5f3d979d65beea24936dc31b62ab6ac7d2f832014394ccc6d3f5e46f3360e60a"
 }

@@ -1,0 +1,24 @@
+{
+  "$comment": "OQ-HA-01 assumption. opencode does not enumerate its tool surface headlessly - `opencode debug v2` returns providers and models, not tools - so this snapshot is the oracle instead. Every name in `tools` MUST be classified by .opencode/lib/harness-core.js as write, read-only or unsupported; an unclassified tool blocks at runtime (FR-HA-11), and this file is what makes that block land in CI before it lands on a user. Refresh it on an opencode version bump, deliberately, and classify anything new in the same change.",
+  "$how_captured": "Union of the resolved `tools` maps reported by `opencode debug agent <name>` across build, plan, general, explore, developer, tech-lead, auditor and qa-engineer. An earlier version of this file was written from the permission-key list in the published docs and listed four tools that no agent actually exposes (list, websearch, lsp, todoread) while missing the real name of the patch tool. A snapshot that is not a capture is not an oracle.",
+  "opencode_version": "1.18.16",
+  "captured": "2026-08-23",
+  "tools": [
+    "bash",
+    "edit",
+    "glob",
+    "grep",
+    "invalid",
+    "question",
+    "read",
+    "skill",
+    "task",
+    "todowrite",
+    "webfetch",
+    "write"
+  ],
+  "$not_exposed": {
+    "$comment": "Present in the binary but absent from every resolved tool map on this version. Classified anyway, so that enabling one cannot quietly become an unguarded write.",
+    "apply_patch": "unsupported - writes files without naming them in its arguments"
+  }
+}

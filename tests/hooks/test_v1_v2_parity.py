@@ -24,13 +24,13 @@ test_multi_task_provenance.TestSingleEntryParity (which pin the exact exit
 code, stdout and adherence line at one entry). This file is one leg of that
 proof, not the whole of it.
 
-Coverage: the ten consumer hooks, plus each of the four guard_provenance
+Coverage: the seven consumer hooks, plus each of the four guard_provenance
 events (Mode A, B-pre, B-post, C). Stop and PreToolUse Edit stay WIRED and
 inert, so there is nothing left there for two file shapes to differ about.
 
 Method: ONE fixture root per case. Run against the v1 file, capture, reset the
-mutable state that hooks write (adherence log, ledger, cost cursor, costs log),
-rewrite the SAME entry as v2, run again, compare. A single root is what makes
+mutable state that hooks write (adherence log, ledger), rewrite the SAME
+entry as v2, run again, compare. A single root is what makes
 this honest - work_hash excludes company/state, so swapping the task file does
 not perturb the tree fingerprint, and both runs see a byte-identical repo.
 """
@@ -56,13 +56,8 @@ MANIFEST = {
 MODELS = {
     "roles": {"developer": "opus", "auditor": "opus", "tech-lead": "opus"},
     "builtins": {"general-purpose": "opus"},
-    "pricing": {
-        "opus": {"input": 15, "output": 75,
-                 "cache_write": 18.75, "cache_read": 1.5},
-    },
 }
 
-MODEL_NAME = "claude-opus-4-20250101"
 SESSION_ID = "sess1234-abcd-ef01-2345-6789abcdef01"
 
 # The one entry under test, expressed once and written in both shapes.
@@ -78,8 +73,6 @@ ENTRY = {
 MUTABLE = [
     "company/state/adherence.log",
     "company/state/provenance-ledger.json",
-    "company/state/.cost-cursor.json",
-    "company/state/costs.log",
 ]
 
 
@@ -125,16 +118,6 @@ class ParityBase(unittest.TestCase):
         # A dirty, self-authored source path: this is what arms Mode C.
         self.w("src/app.py", "x = 1\n")
 
-        self.transcript = os.path.join(self.root, "transcript.jsonl")
-        with open(self.transcript, "w") as f:
-            f.write(json.dumps({
-                "type": "assistant",
-                "message": {"model": MODEL_NAME, "usage": {
-                    "input_tokens": 100, "output_tokens": 50,
-                    "cache_creation_input_tokens": 10,
-                    "cache_read_input_tokens": 5}},
-            }) + "\n")
-
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
@@ -175,7 +158,6 @@ class ParityBase(unittest.TestCase):
             "stdout": r.stdout.replace(self.root, "<ROOT>"),
             "stderr": r.stderr.replace(self.root, "<ROOT>"),
             "adherence": strip_timestamps(self.read("adherence.log")),
-            "costs": strip_timestamps(self.read("costs.log")),
         }
 
     def read(self, name):
@@ -204,7 +186,7 @@ class ParityBase(unittest.TestCase):
 
         if expect is not None:
             expect(v1)
-        for field in ("rc", "stdout", "stderr", "adherence", "costs"):
+        for field in ("rc", "stdout", "stderr", "adherence"):
             self.assertEqual(
                 v1[field], v2[field],
                 "{} {} differs between the v1 single object and the "
@@ -308,14 +290,6 @@ class TestConsumerHookParity(ParityBase):
         self.parity("session_start.py",
                     {"hook_event_name": "SessionStart", "cwd": self.root},
                     expect=prints)
-
-    def test_cost_capture_line(self):
-        def wrote(v):
-            assert "feat-parity" in v["costs"], v["costs"]
-        self.parity("cost_capture.py", {
-            "hook_event_name": "Stop", "cwd": self.root,
-            "session_id": SESSION_ID, "transcript_path": self.transcript,
-        }, expect=wrote)
 
     def test_risk_score_cli(self):
         def scored(v):

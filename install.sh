@@ -23,10 +23,19 @@ die()   { printf '%s\n' "${C_RED}error:${C_RESET} $*" >&2; exit 1; }
 
 usage() {
   cat >&2 <<USAGE
-Usage: bash install.sh /path/to/target-project
+Usage: bash install.sh [--harness=LIST] /path/to/target-project
 
 Installs the claude-company SDLC system into an existing project directory.
 The target directory must already exist.
+
+  --harness=LIST   comma-separated harnesses to wire, default "claude".
+                   Supported: claude, opencode.
+
+Every harness shares one payload: the guards in .claude/hooks/ and the skills
+in .claude/skills/ are installed regardless of selection, because the opencode
+adapter shells out to those same guards and opencode reads those same skills.
+Selecting opencode additionally installs .opencode/ (the adapter, plus the
+generated agents and slash commands).
 USAGE
   exit 2
 }
@@ -36,9 +45,31 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR"
 
 # --- validate arguments ---------------------------------------------------
-[ "$#" -ge 1 ] || usage
-TARGET_ARG="$1"
+# Default "claude" and not "auto-detect": an existing scripted invocation must
+# keep producing byte-for-byte the install it produced before opencode support
+# existed. Selection is an explicit act, made in the TUI or by this flag.
+HARNESSES="claude"
+TARGET_ARG=""
+for arg in "$@"; do
+  case "$arg" in
+    --harness=*) HARNESSES="${arg#--harness=}" ;;
+    -h|--help)   usage ;;
+    -*)          die "unknown option: $arg" ;;
+    *)           [ -n "$TARGET_ARG" ] && usage; TARGET_ARG="$arg" ;;
+  esac
+done
 [ -n "$TARGET_ARG" ] || usage
+
+# Claude Code is not optional: .claude/ carries the guards every harness runs.
+case ",$HARNESSES," in *,claude,*) ;; *) HARNESSES="claude,$HARNESSES" ;; esac
+for h in $(printf '%s' "$HARNESSES" | tr ',' ' '); do
+  case "$h" in
+    claude|opencode) ;;
+    *) die "unknown harness: $h (supported: claude, opencode)" ;;
+  esac
+done
+harness_selected() { case ",$HARNESSES," in *,"$1",*) return 0 ;; *) return 1 ;; esac; }
+
 [ -d "$TARGET_ARG" ] || die "target directory does not exist: $TARGET_ARG"
 TARGET="$(cd "$TARGET_ARG" && pwd)"
 
@@ -104,6 +135,30 @@ info "Installing agents, hooks, and skills"
 copy_tree_overwrite "$SRC/.claude/agents"  "$TARGET/.claude/agents"
 copy_tree_overwrite "$SRC/.claude/hooks"   "$TARGET/.claude/hooks"
 copy_tree_overwrite "$SRC/.claude/skills"  "$TARGET/.claude/skills"
+
+# --- 1b. the opencode harness, when selected ------------------------------
+# .opencode/ is a GENERATED view of .claude/ (see lib/render-opencode.js): the
+# adapter runs those same guards, and opencode reads those same skills from
+# .claude/skills directly, so nothing here is a second copy of the canon.
+if harness_selected opencode; then
+  info "Installing the opencode harness"
+  copy_tree_overwrite "$SRC/.opencode/plugin"  "$TARGET/.opencode/plugin"
+  copy_tree_overwrite "$SRC/.opencode/lib"     "$TARGET/.opencode/lib"
+  copy_tree_overwrite "$SRC/.opencode/agent"   "$TARGET/.opencode/agent"
+  copy_tree_overwrite "$SRC/.opencode/command" "$TARGET/.opencode/command"
+  copy_overwrite "$SRC/.opencode/opencode.json" "$TARGET/.opencode/opencode.json"
+  # Marks .opencode/*.js as ES modules for plain node. opencode and bun infer
+  # it; node does not, and warns on every import.
+  copy_overwrite "$SRC/.opencode/package.json"  "$TARGET/.opencode/package.json"
+  # opencode reads CLAUDE.md only when no AGENTS.md exists (FR-HA-18). With
+  # both present the project canon is silently ignored, which looks exactly
+  # like a working install, so say so rather than letting it pass.
+  if [ -f "$TARGET/AGENTS.md" ]; then
+    warn "$TARGET/AGENTS.md exists, so opencode will IGNORE CLAUDE.md."
+    warn "Add a line to AGENTS.md pointing at CLAUDE.md, or the company canon"
+    warn "will not reach opencode sessions."
+  fi
+fi
 
 # --- 2. canon docs and orchestrator (ours - update in place) --------------
 info "Installing canon docs"
@@ -398,7 +453,7 @@ else
   # shellcheck source=/dev/null
   . "$MANIFEST_ENUM"
   MANIFEST_DST="$TARGET/company/state/install-manifest.json"
-  if cc_overwrite_relpaths "$SRC" \
+  if cc_overwrite_relpaths "$SRC" "$HARNESSES" \
       | python3 "$MANIFEST_HELPER" build --version "$PKG_VERSION" --root "$SRC" \
       > "$MANIFEST_DST" 2>/dev/null; then
     ok "company/state/install-manifest.json"

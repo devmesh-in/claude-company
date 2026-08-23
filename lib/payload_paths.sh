@@ -5,14 +5,25 @@
 #
 # Works on macOS bash 3.2: no associative arrays, no readarray, no mapfile.
 #
-# cc_overwrite_relpaths SRC_ROOT
+# cc_overwrite_relpaths SRC_ROOT [HARNESSES]
 #   Prints, newline-delimited and LC_ALL=C sorted, the SRC_ROOT-relative paths
 #   (no leading "./") of exactly the files install.sh overwrites in place.
 #   Only paths that actually exist under SRC_ROOT are emitted.
+#
+#   HARNESSES is a comma-separated selection, default "claude". The .opencode
+#   tree is part of the overwrite set ONLY when opencode is selected, because
+#   the manifest must describe what was actually installed: listing files a
+#   claude-only install never received would put `update` into safe mode for
+#   paths that were never meant to be there.
+#
+#   The default is deliberately "claude" and not "everything present": an
+#   existing scripted `bash install.sh /path` must keep producing exactly the
+#   install it produced before opencode support existed.
 
 cc_overwrite_relpaths() {
-  local src_root d f p
+  local src_root harnesses d f p
   src_root="$1"
+  harnesses="${2:-claude}"
   {
     # Overwritten trees - mirror copy_tree_overwrite: every non-pyc file,
     # excluding __pycache__ caches (not just *.py).
@@ -26,6 +37,29 @@ cc_overwrite_relpaths() {
         find "$d" -type f -not -path '*/__pycache__/*' -not -name '*.pyc' -print
       fi
     done
+
+    # The opencode adapter, generated agents and generated commands. Present
+    # in the overwrite set only when that harness was selected.
+    case ",$harnesses," in
+      *,opencode,*)
+        for d in \
+          "$src_root/.opencode/agent" \
+          "$src_root/.opencode/command" \
+          "$src_root/.opencode/lib" \
+          "$src_root/.opencode/plugin"
+        do
+          if [ -d "$d" ]; then
+            find "$d" -type f -not -path '*/node_modules/*' -print
+          fi
+        done
+        for f in \
+          "$src_root/.opencode/opencode.json" \
+          "$src_root/.opencode/package.json"
+        do
+          if [ -f "$f" ]; then printf '%s\n' "$f"; fi
+        done
+        ;;
+    esac
 
     # Overwritten singletons - mirror copy_overwrite, only if they exist.
     for f in \

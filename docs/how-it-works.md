@@ -149,11 +149,9 @@ Specs say what to build; architecture decision records (ADRs, in `company/adr/`)
 - **Accepted decisions are immutable.** Once the CEO marks an ADR accepted, a guard blocks every edit to it. You do not amend a decision - you write a new ADR that supersedes it and names what it replaced.
 - **Precedence is explicit.** When a decision and a spec appear to clash, an accepted ADR wins on architecture (how it is built) and the spec wins on scope (what to build). A builder who spots the conflict files a change request rather than picking a winner.
 
-## Risk, cost, and the auditor
+## Risk and the auditor
 
 Not every merge deserves the same scrutiny, so the company measures rather than guesses. Each finished branch is scored across a handful of signals: how large the diff is, whether it strays near a protected file, how much of it is tests, whether it touches sensitive paths. A low score merges on the normal path; a high score makes an independent auditor's recheck mandatory, not a judgment call.
-
-Cost is tracked the same passive way. Every time an agent stops, its token use and an estimated spend append to `company/state/costs.log` - an estimate for visibility, never a bill. `/standup` sums it into a Spend line, today's estimate and the active task's, so the price of running agents in parallel is visible before it surprises you.
 
 ## Preparing a release
 

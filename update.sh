@@ -85,6 +85,16 @@ fi
 # --- wire the shared helpers ----------------------------------------------
 MANIFEST_HELPER="$SRC/lib/manifest.py"
 MANIFEST_ENUM="$SRC/lib/payload_paths.sh"
+
+# --- which harnesses this project already runs (FR-HA-17) -----------------
+# DETECTED, never selected here. An update refreshes the harnesses a project
+# already has and never adds one: the same posture as company/provenance.json,
+# where W-020 pins that a payload refresh must not switch a project's
+# enforcement regime. Adding opencode to an existing project is an install.
+TARGET_HARNESSES="claude"
+if [ -f "$TARGET/.opencode/plugin/company-harness.js" ]; then
+  TARGET_HARNESSES="claude,opencode"
+fi
 [ -f "$MANIFEST_HELPER" ] || die2 "missing helper: $MANIFEST_HELPER"
 [ -f "$MANIFEST_ENUM" ]   || die2 "missing helper: $MANIFEST_ENUM"
 # shellcheck source=/dev/null
@@ -217,7 +227,7 @@ while IFS= read -r rel; do
       safe_cp "$SRC/$rel" "$TARGET/$rel.new"
     fi
   fi
-done < <(cc_overwrite_relpaths "$SRC")
+done < <(cc_overwrite_relpaths "$SRC" "$TARGET_HARNESSES")
 
 # --- copy_if_absent config (FR-UPD-07) ------------------------------------
 # gates.config, frozen-surfaces.json, models.json: restore only if the target
@@ -552,7 +562,7 @@ fi
 # clobbered on the next run. Skipped entirely in --check.
 if [ "$CHECK" != "1" ]; then
   safe_mkdir "$TARGET/company/state"
-  if ! cc_overwrite_relpaths "$SRC" \
+  if ! cc_overwrite_relpaths "$SRC" "$TARGET_HARNESSES" \
       | python3 "$MANIFEST_HELPER" build --version "$PKG_VERSION" --root "$SRC" \
       > "$MANIFEST"; then
     die3 "failed to rewrite manifest: $MANIFEST"
