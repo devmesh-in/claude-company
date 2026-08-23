@@ -464,9 +464,9 @@ class TestWriteJsonAtomic(KernelBase):
     def test_indent_and_compact_formats_fr_hp_02(self):
         """On-disk formatting is the caller's, not the helper's.
 
-        gate_stamp.py and witness_check.py ship indent=2 files and
-        cost_capture.py ships a compact one. Other lanes diff and eyeball
-        those, so the exact text is part of the contract.
+        gate_stamp.py and witness_check.py ship indent=2 files, and the
+        helper must also be able to ship a compact one. Other lanes diff
+        and eyeball those, so the exact text is part of the contract.
         """
         data = {"b": 1, "a": [1, 2]}
         pretty = self.dest("pretty.json")
@@ -489,9 +489,9 @@ class TestWriteJsonAtomic(KernelBase):
         """mkstemp creates 0600 and os.replace carries the temp file's mode
         with it, so without an explicit chmod every state file would silently
         tighten to owner-only the first time its writer adopted this helper.
-        Three lanes migrate gates.status, witnesses.json and .cost-cursor.json
-        onto it next wave; a permission change none of them asked for is the
-        kind of thing that surfaces as a mystery on someone else's machine.
+        Lanes migrate gates.status and witnesses.json onto it next wave; a
+        permission change none of them asked for is the kind of thing that
+        surfaces as a mystery on someone else's machine.
         """
         path = os.path.join(self.root, "company", "state", "modes.json")
         self.assertIs(_common.write_json_atomic(path, {"n": 1}), True)

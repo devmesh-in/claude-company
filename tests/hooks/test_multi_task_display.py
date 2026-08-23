@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Multi-entry rendering for the four display/telemetry hooks (FR-MST-10..13).
+"""Multi-entry rendering for the display/telemetry hooks (FR-MST-10..13,
+less the cost_capture leg, removed with the cost ledger in #134).
 
-context_pin, session_start, cost_capture and risk_score are the hooks that
-only READ the task list: none of them gates anything, and none may start.
+context_pin, session_start and risk_score are the hooks that only READ the
+task list: none of them gates anything, and none may start.
 These tests pin two things at once - that every entry in flight is rendered,
 and that the single-entry path stayed byte-identical (BR-MST-02).
 
@@ -24,7 +25,6 @@ from test_hooks import Base, git, run_cli, run_hook  # noqa: E402
 
 PIN = "context_pin.py"
 SESSION = "session_start.py"
-COST = "cost_capture.py"
 RISK = "risk_score.py"
 PROV = "guard_provenance.py"
 
@@ -34,22 +34,6 @@ MANIFEST = {
     "builder_roles": ["tech-lead", "developer", "qa-engineer"],
 }
 
-MODEL = "claude-opus-4-20250101"
-
-
-def assistant_line(tin, tout):
-    return json.dumps({
-        "type": "assistant",
-        "message": {
-            "model": MODEL,
-            "usage": {
-                "input_tokens": tin,
-                "output_tokens": tout,
-                "cache_creation_input_tokens": 0,
-                "cache_read_input_tokens": 0,
-            },
-        },
-    })
 
 
 def parse_risk(stdout):
@@ -98,30 +82,6 @@ class MultiBase(Base):
     def digest(self):
         payload = {"hook_event_name": "SessionStart", "cwd": self.root}
         return run_hook(SESSION, payload, self.root)
-
-    def transcript_path(self):
-        return os.path.join(self.root, "transcript.jsonl")
-
-    def write_transcript(self):
-        with open(self.transcript_path(), "w") as f:
-            f.write(assistant_line(100, 200) + "\n")
-
-    def cost(self, session="sess1234-abcd"):
-        payload = {"hook_event_name": "Stop", "cwd": self.root,
-                   "transcript_path": self.transcript_path(),
-                   "session_id": session}
-        return run_hook(COST, payload, self.root)
-
-    def costs_lines(self):
-        path = os.path.join(self.root, "company", "state", "costs.log")
-        if not os.path.exists(path):
-            return []
-        with open(path) as f:
-            return [ln for ln in f.read().splitlines() if ln.strip()]
-
-    def task_column(self, line):
-        # timestamp | session8 | kind | task | model | tokens [| est]
-        return line.split(" | ")[3]
 
     def git_history(self):
         """A base commit carrying a brief, then a HEAD commit touching one
@@ -192,21 +152,6 @@ class TestSingleEntryParity(MultiBase):
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertSameRun(first, second, "session_start")
         self.assertIn("active-task: feat-x (feature)", first.stdout)
-
-    def test_cost_capture_parity(self):
-        self.write_transcript()
-        obj = {"task": "solo", "type": "feature"}
-        self.set_task(obj)
-        first = self.cost(session="sess-aaaa-0001")
-        self.set_tasks(obj)
-        # A second session id gives a fresh delta cursor, so the second run
-        # logs a line of its own instead of a no-op.
-        second = self.cost(session="sess-bbbb-0002")
-        self.assertSameRun(first, second, "cost_capture")
-        logged = self.costs_lines()
-        self.assertEqual(len(logged), 2, logged)
-        self.assertEqual(self.task_column(logged[0]), "solo")
-        self.assertEqual(self.task_column(logged[1]), "solo")
 
     def test_risk_score_parity(self):
         base = self.git_history()
@@ -385,47 +330,6 @@ class TestSessionStartMulti(MultiBase):
         self.assertEqual(len(ident), 3, r.stdout)
         self.assertTrue(ident[1].endswith(" HOTFIX:hf-b"), ident[1])
         self.assertIn("and 2 more", out)
-
-
-class TestCostCaptureMulti(MultiBase):
-    def test_two_slugs_render_sorted(self):
-        self.write_transcript()
-        # Deliberately out of order: the column sorts, so the standup skill
-        # can match by containment regardless of entry order.
-        self.set_tasks({"task": "b-two", "type": "feature"},
-                       {"task": "a-one", "type": "feature"})
-        r = self.cost()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        logged = self.costs_lines()
-        self.assertEqual(len(logged), 1, logged)
-        self.assertEqual(self.task_column(logged[0]), "a-one+b-two")
-
-    def test_four_slugs_truncate_with_more(self):
-        self.write_transcript()
-        self.set_tasks({"task": "d", "type": "quick"},
-                       {"task": "c", "type": "quick"},
-                       {"task": "b", "type": "quick"},
-                       {"task": "a", "type": "quick"})
-        r = self.cost()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        logged = self.costs_lines()
-        self.assertEqual(self.task_column(logged[0]), "a+b+c+more")
-
-    def test_no_entries_render_dash(self):
-        self.write_transcript()
-        self.set_tasks()
-        r = self.cost()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        logged = self.costs_lines()
-        self.assertEqual(self.task_column(logged[0]), "-")
-
-    def test_single_slug_renders_exactly_that_slug(self):
-        self.write_transcript()
-        self.set_tasks({"task": "cost_capture", "type": "feature"})
-        r = self.cost()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        logged = self.costs_lines()
-        self.assertEqual(self.task_column(logged[0]), "cost_capture")
 
 
 class TestRiskScoreMulti(MultiBase):

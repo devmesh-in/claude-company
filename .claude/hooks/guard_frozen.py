@@ -36,8 +36,6 @@ ALWAYS_DEFAULTS = [
     "Cargo.lock",
     "company/state/gates.status",
     "company/state/adherence.log",
-    "company/state/costs.log",
-    "company/state/.cost-cursor.json",
     "company/state/provenance-ledger.json",
     # CR-UPD-1 repair (CR-2): these two were added to the registry in
     # company/frozen-surfaces.json and never mirrored here, so they have been
