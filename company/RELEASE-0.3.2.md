@@ -1,6 +1,6 @@
 # RELEASE 0.3.2 - harness-agnostic
 
-_Prepared: 2026-08-23. Target commit: `a209cfc` on `main`. Prepared by: CEO._
+_Prepared: 2026-08-23. Target commit: `39b63c8` on `main`. Prepared by: CEO._
 _Status: PROPOSED - awaiting owner. The company prepares; the owner ships._
 
 ## Readiness
@@ -140,18 +140,21 @@ who updates loses cost tracking and the `/standup` Spend line.
 
 ## OWNER-ONLY ship commands
 
-The company does not run these. Documentation of what the owner runs:
+The company does not run these. Documentation of what the owner runs.
+
+Publishing happens through OIDC trusted publishing, NOT a local `npm publish`:
+no npm token exists anywhere, and `.github/workflows/release.yml` triggers on
+`release: published`, not on a tag push. Pushing the tag alone ships nothing.
 
 ```bash
 # OWNER-ONLY - the company never runs these
-git tag -a v0.3.2 a209cfc -m "v0.3.2"
+git tag -a v0.3.2 39b63c8 -m "v0.3.2"
 git push origin v0.3.2
-npm publish            # from a clean clone of the tag, AUTHORIZED=1
+gh release create v0.3.2 --title "v0.3.2" --notes-file company/RELEASE-0.3.2.md
 ```
 
-Publishing is owner-manual by standing decision: the account uses link-based
-2FA with no OTP, and `package.json`'s `prepare` script refuses any publish
-without `AUTHORIZED=1`.
+Creating the release is what publishes: release.yml re-runs all six suites,
+asserts the tag matches package.json, then publishes with provenance.
 
 ## Rollback (OWNER-ONLY)
 
