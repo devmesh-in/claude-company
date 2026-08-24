@@ -30,6 +30,9 @@ The target directory must already exist.
 
   --harness=LIST   comma-separated harnesses to wire, default "claude".
                    Supported: claude, opencode.
+  --no-background-subagents-env
+                   skip writing the OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
+                   export into your shell profile (opencode harness only).
 
 Every harness shares one payload: the guards in .claude/hooks/ and the skills
 in .claude/skills/ are installed regardless of selection, because the opencode
@@ -50,9 +53,11 @@ SRC="$SCRIPT_DIR"
 # existed. Selection is an explicit act, made in the TUI or by this flag.
 HARNESSES="claude"
 TARGET_ARG=""
+BG_ENV=1
 for arg in "$@"; do
   case "$arg" in
     --harness=*) HARNESSES="${arg#--harness=}" ;;
+    --no-background-subagents-env) BG_ENV=0 ;;
     -h|--help)   usage ;;
     -*)          die "unknown option: $arg" ;;
     *)           [ -n "$TARGET_ARG" ] && usage; TARGET_ARG="$arg" ;;
@@ -124,10 +129,41 @@ copy_tree_if_absent() {
   find "$src" -type f -not -path '*/__pycache__/*' -not -name '*.pyc' -print | while IFS= read -r f; do
     rel="${f#$src/}"
     if [ ! -e "$dst/$rel" ]; then
-      mkdir -p "$dst/$(dirname "$rel")"
+      mkdir -p "$(dirname "$dst/$rel")"
       cp "$f" "$dst/$rel"
     fi
   done
+}
+
+# Ensure OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true is exported by the
+# user's shell before any opencode process starts. The flag is read from the
+# process environment at startup and CANNOT be enabled later: verified live
+# 2026-08-24 that neither .opencode/opencode.json nor a plugin setting
+# process.env flips it (the task tool schema is built without the background
+# parameter). Idempotent via a plain grep guard; a write failure warns and
+# moves on - this is a convenience, never worth failing an install over.
+wire_background_subagents_env() {
+  [ "$BG_ENV" -eq 1 ] || { skip "background-subagents env (skipped by flag)"; return 0; }
+  local rc
+  case "${SHELL##*/}" in
+    zsh)  rc="$HOME/.zshrc"  ;;
+    bash) rc="$HOME/.bashrc" ;;
+    *)    rc="$HOME/.profile" ;;
+  esac
+  # Guard on the exact active line, not the bare variable name: a comment
+  # mentioning it must not read as "already wired" - that failure mode is
+  # invisible capability loss.
+  if grep -qs "^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true" "$rc"; then
+    skip "background-subagents env already present in ${rc#$HOME/}"
+    return 0
+  fi
+  {
+    printf '\n'
+    printf '# claude-company: background subagent tasks for opencode\n'
+    printf 'export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true\n'
+  } >> "$rc" 2>/dev/null && \
+    ok "export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true added to ${rc#$HOME/}" ||
+    warn "could not write to $rc - add 'export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true' yourself before running opencode"
 }
 
 # --- 1. agents, hooks, skills (ours - update in place) --------------------
@@ -150,14 +186,20 @@ if harness_selected opencode; then
   # Marks .opencode/*.js as ES modules for plain node. opencode and bun infer
   # it; node does not, and warns on every import.
   copy_overwrite "$SRC/.opencode/package.json"  "$TARGET/.opencode/package.json"
-  # opencode reads CLAUDE.md only when no AGENTS.md exists (FR-HA-18). With
-  # both present the project canon is silently ignored, which looks exactly
-  # like a working install, so say so rather than letting it pass.
-  if [ -f "$TARGET/AGENTS.md" ]; then
-    warn "$TARGET/AGENTS.md exists, so opencode will IGNORE CLAUDE.md."
-    warn "Add a line to AGENTS.md pointing at CLAUDE.md, or the company canon"
-    warn "will not reach opencode sessions."
-  fi
+  # FR-HA-18. opencode's AGENTS.md SUPPRESSES CLAUDE.md - but only for the
+  # automatic walk. The generated .opencode/opencode.json names CLAUDE.md in
+  # its `instructions` array, and instruction files are combined with
+  # AGENTS.md rather than replaced by it, so the canon reaches the session
+  # either way. Verified 2026-08-23 with a codeword probe: present with the
+  # instructions line and AGENTS.md both there, absent without it.
+  #
+  # This block previously WARNED that canon would not reach opencode. That was
+  # false - the fix was already shipped one line above, in the generated
+  # config. Nothing to do here; the note stays as the record of why.
+
+  # Background subagents (task(background=true)) need the env var in the
+  # process environment BEFORE opencode starts - see the helper's comment.
+  wire_background_subagents_env
 fi
 
 # --- 2. canon docs and orchestrator (ours - update in place) --------------

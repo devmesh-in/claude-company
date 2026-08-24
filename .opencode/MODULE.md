@@ -67,3 +67,10 @@ This is how you tell them apart.
 ## Changelog
 
 - 2026-08-23: created (#133, FR-HA-01..20).
+- 2026-08-24 (harness-e2e): end-to-end run against real opencode 1.18.21. The
+  generated config now carries `subagent_depth: 2` so a lead session can
+  dispatch developer/qa-engineer (verified live: the depth-1 default failed
+  with "Subagent depth limit reached", depth 2 returns LEAD-OK from a nested
+  crew). Verified live in the same run: deny-path block, commit guard,
+  no-slop Write block, Task chains firing in both CEO and lead sessions, and
+  background subagents under OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true.

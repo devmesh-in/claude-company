@@ -119,6 +119,31 @@ process.stdout.write("\ngenerated agents (FR-HA-02, FR-HA-15)\n")
 }
 
 // --------------------------------------------------------------------------
+process.stdout.write("\ngenerated config carries the canon (FR-HA-18)\n")
+
+{
+  // This one line is the whole reason a project with an AGENTS.md still gets
+  // its CLAUDE.md canon on opencode. opencode's automatic walk drops
+  // CLAUDE.md when AGENTS.md exists; the instructions array is combined with
+  // AGENTS.md instead of replaced by it. Drop this and the canon stops
+  // arriving silently, in exactly the projects that look most set up.
+  // Verified live 2026-08-23 with a codeword probe, both directions.
+  const cfg = JSON.parse(fs.readFileSync(
+    path.join(REPO, ".opencode", "opencode.json"), "utf8"))
+  is("opencode.json names CLAUDE.md in instructions",
+     Array.isArray(cfg.instructions) && cfg.instructions.includes("CLAUDE.md"),
+     JSON.stringify(cfg.instructions))
+  // opencode defaults subagent_depth to 1, which strips the task tool from
+  // every lead session: a tech-lead could describe its crew but never dispatch
+  // it. 2 is exactly the one nested level the hierarchy needs (CEO -> lead ->
+  // developer/qa-engineer); developers stay terminal because they carry no
+  // explicit task permission at all.
+  is("opencode.json allows one nested spawn level (subagent_depth 2)",
+     cfg.subagent_depth === 2,
+     JSON.stringify(cfg.subagent_depth))
+}
+
+// --------------------------------------------------------------------------
 process.stdout.write("\nthe Claude side is never written (FR-HA-01)\n")
 
 {

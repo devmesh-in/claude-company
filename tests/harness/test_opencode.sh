@@ -121,6 +121,13 @@ import json,sys
 p=(json.load(open('$CFG')).get('agent') or {}).get('tech-lead',{}).get('permission') or {}
 sys.exit(0 if p.get('task')=={'*':'deny','developer':'allow','qa-engineer':'allow'} else 1)"
 
+# opencode defaults subagent_depth to 1, which strips the task tool from every
+# lead session - the crew could never be dispatched. The generated config must
+# raise it to exactly the one nested level the hierarchy needs.
+check "nested spawn depth is 2 (leads can dispatch their crew)" python3 -c "
+import json,sys
+sys.exit(0 if json.load(open('$CFG')).get('subagent_depth')==2 else 1)"
+
 check "the auditor cannot write" python3 -c "
 import json,sys
 p=(json.load(open('$CFG')).get('agent') or {}).get('auditor',{}).get('permission') or {}
