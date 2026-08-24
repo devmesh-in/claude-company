@@ -79,13 +79,9 @@ The company interrupts you for two things only:
 | Delivery | What shipped, the evidence (green gates, screenshots), what is next |
 | Your decisions | Anything involving money, deploys, or business policy, batched in `company/state/DECISIONS.md` |
 
-To check on things at any time:
-
-```text
-/standup
-```
-
-You get one screen: done, in flight, blocked, decisions you owe, and current gate status.
+To check on things at any time, run `/orchestrator` with no work given. You get
+done, in flight, blocked, decisions you owe, and current gate status, from
+`company/state/RESUME.md` and `company/state/active-task.json`.
 
 ## When something gets blocked
 

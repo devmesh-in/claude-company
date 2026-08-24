@@ -5,26 +5,30 @@ ship. Every agent that touches release work follows this page; the CEO enforces
 it. The one rule that outranks the rest:
 
 **A release is PREPARED by the company and SHIPPED by the owner, never the
-reverse.** The company assembles the evidence, writes the notes, proposes the
-version, and stops. Tag, publish, and deploy are owner buttons - not in any
-skill, script, agent tool, or CI step. A release that a company agent tagged or
-published is a boundary violation, full stop, the same class of error as pushing
-to `main`.
+reverse.** The company assembles the evidence, writes the notes, bumps
+`package.json`, and lands that commit on `main`. The owner's ship button is
+one GitHub release: publishing a release tagged `vX.Y.Z` (matching
+`package.json`) runs `.github/workflows/release.yml`, which re-runs the
+suites and publishes to npm via OIDC trusted publishing. No npm token lives
+in this repo. An agent does not tag, does not `npm publish`, and does not
+create the GitHub release unless the owner instructed that ship in-session
+(DECISIONS #17 option a).
 
 ## The two halves of a release
 
 ```text
 company (prepared)                     owner (shipped)
   readiness proved                       reviews the proposal
-  changelog assembled        ---->       runs git tag
-  semver proposed                        runs npm publish / deploy
-  notes written                          the release is live
+  changelog assembled        ---->       publishes a GitHub release
+  semver proposed                          tagged vX.Y.Z matching package.json
+  notes written                            release.yml publishes to npm (OIDC)
+  version bumped on main                   the release is live
   proposal filed to DECISIONS.md
 ```
 
-The seam is `company/state/DECISIONS.md`. The company's last act is a proposal
-entry there; the owner's first act is reading it. Nothing the company runs
-crosses that line.
+The seam is `company/state/DECISIONS.md`. The company's last act is a
+proposal entry plus the version bump on `main`. The owner's first act is
+reading it, then creating the GitHub release.
 
 ## Release readiness (ALL must hold before preparation starts)
 
@@ -40,10 +44,11 @@ red; it does not prepare a partial release.
 | R3 | Requirement traceability (G6) clean | `python3 .claude/hooks/trace_check.py` | exit 0, no orphan FR |
 | R4 | Model routing (G7) clean | `python3 .claude/hooks/guard_models.py --check` | exit 0, no frontmatter drift |
 | R5 | Dependency / CVE audit (G8) green where wired | the G8 command in `company/gates.config` | exit 0, no known-vulnerable dependency |
-| R6 | Security pass for sensitive releases | security-reviewer verdict on the diff | required only if the release touches auth, session, or money; verdict is pass |
+| R6 | Security pass for sensitive releases | opt-in security-reviewer per `company/EXTENDING.md` | required only if the release touches auth, session, or money; verdict is pass |
 | R7 | Zero open P0/P1 rows | read `company/state/WORRIES.md` | no row with `P0` or `P1` in the P column |
 | R8 | Zero undecided change requests | list `company/change-requests/` | no CR still awaiting a decision |
-| R9 | No red task in release scope | read `company/state/STATUS.md` | no task in scope shows red |
+| R9 | No red task in release scope | read `company/state/RESUME.md` in-flight | no in-flight task in scope shows red |
+| R10 | Enforcement still pays rent (FR-ASR-12, BR-ASR-12) | `python3 .claude/hooks/rent_report.py` | idle non-exempt hooks are named; unrecoverable-class stays exempt |
 
 R1 - R5 map to the gate ladder in `company/GATES.md` (G0 witnesses, G6 trace,
 G7 models, G8 audit); they are the same commands the CEO re-runs at integration,
@@ -55,9 +60,10 @@ any ladder rung a project has not configured yet) means: if the rung exists in
 per `company/GATES.md`, and a rung that is genuinely not yet wired is recorded
 as such in the readiness table, never silently skipped.
 
-## Release preparation (what the devops-engineer produces via /release)
+## Release preparation (what /release produces)
 
-Once readiness holds, the devops-engineer (or the CEO acting as one) assembles
+Once readiness holds, the CEO (or an opt-in devops-engineer per
+`company/EXTENDING.md`) assembles
 the release from `main` itself - never from a worktree, never from unmerged
 work. Four artifacts, all landing in the filled `RELEASE-TEMPLATE.md`:
 
@@ -124,16 +130,18 @@ entry in the DECISIONS table, matching the existing structure, terse:
   reads `proposed - awaiting owner`.
 - **Affects** is `release`.
 
-The owner reads the entry, then runs the ship commands themselves. Include these
-in the notes clearly marked OWNER-ONLY - they are documentation of what the
-owner would run, never a script an agent invokes:
+The owner reads the entry, then ships with one command. Include it in the
+notes marked OWNER-ONLY - documentation of what the owner runs, never a
+local `npm publish`:
 
 ```bash
-# OWNER-ONLY - the company never runs these
-git tag -a v0.2.0 <target-commit> -m "v0.2.0"
-git push origin v0.2.0
-npm publish            # or the project's publish/deploy step
+# OWNER-ONLY - publishes the GitHub release; release.yml then npm-publishes
+gh release create v<version> --target <target-commit> \
+  --notes-file company/RELEASE-<version>.md
 ```
+
+The tag must equal `v` plus `package.json`'s version or `release.yml` exits
+before publish. There is no separate `npm publish` step.
 
 When the owner responds, the CEO records the outcome on the same decision
 (`accepted` / `accepted-with-notes` / `rejected`) with the date and one line,
@@ -150,15 +158,14 @@ or roll back on its own.
 
 ## Where release work is barred
 
-- No skill, agent, hook, CI step, or make target the company owns may run
-  `git tag`, `git push` of a tag, `npm publish`, or any deploy. If a task would
-  need one, it stops and the owner is told - it is escalation-list item 3
-  (deploys) in `company/METHOD.md`, never an agent decision.
+- No skill, agent, hook, or make target the company owns may run `git tag`,
+  `git push` of a tag, `npm publish`, `gh release create`, or any deploy
+  on its own initiative. Direct in-session owner instruction to ship
+  authorizes `gh release create` for that release only, recorded in
+  DECISIONS.md. `release.yml` is the only path that runs `npm publish`.
 - The changelog and notes are built from `main` after integration, never from a
   task worktree - a worktree's view can miss merged work or carry unmerged work.
-- An update is never run mid-task: `guard_provenance` imports `guard_spec`,
-  `guard_models` and `guard_commit`, and `context_pin` / `session_start` import
-  `guard_provenance`, so a mid-turn tree swap can mix hook versions for
-  sub-second windows.
+- An update is never run mid-task: a mid-turn tree swap can mix hook versions
+  for sub-second windows.
 - Preparation runs only on a green board. A red readiness criterion is a stop,
   not a footnote.

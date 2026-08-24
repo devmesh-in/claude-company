@@ -9,8 +9,11 @@ the stamp in `company/state/gates.status` is red, stale, or missing.
 
 1. Gates are defined per project in `company/gates.config` (JSON). Each gate is
    a name plus a shell command; exit 0 is green.
-2. `bash company/run-gates.sh` runs the ladder, prints the table, and stamps
+2. `bash company/run-gates.sh` runs the ladder in parallel (FR-ASR-09),
+   reuses a green matching stamp (FR-ASR-10), prints the table, and stamps
    the result into `company/state/gates.status` together with a work-tree hash.
+   Pipefail/EPIPE false-reds in the install/CLI suites are forbidden
+   (`printf | grep -q`); see FR-ASR-11.
 3. The stamp goes stale the moment tracked files change again - a green stamp
    from before your last edit does not count. Re-run the suite. Freshness is
    CONTENT-based: what stales a stamp is the work changing under it, not HEAD

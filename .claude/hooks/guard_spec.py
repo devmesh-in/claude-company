@@ -143,7 +143,7 @@ def main():
         # project's business at all. c.rel_path falls back to stripping the
         # leading slash there, so a write to the scratchpad every agent is
         # told to use arrived as `private/tmp/.../foo.py`, classified as
-        # source, and blocked. Asked FIRST, the way guard_provenance mode E
+        # source, and blocked. Asked FIRST, the way a spawn-time gate
         # asks it.
         #
         # Scope is "no checkout of this repository", NOT "outside the root

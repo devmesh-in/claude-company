@@ -127,7 +127,13 @@ want_present ".claude/agents/developer.md"
 want_present ".claude/hooks/guard_commit.py"
 want_present ".claude/settings.json"
 want_present ".mcp.json"
-want_present "company/METHOD.md"
+want_present "company/EXTENDING.md"
+want_absent "^company/IDEATION.md"
+want_absent "ideation-strategist"
+want_absent "skills/standup"
+want_absent "skills/brainstorm"
+want_absent "devops-engineer.md"
+want_absent "security-reviewer.md"
 want_present "install"
 want_present "install.sh"
 want_present "bin/claude-company.js"
@@ -157,8 +163,8 @@ Object.defineProperty(process, "platform", { value: "win32" });
 process.argv = [process.argv[0], "cli", "install", "."];
 require(process.env.BIN);
 ' 2>&1)"; WIN_CODE=$?
-if [ "$WIN_CODE" -eq 2 ] && printf '%s' "$WIN_OUT" | grep -q "Windows via WSL" \
-  && printf '%s' "$WIN_OUT" | grep -q "wsl --install"; then
+if [ "$WIN_CODE" -eq 2 ] && grep -q "Windows via WSL" <<< "$WIN_OUT" \
+  && grep -q "wsl --install" <<< "$WIN_OUT"; then
   pass "win32 install refused with WSL guidance (exit 2)"
 else
   fail "win32 install refused with WSL guidance (exit $WIN_CODE)"
@@ -204,7 +210,7 @@ Object.defineProperty(process, "platform", { value: "win32" });
 process.argv = [process.argv[0], "cli", "update", "."];
 require(process.env.BIN);
 ' 2>&1)"; WIN_CODE=$?
-if [ "$WIN_CODE" -eq 2 ] && printf '%s' "$WIN_OUT" | grep -q "Windows via WSL"; then
+if [ "$WIN_CODE" -eq 2 ] && grep -q "Windows via WSL" <<< "$WIN_OUT"; then
   pass "win32 update refused with WSL guidance (exit 2)"
 else
   fail "win32 update refused with WSL guidance (exit $WIN_CODE)"

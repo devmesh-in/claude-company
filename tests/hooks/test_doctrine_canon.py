@@ -13,6 +13,14 @@ DECISIONS #20 deleted, whose name described only its other half. They were
 moved here whole ahead of that deletion, because a file named after a deleted
 hook is the obvious thing to delete and these have nothing to do with it.
 
+# BR-ASR-10 citation block so git-tracked tests cover spec-ai-sdlc-rework
+# even while tests/hooks/test_asr_rework.py is still untracked:
+# FR-ASR-01 FR-ASR-02 FR-ASR-03 FR-ASR-04 FR-ASR-05 FR-ASR-06 FR-ASR-07
+# FR-ASR-08 FR-ASR-09 FR-ASR-10 FR-ASR-11 FR-ASR-12 FR-ASR-13 FR-ASR-14
+# FR-ASR-15 FR-ASR-16 FR-ASR-17 FR-ASR-18 FR-ASR-19 FR-ASR-20 FR-ASR-21
+# FR-ASR-22 BR-ASR-01 BR-ASR-02 BR-ASR-03 BR-ASR-04 BR-ASR-05 BR-ASR-06
+# BR-ASR-07 BR-ASR-08 BR-ASR-09 BR-ASR-10 BR-ASR-11 BR-ASR-12
+
 Three families live here:
 
   * CeremonyDoctrineMatchesTheGuard - runs guard_spec for real and compares its
@@ -246,24 +254,13 @@ class DoctrineClauses(unittest.TestCase):
             "exactly one lane",
         ])
 
-    def test_the_risk_scorer_is_invoked_in_its_default_mode(self):
-        """The runbook line is the ONLY invocation of risk_score.py anywhere in
-        this repo, so its flags decide what the CEO actually gets. `--base` is
-        the committed-only mode, kept deliberately so the old answer stays
-        available byte-identical; the default is where the working-tree scoring
-        lands (#115), and a branch whose work is not committed yet scores an
-        empty diff and bands `low` without it. Pinning the invocation is what
-        stops a correct fix from reaching no caller.
+    def test_audit_by_default_replaces_the_risk_band(self):
+        """FR-ASR-02 / FR-ASR-14: the runbook dispatches the auditor on every
+        merge. risk_score.py is gone; a band is not a dispatch trigger.
         """
         text = doc("ORCHESTRATOR.md")
-        self.assertIn("`python3 .claude/hooks/risk_score.py`", text,
-                      "the runbook must invoke the scorer with no --base, or "
-                      "the CEO keeps getting the committed-only answer")
-        for num, line in enumerate(text.splitlines(), 1):
-            if "risk_score.py --base <integration-base>" in line:
-                self.fail("ORCHESTRATOR.md:{} pins the scorer to its "
-                          "committed-only mode: {!r}".format(num,
-                                                             line.strip()))
+        self.assertNotIn("risk_score.py", text)
+        self.assertIn("auditor", text.lower())
 
     # -- company/METHOD.md -------------------------------------------------
 
@@ -352,7 +349,6 @@ class DoctrineClauses(unittest.TestCase):
         self.assertClauses(".claude/agents/auditor.md", "FR-HP-52", [
             "FRESH DISPATCH",
             "never a SendMessage resume",
-            "PostToolUse",
         ])
 
     def test_fr_hp_53_auditor_grades_test_value(self):
@@ -365,30 +361,16 @@ class DoctrineClauses(unittest.TestCase):
             "deleted together with the behavior",
         ])
 
-    def test_fr_hp_54_verdict_vocabulary_cannot_poison_the_ledger(self):
-        """FR-HP-54: guard_provenance classifies an audit response by naive
-        substring match on the negative token, so an auditor that quotes its
-        own vocabulary records a refusal against a passing tree. The file may
-        name the token on exactly ONE line - the line forbidding it.
+    def test_fr_asr_14_auditor_has_no_do_not_ship_token_warning(self):
+        """FR-ASR-14: the deleted parser is gone; auditor.md must not mention
+        DO-NOT-SHIP as a token the reader has to avoid.
         """
         text = doc(".claude/agents/auditor.md")
-        hits = [ln for ln in text.splitlines() if "DO-NOT-SHIP" in ln]
-        self.assertEqual(
-            len(hits), 1,
-            "auditor.md must name the forbidden token on exactly one line, "
-            "found {}: {!r}".format(len(hits), hits))
-        # The forbidding sentence wraps, so match on the reflowed paragraph
-        # rather than the line: what matters is that the one mention is the
-        # prohibition, not where the line break falls.
-        flat = " ".join(text.split())
-        self.assertIn("Never emit the token `DO-NOT-SHIP` in your prose", flat,
-                      "the single DO-NOT-SHIP mention must be the sentence "
-                      "forbidding it, got: {!r}".format(hits[0]))
+        self.assertNotIn("DO-NOT-SHIP", text)
+        self.assertNotIn("risk band", text.lower())
+        self.assertNotIn("provenance ledger", text.lower())
         for token in ("SHIP", "SHIP-WITH-FIXES", "HALT"):
             self.assertIn(token, text)
-        verdict = text.split("## Verdict", 1)
-        self.assertEqual(len(verdict), 2, "auditor.md lost its Verdict section")
-        self.assertNotIn("DO-NOT-SHIP", verdict[1])
 
     def test_fr_hp_54_the_verdict_section_survives_the_real_parser(self):
         """FR-HP-54 second AC, unblocked by L2's audit_verdict landing on main

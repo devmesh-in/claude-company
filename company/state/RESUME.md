@@ -5,7 +5,21 @@ every spawn, merge, CR decision, and agent report. If a session died mid-flight,
 check each worktree's git log before respawning - work may be complete on disk
 without a report._
 
-## 0. IN FLIGHT RIGHT NOW - 2026-08-13, SECOND HALF (enforcement repair)
+`company/state/STATUS.md` is retired. In-flight work, red facts, and the next
+action live here. Field installs that still have STATUS.md on disk keep it
+untouched (OQ-ASR-10); session_start does not read it.
+
+## 0. IN FLIGHT RIGHT NOW - 2026-08-25
+
+| Slug | What |
+|---|---|
+| ai-sdlc-rework | AI-SDLC harness rework + 0.4.0 release. Task branch `task/ai-sdlc-rework`. |
+
+NEXT ACTION: land the PR, then owner ships with `gh release create v0.4.0`.
+
+CLOSED by this work (graduated from WORRIES): P0 unmechanized risk band
+(audit-by-default), P1 umbrella dirty-check (provenance enforcement cut),
+pipefail EPIPE false-reds, guard_tests worktree scope, md-under-tests block.
 
 The harness-port program (wave 1 and 2) is MERGED. What follows it is a second
 program the owner ordered after the port exposed the enforcement layer fighting

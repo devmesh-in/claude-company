@@ -21,15 +21,6 @@
       "added_at": "2026-07-09T18:03:38Z"
     },
     {
-      "id": "W-004",
-      "task": "wave2-enforce",
-      "file": ".claude/hooks/risk_score.py",
-      "must_contain": "auditor dispatch mandatory",
-      "regex": false,
-      "why": "high-band recommendation string is the contract ORCHESTRATOR step 6 dispatches on",
-      "added_at": "2026-07-09T20:34:59Z"
-    },
-    {
       "id": "W-005",
       "task": "wave2-enforce",
       "file": ".claude/hooks/trace_check.py",
@@ -73,33 +64,6 @@
       "regex": false,
       "why": "the issue-31 guarantee: the not-on-disk branch must inspect incoming content for a pre-accepted ADR",
       "added_at": "2026-07-09T21:25:22Z"
-    },
-    {
-      "id": "W-011",
-      "task": "delegation-enforcement",
-      "file": ".claude/hooks/guard_provenance.py",
-      "must_contain": "def execution_decision(task):",
-      "regex": false,
-      "why": "layer-3 execution gate - the written self/delegated decision derivation",
-      "added_at": "2026-07-09T23:20:46Z"
-    },
-    {
-      "id": "W-012",
-      "task": "delegation-enforcement",
-      "file": ".claude/hooks/guard_provenance.py",
-      "must_contain": "def fresh_audit(root, ledger):",
-      "regex": false,
-      "why": "mechanism-5 mechanized - independent audit must cover the current tree",
-      "added_at": "2026-07-09T23:20:46Z"
-    },
-    {
-      "id": "W-013",
-      "task": "delegation-enforcement",
-      "file": ".claude/hooks/guard_provenance.py",
-      "must_contain": "def tracking_untracked(root, task):",
-      "regex": false,
-      "why": "FR-DE-15 - PR-mode work cannot start untracked",
-      "added_at": "2026-07-09T23:20:46Z"
     },
     {
       "id": "W-014",
@@ -264,15 +228,6 @@
       "added_at": "2026-07-27T13:54:29Z"
     },
     {
-      "id": "W-033",
-      "task": "multi-session-tasks",
-      "file": ".claude/hooks/guard_provenance.py",
-      "must_contain": "def dispatches_for(ledger, slug):",
-      "regex": false,
-      "why": "dispatch credit must stay PER-SLUG; a regression to a whole-ledger dispatch count lets one session's dispatch vacuously satisfy another session's delegated decision",
-      "added_at": "2026-07-27T13:54:30Z"
-    },
-    {
       "id": "W-034",
       "task": "hp-guards",
       "file": ".claude/hooks/guard_commit.py",
@@ -316,7 +271,34 @@
       "regex": false,
       "why": "Succeeds W-006. The branch and stamp checks must be judged against the tree the commit actually targets, not the project root. Reverting it re-blocks every worktree commit as a protected-branch violation (issue 26) AND lets a lane be gated on a stamp describing somebody else's tree (CR-HP-2, filed independently by three lanes).",
       "added_at": "2026-08-13T13:12:45Z"
+    },
+    {
+      "id": "W-039",
+      "task": "ai-sdlc-rework",
+      "file": ".claude/hooks/dispatch_feed.py",
+      "must_contain": "def execution_decision(task):",
+      "regex": false,
+      "why": "FR-ASR-03: written self/delegated decision derivation now lives on the dispatch feed",
+      "added_at": "2026-08-24T21:42:32Z"
+    },
+    {
+      "id": "W-040",
+      "task": "ai-sdlc-rework",
+      "file": ".claude/hooks/dispatch_feed.py",
+      "must_contain": "def tracking_untracked(root, task):",
+      "regex": false,
+      "why": "FR-DE-15: PR-mode work cannot start untracked; marker follows the feed",
+      "added_at": "2026-08-24T21:42:32Z"
+    },
+    {
+      "id": "W-041",
+      "task": "ai-sdlc-rework",
+      "file": ".claude/hooks/dispatch_feed.py",
+      "must_contain": "def dispatches_for(ledger, slug):",
+      "regex": false,
+      "why": "dispatch credit must stay PER-SLUG after the provenance cut",
+      "added_at": "2026-08-24T21:42:32Z"
     }
   ],
-  "checksum": "5f3d979d65beea24936dc31b62ab6ac7d2f832014394ccc6d3f5e46f3360e60a"
+  "checksum": "2d85f146e28be59d403e8d0d8cb5300e149cdc1a4c815015a1bb936734e98e7f"
 }

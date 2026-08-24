@@ -2,15 +2,13 @@
 """Multi-entry rendering for the display/telemetry hooks (FR-MST-10..13,
 less the cost_capture leg, removed with the cost ledger in #134).
 
-context_pin, session_start and risk_score are the hooks that only READ the
-task list: none of them gates anything, and none may start.
-These tests pin two things at once - that every entry in flight is rendered,
-and that the single-entry path stayed byte-identical (BR-MST-02).
+context_pin and session_start only READ the task list: none of them gates
+anything, and none may start. These tests pin two things at once - that every
+entry in flight is rendered, and that the single-entry path stayed
+byte-identical (BR-MST-02).
 
-Ledger counts are only ever seeded by driving REAL guard_provenance payloads
-(Mode B-pre for a dispatch, Mode A for a self-authored path), and always while
-exactly ONE entry is in flight, so the seeding itself rides the frozen N == 1
-path and cannot drift with the gate work happening in parallel.
+Ledger counts are seeded via dispatch_feed.write_sealed_ledger while exactly
+ONE entry is in flight.
 """
 
 import json
@@ -21,12 +19,13 @@ import sys
 # (which seeds sys.path) and under `-m unittest tests.hooks.<mod>` (which does
 # not) - mirror the hooks' own sys.path insert.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_hooks import Base, git, run_cli, run_hook  # noqa: E402
+from test_hooks import Base, HOOKS_DIR, git, run_cli, run_hook  # noqa: E402
+
+sys.path.insert(0, HOOKS_DIR)
+import dispatch_feed as df  # noqa: E402
 
 PIN = "context_pin.py"
 SESSION = "session_start.py"
-RISK = "risk_score.py"
-PROV = "guard_provenance.py"
 
 MANIFEST = {
     "version": 1,
@@ -35,11 +34,6 @@ MANIFEST = {
 }
 
 
-
-def parse_risk(stdout):
-    lines = [ln for ln in stdout.splitlines() if ln.startswith("RISK_JSON: ")]
-    assert lines, "no RISK_JSON line in output:\n" + stdout
-    return json.loads(lines[-1][len("RISK_JSON: "):])
 
 
 class MultiBase(Base):
@@ -58,17 +52,21 @@ class MultiBase(Base):
 
     # --- ledger seeding, always at N == 1 ---------------------------------
     def seed_dispatch(self, role="developer"):
-        payload = {"hook_event_name": "PreToolUse", "tool_name": "Task",
-                   "tool_input": {"subagent_type": role}, "cwd": self.root}
-        r = run_hook(PROV, payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        ledger = df.read_ledger(self.root)
+        raw = json.load(open(os.path.join(
+            self.root, "company", "state", "active-task.json")))
+        if isinstance(raw, dict) and isinstance(raw.get("tasks"), list):
+            slug = (raw["tasks"][0] or {}).get("task") or ""
+        else:
+            slug = (raw or {}).get("task") or ""
+        rec = df.task_record(ledger, slug)
+        rec["dispatches"].append({"role": role, "at": "2026-01-01T00:00:00Z"})
+        df.write_sealed_ledger(self.root, ledger)
 
     def seed_self_authored(self, rel):
-        payload = {"hook_event_name": "PostToolUse", "tool_name": "Write",
-                   "tool_input": {"file_path": rel, "content": "code"},
-                   "cwd": self.root}
-        r = run_hook(PROV, payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        ledger = df.read_ledger(self.root)
+        ledger.setdefault("self_authored", []).append(rel)
+        df.write_sealed_ledger(self.root, ledger)
 
     def ledger_path(self):
         return os.path.join(self.root, "company", "state",
@@ -152,19 +150,6 @@ class TestSingleEntryParity(MultiBase):
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertSameRun(first, second, "session_start")
         self.assertIn("active-task: feat-x (feature)", first.stdout)
-
-    def test_risk_score_parity(self):
-        base = self.git_history()
-        obj = self.feature("feat-x")
-        self.set_task(obj)
-        first = run_cli(RISK, ["--base", base], self.root)
-        self.set_tasks(obj)
-        second = run_cli(RISK, ["--base", base], self.root)
-        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
-        self.assertSameRun(first, second, "risk_score")
-        # The single entry's own brief was used: one un-owned path scores 10.
-        self.assertEqual(parse_risk(first.stdout)["signals"]
-                         ["out_of_ownership"], 10, first.stdout)
 
 
 class TestContextPinMulti(MultiBase):
@@ -332,47 +317,6 @@ class TestSessionStartMulti(MultiBase):
         self.assertIn("and 2 more", out)
 
 
-class TestRiskScoreMulti(MultiBase):
-    def test_two_entries_no_brief_keeps_exit_code_and_notes_the_count(self):
-        base = self.git_history()
-        a = self.feature("feat-a")
-        b = self.feature("feat-b")
-
-        self.set_tasks(a)
-        one = run_cli(RISK, ["--base", base], self.root)
-        self.assertEqual(one.returncode, 0, one.stdout + one.stderr)
-        # One entry: unchanged - its own brief is loaded and scored.
-        self.assertEqual(
-            parse_risk(one.stdout)["signals"]["out_of_ownership"], 10,
-            one.stdout)
-        self.assertNotIn("active task entries", one.stdout)
-
-        self.set_tasks(a, b)
-        two = run_cli(RISK, ["--base", base], self.root)
-        # Advisory: the exit code is unchanged at every N.
-        self.assertEqual(two.returncode, one.returncode)
-        self.assertEqual(two.returncode, 0, two.stdout + two.stderr)
-        self.assertIn("2 active task entries", two.stdout)
-        self.assertIn("--brief", two.stdout)
-        # No brief is guessed: the ownership signal is skipped, not invented.
-        self.assertEqual(
-            parse_risk(two.stdout)["signals"]["out_of_ownership"], 0,
-            two.stdout)
-
-    def test_explicit_brief_still_scores_with_two_entries(self):
-        base = self.git_history()
-        self.set_tasks(self.feature("feat-a"), self.feature("feat-b"))
-        r = run_cli(RISK, ["--base", base, "--brief", "company/briefs/b.md"],
-                    self.root)
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(
-            parse_risk(r.stdout)["signals"]["out_of_ownership"], 10, r.stdout)
-
-    def test_no_entries_keeps_todays_note(self):
-        base = self.git_history()
-        r = run_cli(RISK, ["--base", base], self.root)
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("no brief", r.stdout)
 
 
 if __name__ == "__main__":

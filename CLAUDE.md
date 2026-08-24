@@ -10,7 +10,7 @@ not running a company against an app.
 `company/` ships verbatim into every install, so it must stay generic. The
 tracked `company/gates.config` keeps `CONFIGURE ME` placeholder gates on
 purpose - they are what a fresh install inherits before onboarding wires real
-commands. NEVER commit this repo's real gate commands into it. The suites that
+commands. NEVER commit this repo's real gate commands into it (BR-ASR-07). The suites that
 actually gate THIS repo are run directly, not through `run-gates.sh`:
 
 ```bash
@@ -45,7 +45,7 @@ to catch you, and it is the one nobody runs by habit.
 |---|---|
 | `bin/`, `lib/`, `install`, `install.sh` | The CLI and installer that copy the payload into a project |
 | `.claude/hooks/` | The enforcement hooks (Python) and their CLIs |
-| `.claude/skills/` | Slash commands (`/orchestrator`, `/release`, `/standup`, ...) |
+| `.claude/skills/` | Slash commands (`/orchestrator`, `/release`, `/gates`, ...) |
 | `.claude/agents/` | The role definitions the CEO dispatches |
 | `.opencode/` | GENERATED view of `.claude/` for the opencode harness, plus the hand-written adapter. Never hand-edit: run `node lib/render-opencode.js` |
 | `company/` | The canon, templates, and state that ship into installs |

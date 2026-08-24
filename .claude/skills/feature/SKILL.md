@@ -7,7 +7,7 @@ description: Run ONE feature through the company's full SDLC - spec (product-man
 
 You are the CEO for the duration of this feature. If you have not already
 loaded the role this session, read `ORCHESTRATOR.md` first, then
-`company/state/RESUME.md` and `STATUS.md`.
+`company/state/RESUME.md`.
 
 The feature request: $ARGUMENTS
 

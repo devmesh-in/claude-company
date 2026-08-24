@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""PreToolUse (Edit|Write|MultiEdit): block edits to frozen surfaces.
+"""PreToolUse (Edit|Write|MultiEdit): block edits to unrecoverable frozen paths.
 
-Clauses, in order:
-  1. always-frozen defaults + declared surfaces (company/frozen-surfaces.json;
-     when that file is missing only the hardcoded `always` defaults apply).
-  2. Accepted ADRs (company/adr/*.md) are immutable. An ADR already on disk with
-     a `Status: accepted` line may only be superseded, never edited. A brand-new
-     ADR is born proposed: creating one whose INCOMING content declares
-     `Status: accepted` is blocked (the CEO flips the status on acceptance).
-  3. git-TRACKED files under any migrations/ or alembic/versions/ directory (a
-     new, untracked migration stays editable; on git uncertainty we treat the
-     file as tracked and block).
+FR-ASR-08: lockfile patterns WARN (adherence.log + stderr) and allow.
+Project surfaces[] are NOT blocked mid-flight; guard_commit's drift sensor
+judges undeclared frozen-path changes at commit (FR-ASR-05). Hard BLOCK stays
+for .env/.env.*, company/state run artifacts, witnesses.json, accepted ADRs,
+and shipped migrations.
 
 Fails open on any internal error. The immutability checks (accepted ADRs,
 shipped migrations) are the one place we fail SAFE - on uncertainty they block.
@@ -25,15 +20,21 @@ import _common as c  # noqa: E402
 
 HOOK = "guard_frozen"
 
-ALWAYS_DEFAULTS = [
-    ".env",
-    ".env.*",
+# FR-ASR-08: lockfiles leave ALWAYS_DEFAULTS (and the registry always list)
+# together so FrozenBaselineAgreement still holds. They WARN, they do not BLOCK.
+LOCKFILE_PATTERNS = [
     "*.lock",
     "package-lock.json",
     "yarn.lock",
     "pnpm-lock.yaml",
     "poetry.lock",
     "Cargo.lock",
+]
+
+ALWAYS_DEFAULTS = [
+    ".env",
+    ".env.*",
+    "company/witnesses.json",
     "company/state/gates.status",
     "company/state/adherence.log",
     "company/state/provenance-ledger.json",
@@ -138,26 +139,31 @@ def main():
         if base.startswith(".env") and base.endswith(ENV_ALLOW_SUFFIXES):
             sys.exit(0)
 
-        surfaces, always = load_config(root)
+        _surfaces, always = load_config(root)
+
+        # FR-ASR-08 / BR-ASR-01: lockfiles WARN, never BLOCK, even if an
+        # older install still lists them in frozen-surfaces.json `always`.
+        for pat in LOCKFILE_PATTERNS:
+            if matches(pat, rel, base):
+                c.log_warn(
+                    root, HOOK, rel, "lockfile-warn: " + pat,
+                    "WARN: '{}' matches lockfile pattern {} - recorded, not "
+                    "blocked. Dependency lockfiles are recoverable; the "
+                    "commit-time drift sensor does not cover them.".format(
+                        rel, pat
+                    ),
+                )
+                break
 
         for pat in always:
+            if pat in LOCKFILE_PATTERNS:
+                continue
             if matches(pat, rel, base):
                 c.block(
                     root, HOOK, rel, "always-frozen: " + pat,
                     "BLOCKED: '{}' is a frozen surface ({}). {}".format(
                         rel, pat, CR_NOTE
                     ),
-                )
-
-        for s in surfaces:
-            pat = s.get("pattern")
-            if matches(pat, rel, base):
-                why = s.get("why", "declared frozen")
-                via = s.get("change_via", "CR")
-                c.block(
-                    root, HOOK, rel, "frozen: " + pat,
-                    "BLOCKED: '{}' is a frozen surface. WHY: {}. "
-                    "Change via: {}. {}".format(rel, why, via, CR_NOTE),
                 )
 
         # Accepted ADRs are immutable (mirrors the shipped-migrations clause).

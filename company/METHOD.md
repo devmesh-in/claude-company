@@ -5,9 +5,36 @@ under one accountable orchestrator (the CEO, your main Claude session). This fil
 is the method. Every agent reads it once and holds to it. The CEO's private
 runbook is `ORCHESTRATOR.md` (repo root); subagents never read that file.
 
+This harness is an AI SDLC, not a human SDLC with agents in the seats. Human
+process manages intent because humans have private context, misaligned
+incentives, and egos. Agents have none of those. What agents have is
+confabulation: they sincerely report things that never happened. So the
+harness manages evidence, not intent.
+
+Four laws (FR-ASR-01):
+
+1. **Attention is the scarce resource.** An agent with a narrow scope goes
+   deep; a broad prompt goes shallow. Decomposition into sealed briefs IS the
+   quality engine, and it applies to the coordinator too.
+2. **Self-report is not evidence.** Every "done" must convert into proof the
+   claimant cannot fabricate or reset: gates, tree-hash stamps, witnesses,
+   trace checks. Blocks are reserved for the unrecoverable; everything
+   recoverable is detected at merge, never permissioned mid-flight.
+3. **Scripts sense, judges judge.** A script may only BLOCK on a context-free
+   predicate (a path matches, a hash differs, a pattern fires, an ID lacks a
+   test). Situational questions go to an LLM judge who is never the actor
+   being judged.
+4. **A rule is a mechanism or it is dead.** Prose is followed
+   probabilistically; hooks are followed always. Doctrine that matters gets
+   mechanized; doctrine not worth mechanizing gets deleted. Enforcement pays
+   rent (DECISIONS #21): a hook exists to change outcomes, not to exist.
+   Audit-by-default at merge replaces the unused risk_score band (FR-ASR-02).
+   Tests of deleted behavior are deleted, not skipped (FR-ASR-20, BR-ASR-11).
+
 The thesis, in one line: **gates are enforced, not narrated.** Process that lives
 only in prose gets skipped under pressure. Here, the load-bearing rules are
 backed by hooks and scripts that mechanically block; the prose explains why.
+Every FR/BR ID in a live spec must appear in a test and in source (BR-ASR-10).
 
 ## The five mechanisms
 
@@ -26,12 +53,14 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    per workstream - mechanics in `company/GIT.md`). Nobody fixes things they
    notice outside their scope - they report them.
 
-3. **Frozen surfaces change only by change request.** The registry is
-   `company/frozen-surfaces.json` (enforced by a PreToolUse hook). An agent that
-   needs a frozen surface changed STOPS and files a CR in
-   `company/change-requests/`; it never patches locally. The CR queue is the
-   integration risk made visible. The bureaucracy is the point. Accepted
-   architecture decision records (`company/adr/`) are frozen the same way: a
+3. **Frozen surfaces change by CR, judged at commit.** The registry is
+   `company/frozen-surfaces.json`. Unrecoverable `always[]` paths (.env,
+   evidence, witnesses, accepted ADRs) are hard-BLOCKed mid-flight.
+   Project `surfaces[]` are NOT blocked mid-flight; `guard_commit` BLOCKs an
+   UNDECLARED change to a matching path at commit (path matches AND no file
+   in `company/change-requests/` names it). File a CR in
+   `company/change-requests/` before landing that change. Accepted
+   architecture decision records (`company/adr/`) stay immutable: a
    guard blocks edits to any ADR whose status line is `Status: accepted`, and a
    settled decision is changed only by a superseding ADR (see
    `company/adr/README.md`). Precedence when a document and a decision clash:
@@ -53,22 +82,9 @@ backed by hooks and scripts that mechanically block; the prose explains why.
    tech leads re-check against the brief; QA drives the running product and
    captures screenshots but does not judge them; leads and the CEO judge. The
    CEO re-runs gates, diff-checks ownership, and spot-reads before integrating.
-
-   This applies to the CEO mechanically, not just as prose: the provenance hook
-   (.claude/hooks/guard_provenance.py, manifest company/provenance.json) blocks
-   commit and task close while the main checkout holds source changes no
-   independent verifier context has audited at the current tree state. Delegated
-   worktree work is exempt, and the exemption rests on a precondition rather
-   than on the worktree: SOMEONE independent verified it inside the hierarchy -
-   a developer built, a lead re-checked against the brief, the CEO judged the
-   lead's diff. A worktree is where that usually happens, not why it counts.
-
-   So the exemption follows the verifier, not the directory. Any configuration
-   that removes the independent reader - a build with no lead between the
-   developer and the CEO, a single agent that both writes and reports - has
-   nothing to exempt, and its work needs the audit the exemption was standing
-   in for. Read the sentence as "verified by someone who did not write it";
-   if you cannot name that someone, the exemption does not apply.
+   The auditor is dispatched on every merge; its brief is the negation of the
+   builder's ("prove this broken"). Self-authored main-checkout work is not a
+   special provenance ledger gate - it is the same falsification audit.
 
 ## The client posture
 
@@ -119,7 +135,7 @@ Depth is capped at two below the CEO by construction (CEO -> lead -> dev/QA).
 Deeper pyramids multiply handoff drift and token cost without adding judgment.
 
 Communication travels through typed artifacts, not conversation: spec -> brief ->
-report -> STATUS. A brief is sealed and self-contained; a report follows
+report -> RESUME. A brief is sealed and self-contained; a report follows
 `company/templates/REPORT-TEMPLATE.md` and contains facts, not adjectives.
 
 ## Ceremony scales with the task
@@ -128,7 +144,6 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 
 | Class | What | Path |
 |---|---|---|
-| `ideation` | The ask is ideas/direction, or too fuzzy to build without guessing | Brainstorm engagement per `company/IDEATION.md`: parallel strategists diverge, CEO converges, client gets an options memo; the winner reclassifies as quick/feature/program. |
 | `quick` | The change fits ONE seam and trips none of the escalation conditions below. Internal engineering work counts and is the common case: a hook fix, a bug, a refactor inside one module, a test repair, a CLI flag, a copy or config change. Size is not the test and neither is how important the work feels - blast radius is. | No Phase 0, and a quick entry needs no brief - the request is the work order. The exemption is PER ENTRY: a briefless quick entry exempts itself and never the tree, so a feature entry beside it still needs its brief. One developer or the CEO itself; a tech-lead over a one-seam task is a layer that reads in and delegates to itself. Gates still gate - every one of them, unchanged. |
 | `feature` | Any ONE of the escalation conditions is tripped - a frozen surface, a stated invariant, an accepted ADR, money/auth/billing, a migration or schema change, a second repo - or the work spans more than one seam. New user-visible capability is the usual reason but not the test. | Phase 0 at one of two rungs, chosen on objective conditions and never on appetite. `spec-lite`: permitted only when ALL FOUR hold - one repo, nothing frozen, no money, no invariant in play - and the CEO derives the sealed brief straight from the request, recording the rung on the task's entry. Otherwise a full Phase 0 spec -> spec-ready gate. The escape upward is ONE-WAY: the moment the work touches a frozen surface, a second repo, or an invariant it becomes a full spec and never comes back down. Then brief (required at both rungs) -> one tech lead + team -> QA evidence -> verify -> integrate. |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |
@@ -166,12 +181,11 @@ All under `company/state/`, all owned by the CEO:
 
 | File | Job |
 |---|---|
-| `STATUS.md` | Current truth board. Red stays red until proven green. Never average a status. |
-| `RESUME.md` | Session handoff: done / running / next, plus the facts every spawn prompt needs. Read first on every session start. |
-| `WORRIES.md` | Terse ledger of suspected-but-unproven risks: `P (P0-P3) \| Worry \| What \| Logic`. A row graduates OUT when it becomes a CR, a STATUS risk, or a verified fix. |
+| `RESUME.md` | Session handoff: done / running / next, plus the facts every spawn prompt needs. Read first on every session start. In-flight work lives here (STATUS.md is retired). |
+| `WORRIES.md` | Terse ledger of suspected-but-unproven risks: `P (P0-P3) \| Worry \| What \| Logic`. A row graduates OUT when it becomes a CR, a RESUME note, or a verified fix. |
 | `DECISIONS.md` | Owner escalations and their outcomes. |
 | `active-task.json` | The machine-readable list of tasks in flight in this working tree (read by hooks). One entry per task; an entry carries that task's written execution decision (execution / execution_why) for feature/program work, plus reclassified_why on downgrades. Write it per the rule below. |
-| `provenance-ledger.json` | Audit and dispatch records for the task in flight (written only by the provenance hook). |
+| `provenance-ledger.json` | Dispatch records the pin and digest may read. Not a commit gate. |
 | `gates.status` | The stamped gate result (written only by the gate runner). |
 | `gates.log` | One line per ladder run - the run history, oldest first. Written only by the gate runner. |
 | `gate-output/` | The latest full output of each gate, one file per gate, replaced on every run. Written only by the gate runner. |
@@ -237,7 +251,8 @@ prose only, never a hook.)
 3. Deploys, prod migrations, cutover. Merge is integration; deploy is a manual
    owner step, never in any script or agent's tooling. Release preparation is
    doctrine in `company/RELEASE.md` and ends at a proposal on `DECISIONS.md` -
-   the company prepares, the owner tags and publishes.
+   the company prepares, the owner publishes one GitHub release; `release.yml`
+   publishes to npm via OIDC. There is no local `npm publish`.
 4. Scope changes beyond a brief.
 5. A gate failing twice on the same cause after a respawn - that signals a
    design problem, not an agent problem. Stop and surface.

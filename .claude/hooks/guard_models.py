@@ -50,23 +50,19 @@ SPAWN_TYPE_FIELDS = ("subagent_type", "agent_type", "type")
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit")
 SPAWN_TOOLS = ("Task", "Agent")
 
+# FR-ASR-21: provenance bindings removed; empty Stop/PostToolUse omitted
+# (OQ-ASR-09 assumption).
 EXPECTED_WIRING = [
     ("PreToolUse", EDIT_TOOLS, "guard_frozen.py"),
     ("PreToolUse", EDIT_TOOLS, "guard_spec.py"),
     ("PreToolUse", EDIT_TOOLS, "guard_tests.py"),
     ("PreToolUse", EDIT_TOOLS, "no_slop.py"),
     ("PreToolUse", EDIT_TOOLS, "guard_models.py"),
-    ("PreToolUse", EDIT_TOOLS, "guard_provenance.py"),
     ("PreToolUse", SPAWN_TOOLS, "guard_models.py"),
-    ("PreToolUse", SPAWN_TOOLS, "guard_provenance.py"),
     ("PreToolUse", ("Bash",), "guard_commit.py"),
     ("PreToolUse", ("Bash",), "guard_secrets.py"),
     ("PreToolUse", ("Bash",), "guard_tests.py"),
-    ("PreToolUse", ("Bash",), "guard_provenance.py"),
-    ("PostToolUse", EDIT_TOOLS, "guard_provenance.py"),
-    ("PostToolUse", SPAWN_TOOLS, "guard_provenance.py"),
     ("UserPromptSubmit", None, "context_pin.py"),
-    ("Stop", None, "guard_provenance.py"),
     ("SessionStart", None, "session_start.py"),
 ]
 
@@ -165,7 +161,7 @@ def handle_spawn(root, tool_input, roles, builtins):
     pin = builtins[role]
     override = tool_input.get("model")
     if override == pin:
-        return  # explicit matching override -> allow
+        return  # FR-ASR-07 / BR-ASR-05: explicit matching override -> allow
     if hotfix_bypass(root, "spawn " + role):
         return
     if not override:

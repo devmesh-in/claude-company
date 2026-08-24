@@ -71,9 +71,14 @@ check "the adapter reached its load path" test -s "$TRACE"
 
 # Derived from .claude/settings.json, not hardcoded here - if a hook binding is
 # added or removed, this reflects it with no edit to the adapter.
-for ev in PreToolUse PostToolUse UserPromptSubmit Stop SessionStart; do
+# OQ-ASR-09 / FR-ASR-21: empty Stop and PostToolUse groups are omitted.
+for ev in PreToolUse UserPromptSubmit SessionStart; do
   check "wiring derived for $ev" grep -q "\"$ev\"" "$TRACE"
 done
+check "empty PostToolUse group omitted" \
+  bash -c '! grep -q "\"PostToolUse\"" "'"$TRACE"'"'
+check "empty Stop group omitted" \
+  bash -c '! grep -q "\"Stop\"" "'"$TRACE"'"'
 
 # --- everything the renderer generated is registered -----------------------
 printf '\ngenerated agents register (FR-HA-02, FR-HA-19)\n'

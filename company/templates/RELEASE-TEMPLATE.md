@@ -1,6 +1,6 @@
 # RELEASE: <proposed tag, e.g. v0.2.0>
 
-_Prepared by: <devops-engineer/CEO>. Target commit: <sha>. Date: <YYYY-MM-DD>._
+_Prepared by: <CEO, or opt-in devops-engineer per company/EXTENDING.md>. Target commit: <sha>. Date: <YYYY-MM-DD>._
 
 The company PREPARES this; the owner SHIPS. Tag, publish, and deploy are owner
 buttons - never a step an agent runs. This filled checklist is the evidence the
@@ -23,7 +23,8 @@ report what is red and prepare nothing further.
 | R6 - Security pass for sensitive releases | security-reviewer verdict on the diff | <required only if the release touches auth, session, or money; green = verdict is pass. If not sensitive, record "n/a - no auth/session/money"> |
 | R7 - Zero open P0/P1 rows | read `company/state/WORRIES.md` | <green = no row with `P0` or `P1` in the P column> |
 | R8 - Zero undecided change requests | list `company/change-requests/` | <green = no CR still awaiting a decision> |
-| R9 - No red task in release scope | read `company/state/STATUS.md` | <green = no task in scope shows red> |
+| R9 - No red task in release scope | read `company/state/RESUME.md` | <green = no task in scope shows red> |
+| R10 - Enforcement still pays rent | `python3 .claude/hooks/rent_report.py` | <idle non-exempt hooks named; unrecoverable-class stays exempt> |
 
 R1 - R5 are the same gate-ladder commands the CEO re-runs at integration (G0
 witnesses, G6 trace, G7 models, G8 audit per `company/GATES.md`), not new
@@ -87,8 +88,7 @@ The owner then runs the ship commands themselves. These are documentation of
 what the owner runs, never a script an agent invokes:
 
 ```bash
-# OWNER-ONLY - the company never runs these
-git tag -a <tag> <target-commit> -m "<tag>"
-git push origin <tag>
-npm publish            # or the project's publish/deploy step
+# OWNER-ONLY - one GitHub release; release.yml publishes to npm via OIDC
+gh release create <tag> --target <target-commit> \
+  --notes-file company/RELEASE-<version>.md
 ```

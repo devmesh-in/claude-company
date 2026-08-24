@@ -12,12 +12,13 @@ $ARGUMENTS tells you which mode you are in; if ambiguous, look at
 
 1. Copy `company/templates/CR-TEMPLATE.md` to
    `company/change-requests/CR-<n>-<slug>.md` (next free number is tracked in
-   `company/state/STATUS.md`; bump it).
+   `company/state/RESUME.md`; next free CR number is the highest existing
+   `CR-<n>-` plus one).
 2. Fill every section honestly. The two that decide the CR's fate:
    - **Why (cite the requirement):** a CR without a concrete FR/BR/invariant
      citation is rejected by default.
    - **Exact proposed change:** the precise diff. No "something like".
-3. Update STATUS.md's CR table. If the surface is on the owner-escalation
+3. Note the CR in RESUME. If the surface is on the owner-escalation
    list (money, invariants, prod schema, versioning), flag it for the owner
    in the report - the CEO cannot approve those alone.
 
@@ -31,8 +32,8 @@ Arbitrate by the standing criteria:
 - **Reject when:** convenience-driven; duplicates an existing surface;
   vocabulary invention; the workstream can meet its spec without it.
 
-Write the decision and reasoning into the CR's footer, set Status, update
-STATUS.md.
+Write the decision and reasoning into the CR's footer, set Status, note it
+in RESUME.
 
 **If approved, apply it yourself** in a dedicated branch/PR that runs the full
 gates - approved CRs to frozen surfaces are CEO-applied, never agent-applied.

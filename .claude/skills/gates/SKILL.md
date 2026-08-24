@@ -18,6 +18,11 @@ description: Run the project's full gate ladder (company/run-gates.sh) and stamp
    stamping), the commit hook will block again - rerun this skill after
    changes; that is the intended loop.
 
+Enforcement rent: `python3 .claude/hooks/rent_report.py` prints per-hook
+BLOCK/WARN counts against each guard's declared claim. Unrecoverable-class
+guards are rent-exempt. A non-exempt hook that is idle is a candidate for
+eviction (DECISIONS #21). /release readiness rung R10 runs this.
+
 ## Configuring gates ($ARGUMENTS mentions adding/changing gates)
 
 Auto-detect first: `python3 .claude/hooks/gates_detect.py --write` sniffs the

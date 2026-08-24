@@ -67,7 +67,6 @@ cc_overwrite_relpaths() {
       "$src_root/company/METHOD.md" \
       "$src_root/company/GATES.md" \
       "$src_root/company/EXTENDING.md" \
-      "$src_root/company/IDEATION.md" \
       "$src_root/company/GIT.md" \
       "$src_root/company/LOOPS.md" \
       "$src_root/company/run-gates.sh"

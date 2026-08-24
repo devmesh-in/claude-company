@@ -29,7 +29,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
-import guard_provenance as gp  # noqa: E402
+import dispatch_feed as gp  # noqa: E402  # FR-ASR-03
 
 PREFIX = "[company]"
 FEATURE_TYPES = ("feature", "program")

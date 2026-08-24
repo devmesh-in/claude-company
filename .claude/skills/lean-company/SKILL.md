@@ -37,7 +37,7 @@ not want lean mode - you want less rigor, and that is not on offer here.
 
 ## Before you commit to this door
 
-Read `company/state/RESUME.md`, `STATUS.md`, and `git log --oneline -5`.
+Read `company/state/RESUME.md` and `git log --oneline -5`.
 Two ways this is the wrong door:
 
 - **The company is not initialized** (state files missing or empty). Run
@@ -127,9 +127,9 @@ change. Hold the line here and lean mode stays cheap for the work it fits.
    same cause after a respawn is an owner escalation, in this mode as in the
    other.
 
-7. **Integrate and leave one STATUS line.** Merge, remove ONLY your entry
+7. **Integrate and leave one RESUME line.** Merge, remove ONLY your entry
    from `active-task.json` with a targeted Edit, remove the worktree. Then
-   append **one row** to `company/state/STATUS.md`: what shipped, gates
+   append **one row** to `company/state/RESUME.md`: what shipped, gates
    green, audit done. Not a report - one line. Lean work that leaves no trace
    recreates the exact problem RESUME exists to solve, and the next session
    pays for it. If the work turned up something you did not chase, that is

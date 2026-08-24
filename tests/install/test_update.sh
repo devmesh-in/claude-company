@@ -93,7 +93,7 @@ T1="$WORK/t1"; fresh_install "$T1"
 check "install wrote the manifest" test -f "$T1/company/state/install-manifest.json"
 OUT="$(bash "$REPO/update.sh" "$T1" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && pass "pristine update exits 0" || fail "pristine update exits 0 (rc=$RC)"
-printf '%s' "$OUT" | grep -q "already up to date" && pass "reports already up to date" || fail "reports already up to date"
+grep -q "already up to date" <<< "$OUT" && pass "reports already up to date" || fail "reports already up to date"
 nott "no .new files"       bash -c "find '$T1' -name '*.new' | grep -q ."
 nott "no backup dir"       test -d "$T1/company/state/.update-backups"
 
@@ -109,7 +109,7 @@ OUT="$(bash "$REPO/update.sh" "$T2" 2>&1)"; RC=$?
 check "developer.md.new created"          test -f "$AG.new"
 check ".new holds packaged content"       cmp -s "$AG.new" "$REPO/.claude/agents/developer.md"
 nott  ".new does not contain user edit"   grep -q "USER EDIT SENTINEL" "$AG.new"
-printf '%s' "$OUT" | grep -q "preserved: 1" && pass "report says preserved: 1" || fail "report says preserved: 1"
+grep -q "preserved: 1" <<< "$OUT" && pass "report says preserved: 1" || fail "report says preserved: 1"
 nott  "no backup dir for a preserved file" test -d "$T2/company/state/.update-backups"
 
 # --- 3. bootstrap: no manifest -> safe mode -------------------------------
@@ -119,7 +119,7 @@ rm -f "$T3/company/state/install-manifest.json"
 printf '\nBOOTSTRAP EDIT\n' >> "$T3/.claude/agents/auditor.md"
 OUT="$(bash "$REPO/update.sh" "$T3" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && pass "bootstrap update exits 0" || fail "bootstrap update exits 0 (rc=$RC)"
-printf '%s' "$OUT" | grep -q "unknown -> " && pass "reports unknown -> version" || fail "reports unknown -> version"
+grep -q "unknown -> " <<< "$OUT" && pass "reports unknown -> version" || fail "reports unknown -> version"
 check "edited file preserved to .new"     test -f "$T3/.claude/agents/auditor.md.new"
 check "edited file kept its user content"  grep -q "BOOTSTRAP EDIT" "$T3/.claude/agents/auditor.md"
 nott  "pristine sibling not clobbered"     test -e "$T3/.claude/agents/architect.md.new"
@@ -136,7 +136,7 @@ SNAP_B="$(snapshot "$T4")"
 [ "$SNAP_A" = "$SNAP_B" ] && pass "--check leaves tree byte-identical" || fail "--check leaves tree byte-identical"
 nott "--check wrote no .new"        bash -c "find '$T4' -name '*.new' | grep -q ."
 nott "--check made no backup dir"   test -d "$T4/company/state/.update-backups"
-printf '%s' "$OUT" | grep -q "PRESERVED .claude/agents/qa-engineer.md" && pass "--check plan flags the drift" || fail "--check plan flags the drift"
+grep -q "PRESERVED .claude/agents/qa-engineer.md" <<< "$OUT" && pass "--check plan flags the drift" || fail "--check plan flags the drift"
 
 # --- 5. updated: tgt == baseline != packaged -> backup then overwrite -----
 echo "== updated (pristine-but-stale) flow =="
@@ -147,7 +147,7 @@ printf 'STALE UPSTREAM\n' > "$T5/$REL"
 set_manifest_hash "$MAN5" "$REL" "$(hashf "$T5/$REL")"
 OUT="$(bash "$REPO/update.sh" "$T5" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && pass "updated flow exits 0" || fail "updated flow exits 0 (rc=$RC)"
-printf '%s' "$OUT" | grep -q "updated:   1" && pass "report says updated: 1" || fail "report says updated: 1"
+grep -q "updated:   1" <<< "$OUT" && pass "report says updated: 1" || fail "report says updated: 1"
 check "stale file overwritten with packaged" cmp -s "$T5/$REL" "$REPO/$REL"
 check "backup dir created"                    test -d "$T5/company/state/.update-backups"
 BK="$(find "$T5/company/state/.update-backups" -name 'tech-lead.md' | head -1)"
@@ -161,7 +161,7 @@ RELB=".claude/agents/architect.md"
 rm -f "$T5B/$RELB"
 OUT="$(bash "$REPO/update.sh" "$T5B" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && pass "restored flow exits 0" || fail "restored flow exits 0 (rc=$RC)"
-printf '%s' "$OUT" | grep -q "restored:  1" && pass "report says restored: 1" || fail "report says restored: 1"
+grep -q "restored:  1" <<< "$OUT" && pass "report says restored: 1" || fail "report says restored: 1"
 check "missing file recreated with packaged content" cmp -s "$T5B/$RELB" "$REPO/$RELB"
 nott  "no backup dir for a pure restore"             test -d "$T5B/company/state/.update-backups"
 nott  "no .new for a restored file"                  test -e "$T5B/$RELB.new"
@@ -186,7 +186,7 @@ SNAP_A="$(snapshot "$T7")"
 OUT="$(bash "$REPO/update.sh" "$T7" 2>&1)"
 SNAP_B="$(snapshot "$T7")"
 [ "$SNAP_A" = "$SNAP_B" ] && pass "second run changes nothing" || fail "second run changes nothing"
-printf '%s' "$OUT" | grep -q "already up to date" && pass "second run: already up to date" || fail "second run: already up to date"
+grep -q "already up to date" <<< "$OUT" && pass "second run: already up to date" || fail "second run: already up to date"
 nott "second run makes no backup dir" test -d "$T7/company/state/.update-backups"
 
 # --- 8. user state and config are never touched ---------------------------
@@ -228,7 +228,7 @@ nott "no provenance.json.new" test -f "$T9/company/provenance.json.new"
 # same in --check mode
 OUT="$(bash "$REPO/update.sh" "$T9" --check 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && pass "--check without provenance exits 0" || fail "--check without provenance exits 0 (rc=$RC)"
-printf '%s' "$OUT" | grep -q "delegation enforcer installed but disarmed" \
+grep -q "delegation enforcer installed but disarmed" <<< "$OUT" \
   && pass "--check prints the notice too" || fail "--check prints the notice too"
 nott "--check still did not create provenance.json" test -f "$T9/company/provenance.json"
 
@@ -242,7 +242,11 @@ OUT="$(bash "$REPO/update.sh" "$T10" 2>&1)"; RC=$?
 [ "$PH" = "$(hashf "$T10/company/provenance.json")" ] && pass "modified provenance.json untouched" || fail "modified provenance.json untouched"
 nott "no provenance.json.new when present" test -e "$T10/company/provenance.json.new"
 nott "no backup dir for present provenance" test -d "$T10/company/state/.update-backups"
-nott "no notice when provenance present" bash -c "printf '%s' \"$OUT\" | grep -q 'delegation enforcer installed but disarmed'"
+if grep -q 'delegation enforcer installed but disarmed' <<< "$OUT"; then
+  fail "no notice when provenance present"
+else
+  pass "no notice when provenance present"
+fi
 
 # --- 10. settings.json merge: no churn on pristine, heals dropped groups ---
 echo "== settings.json merge heal (issue-67) =="
@@ -257,7 +261,7 @@ OUT="$(bash "$REPO/update.sh" "$T11" 2>&1)"; RC=$?
 
 # 10b. a 0.2.0-style dropped-group settings.json is HEALED by update. Simulate
 # the exact field damage the old command-per-event dedup caused: the whole
-# Task|Agent PreToolUse group vanished and Bash lost guard_tests + guard_provenance.
+# Task|Agent PreToolUse group vanished and Bash lost guard_tests.
 T12="$WORK/t12"; fresh_install "$T12"
 python3 - "$T12/.claude/settings.json" <<'PY'
 import json, sys
@@ -270,8 +274,7 @@ for g in d["hooks"]["PreToolUse"]:
     if m == "Bash":
         g = dict(g)
         g["hooks"] = [h for h in g["hooks"]
-                      if "guard_tests" not in (h.get("command") or "")
-                      and "guard_provenance" not in (h.get("command") or "")]
+                      if "guard_tests" not in (h.get("command") or "")]
     newpre.append(g)
 d["hooks"]["PreToolUse"] = newpre
 json.dump(d, open(p, "w"), indent=2); open(p, "a").write("\n")
@@ -280,8 +283,10 @@ nott "corrupted file really lost Task|Agent group" matcher_present "$T12/.claude
 OUT="$(bash "$REPO/update.sh" "$T12" 2>&1)"; RC=$?
 [ "$RC" -eq 0 ] && pass "heal update exits 0" || fail "heal update exits 0 (rc=$RC)"
 check "healed: Task|Agent PreToolUse group restored" matcher_present "$T12/.claude/settings.json" PreToolUse "Task|Agent"
-[ "$(command_matcher_count "$T12/.claude/settings.json" PreToolUse guard_provenance)" -eq 3 ] \
-  && pass "healed: guard_provenance back under all 3 PreToolUse matchers" || fail "healed: guard_provenance fanout == 3"
+[ "$(command_matcher_count "$T12/.claude/settings.json" PreToolUse guard_models)" -ge 1 ] \
+  && pass "healed: guard_models present under PreToolUse" || fail "healed: guard_models present under PreToolUse"
+[ "$(command_matcher_count "$T12/.claude/settings.json" PreToolUse guard_provenance)" -eq 0 ] \
+  && pass "healed: guard_provenance stays unwired" || fail "healed: guard_provenance stays unwired"
 [ "$(command_matcher_count "$T12/.claude/settings.json" PreToolUse guard_tests)" -eq 2 ] \
   && pass "healed: guard_tests back under both its matchers" || fail "healed: guard_tests fanout == 2"
 check "healed settings.json still valid JSON" python3 -m json.tool "$T12/.claude/settings.json"
@@ -316,8 +321,8 @@ bash "$REPO/update.sh" "$T16" >/dev/null 2>&1; RC=$?
 [ "$RC" -eq 0 ] && pass "update over env-less settings exits 0" || fail "update over env-less settings exits 0 (rc=$RC)"
 [ "$(env_depth "$T16/.claude/settings.json")" = "2" ] && pass "update adds spawn-depth env = 2" || fail "update adds spawn-depth env = 2"
 check "healed env settings still valid JSON" python3 -m json.tool "$T16/.claude/settings.json"
-[ "$(command_matcher_count "$T16/.claude/settings.json" PreToolUse guard_provenance)" -eq 3 ] \
-  && pass "guard_provenance fanout intact after env merge" || fail "guard_provenance fanout intact after env merge"
+[ "$(command_matcher_count "$T16/.claude/settings.json" PreToolUse guard_models)" -ge 1 ] \
+  && pass "guard_models fanout intact after env merge" || fail "guard_models fanout intact after env merge"
 # re-run must settle byte-identical (no churn)
 SENV_AFTER="$(hashf "$T16/.claude/settings.json")"
 bash "$REPO/update.sh" "$T16" >/dev/null 2>&1
@@ -540,7 +545,7 @@ import os, sys
 t = sys.argv[1]
 sys.path.insert(0, os.path.join(t, ".claude", "hooks"))
 os.environ["CLAUDE_PROJECT_DIR"] = t
-import guard_provenance as gp
+import dispatch_feed as gp
 print(len(gp.dispatches_for(gp.read_ledger(t), "legacy-x")))
 PY
 }

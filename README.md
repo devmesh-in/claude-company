@@ -88,11 +88,9 @@ The CEO sizes every request, so a typo fix never gets a committee and a product 
 ```mermaid
 flowchart LR
     A([Your request]) --> B{CEO sizes it}
-    B -->|ideation| C[Strategists diverge<br>Options memo]
     B -->|quick| D[One developer]
     B -->|feature| E[Spec with options<br>Sealed brief<br>Tech-lead team]
     B -->|program| F[Architect: scored designs<br>Waves of parallel teams]
-    C -.the winner re-enters.-> B
     D --> G[Gates + evidence]
     E --> G
     F --> G
@@ -108,10 +106,10 @@ Five things happen on every build, regardless of size:
 1. **Plans come first.** For features and products, the product manager explores 8 to 15 directions before writing the spec, and the architect picks the design from 2 to 3 scored alternatives. Both record the options they rejected and why.
 2. **[Work orders](docs/glossary.md#work-order-task-order) are sealed.** Builders receive a brief: mission, exact owned directories, [definition of done](docs/glossary.md#definition-of-done-dod), and a decided fallback for every ambiguity. Ten parallel agents make the same assumption instead of ten different ones.
 3. **Teams build in parallel.** Each tech lead runs its own developers on separate directories in an isolated git [worktree](docs/glossary.md#worktree), fills the gaps between their pieces, and sends a QA engineer through the running app.
-4. **Producers never grade their own work.** Developers report, leads verify, QA captures screenshots but does not judge them, the CEO judges. Every finished branch is [risk-scored](docs/glossary.md#risk-score) first, and a high score makes an independent [auditor's](docs/glossary.md#auditor) recheck mandatory, not a judgment call.
+4. **Producers never grade their own work.** Developers report, leads verify, QA captures screenshots but does not judge them, the CEO judges. Every merge gets an independent [auditor](docs/glossary.md#auditor) whose brief is the negation of the builder's. Fresh-context reads are cheap, so the company does not ration them with a score.
 5. **The [gates](docs/glossary.md#gate) decide.** Your test suite, linter, and build run as a stamped ladder. The stamp goes stale the moment a file changes, and the commit hook blocks anything red, stale, or unstamped.
 
-Delivery is a handoff, not a deploy. When work is ready to ship, the company prepares the release - proves the board is green, writes the changelog and notes, proposes a version - and stops there; tagging and publishing are buttons only you press. A delivery is not closed until your acceptance is recorded, so silence never counts as a yes.
+Delivery is a handoff, not a deploy. When work is ready to ship, the company prepares the release - proves the board is green, writes the changelog and notes, bumps `package.json` on `main` - and stops there. You ship by publishing one GitHub release tagged `vX.Y.Z` matching that version; CI re-runs the suites and publishes to npm. A delivery is not closed until your acceptance is recorded, so silence never counts as a yes.
 
 Read [how it works](docs/how-it-works.md) for the full method, including diagrams of the pipeline, the gate lifecycle, and the [change-request](docs/glossary.md#change-request-cr) flow.
 
@@ -120,18 +118,17 @@ Read [how it works](docs/how-it-works.md) for the full method, including diagram
 ```mermaid
 flowchart TD
     YOU(["You: the owner<br>business policy, deploys"]) --> CEO["CEO: your main session<br>plans, staffs, verifies, reports"]
-    CEO --> IS["ideation-strategist<br>explores the option space"]
     CEO --> PM["product-manager<br>specs with testable requirements"]
     CEO --> AR["architect<br>scored designs, boundaries"]
     CEO --> TL["tech-lead<br>one per workstream"]
     CEO --> AU["auditor<br>independent review"]
-    CEO --> ST["security-reviewer<br>devops-engineer<br>docs-librarian"]
+    CEO --> DL["docs-librarian<br>canon stays current"]
     TL --> D1["developer"]
     TL --> D2["developer"]
     TL --> QA["qa-engineer<br>browser + screenshots"]
 ```
 
-
+`devops-engineer` and `security-reviewer` are opt-in copies in `company/EXTENDING.md`. They are not in the default payload.
 
 
 | Role               | Judges its own output?     | Writes code?               | Spawns agents? |
@@ -152,13 +149,12 @@ Each rule is a hook that blocks the action itself. When a hook blocks an agent, 
 
 | Rule                           | What gets blocked |
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| Protected files stay protected | Edits to `.env`, lockfiles, shipped migrations, and any file your project marks as frozen |
+| Protected files stay protected | Edits to `.env`, evidence records, shipped migrations, and accepted ADRs. Project frozen surfaces are judged at commit, not mid-flight |
 | No commit while tests fail     | `git commit` when the gate suite is red, stale, or was never run                          |
 | No secrets in commits          | `git commit` when the staged diff adds an API key, token, private key, or JWT (hotfix does not bypass this one) |
 | No code without a plan         | Source-code changes when no approved work order exists                                    |
 | Tests are the referee          | Editing or deleting tests that the current work order does not cover                      |
 | No AI filler in writing        | Em dashes, smart quotes, and stock AI phrases in anything written                         |
-| No quitting early              | Ending a work session while the active task's gates are red                               |
 | Shipped work stays shipped     | Reporting gates green when a shipped fix's witness - the line of code that proves the fix is still present - has been deleted |
 | Requirements trace to tests    | Reporting gates green while a spec requirement still has no implementing code and test (an orphan) |
 | Accepted decisions stay put    | Edits to an architecture decision record marked accepted - you supersede it, never amend   |
@@ -171,13 +167,11 @@ Every block and every hotfix bypass is one line in `company/state/adherence.log`
 
 | Command                     | What it does |
 | --------------------------- | ----------------------------------------------------------------------- |
-| `/orchestrator`             | Start or resume the company. The only command you need day to day       |
+| `/orchestrator`             | Start or resume the company. The only command you need day to day. With no work given, it reports in-flight status |
 | `/lean-company`             | The fast door for one small piece of work: less hierarchy and paperwork, the same gates |
-| `/brainstorm`               | Explore ideas in parallel and get an options memo with a recommendation |
-| `/standup`                  | One-screen status: done, in flight, blocked, decisions you owe          |
 | `/feature`                  | Run one feature through the full pipeline                               |
 | `/gates`                    | Run the test gates and stamp the result                                 |
-| `/release`                  | Prepare a release for you to ship: prove readiness, write notes, propose a version |
+| `/release`                  | Prepare a release: prove readiness, write notes, bump the version. You ship by publishing a GitHub release |
 | `/company-init`, `/onboard` | Found the company explicitly (new project or existing codebase)         |
 | `/cr`                       | File or decide a change request against a protected file                |
 

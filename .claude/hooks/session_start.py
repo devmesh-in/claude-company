@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """SessionStart hook: print a compact claude-company state digest.
 
-If company/state/RESUME.md or STATUS.md exist, emit a plain-text digest (<= 60
-lines): the first 40 lines of RESUME.md, the first 20 of STATUS.md, and a
-digest PAIR (identity line + execution line) per task entry in flight, display
-truncated at three entries plus one overflow line.
+If company/state/RESUME.md exists, emit a plain-text digest (<= 60 lines):
+the first 40 lines of RESUME.md and a digest PAIR (identity line + execution
+line) per task entry in flight, display truncated at three entries plus one
+overflow line. STATUS.md is retired (FR-ASR-19); session_start ignores it.
 
 With exactly ONE entry the two lines are what they have always been (BR-MST-02
 identity). `dispatches` is that entry's PER-SLUG count; `self-authored` is the
@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
-import guard_provenance as gp  # noqa: E402
+import dispatch_feed as gp  # noqa: E402  # FR-ASR-03
 
 MAX_LINES = 60
 
@@ -44,9 +44,8 @@ def gate_alert(root, tasks):
     Stop-time gate blocked on; it is worth SAYING to the session that can run
     the ladder, and worth nothing refusing the turn of a session that cannot.
 
-    Rendered near the top of the digest deliberately. RESUME.md and STATUS.md
-    can fill MAX_LINES between them, and a warning that scrolls off the end
-    was not delivered.
+    Rendered near the top of the digest deliberately. RESUME.md can fill
+    MAX_LINES, and a warning that scrolls off the end was not delivered.
 
     Fails silent: any trouble computing the stamp returns None rather than
     losing the whole digest, since this line is advisory and the digest is not.
@@ -133,8 +132,8 @@ def main():
         root = c.project_root(payload)
         state = os.path.join(root, "company", "state")
         resume = os.path.join(state, "RESUME.md")
-        status = os.path.join(state, "STATUS.md")
-        if not (os.path.exists(resume) or os.path.exists(status)):
+        # FR-ASR-19 / OQ-ASR-10 assumption: STATUS.md is retired; ignore it.
+        if not os.path.exists(resume):
             sys.exit(0)
 
         out = ["claude-company state digest"]
@@ -142,12 +141,8 @@ def main():
         alert = gate_alert(root, tasks)
         if alert:
             out.append(alert)
-        if os.path.exists(resume):
-            out.append("-- RESUME.md --")
-            out.extend(head_lines(resume, 40))
-        if os.path.exists(status):
-            out.append("-- STATUS.md --")
-            out.extend(head_lines(status, 20))
+        out.append("-- RESUME.md --")
+        out.extend(head_lines(resume, 40))
         # BR-MST-02: the single-entry path is the shipped path, untouched.
         if len(tasks) == 1:
             single_digest(root, tasks, out)
