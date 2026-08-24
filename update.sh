@@ -51,6 +51,13 @@ safe_mkdir() { mkdir -p "$1" || die3 "cannot create directory: $1"; }
 safe_cp()    { cp "$1" "$2" || die3 "write failed: $2"; }
 safe_mv()    { mv "$1" "$2" || die3 "write failed: $2"; }
 
+# wire_background_subagents_env comes from lib/payload_paths.sh (sourced below
+# with the other shared helpers): background subagents need
+# OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true in the process env BEFORE
+# opencode starts; neither project config nor a plugin can enable it later
+# (verified live 2026-08-24). Update applies it to an EXISTING opencode install
+# so the capability arrives without a reinstall. Never runs under --check.
+
 # --- resolve source (this package's root), independent of cwd -------------
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR"
@@ -567,6 +574,9 @@ if [ "$CHECK" != "1" ]; then
       > "$MANIFEST"; then
     die3 "failed to rewrite manifest: $MANIFEST"
   fi
+  case ",$TARGET_HARNESSES," in
+    *,opencode,*) wire_background_subagents_env 1 ;;
+  esac
 fi
 
 # --- report (FR-UPD-14) ---------------------------------------------------

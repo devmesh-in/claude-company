@@ -120,7 +120,11 @@ In the interactive installer it is a checkbox on the Options screen, pre-checked
 
 Models: on Claude Code, roles are pinned per role in `company/models.json` and a hook blocks drift. On opencode, every role inherits whatever model you launched the session with, and the adapter blocks any role that tries to pin one. Same principle - no role reasons at a different level than another - enforced by the absence of a pin rather than by a manifest.
 
-Canon: opencode reads `CLAUDE.md` only when there is no `AGENTS.md`. If your project has both, opencode silently ignores `CLAUDE.md` and your canon never reaches the session. The installer warns when it sees this; the fix is to have `AGENTS.md` point at `CLAUDE.md`.
+Canon: opencode's automatic walk reads `CLAUDE.md` only when there is no `AGENTS.md`. You do not have to do anything about that - the generated `.opencode/opencode.json` names `CLAUDE.md` in its `instructions` array, and instruction files are combined with `AGENTS.md` rather than replaced by it, so your canon reaches opencode sessions whether or not the project has an `AGENTS.md`. If you delete that line from `opencode.json`, and the project has an `AGENTS.md`, the canon silently stops arriving.
+
+Nesting: opencode caps subagent depth at 1 by default, which would strip the task tool from every lead session - a tech-lead could describe its crew but never dispatch it. The generated config sets `subagent_depth: 2`, exactly the one nested level the hierarchy needs (CEO -> tech-lead -> developer/qa-engineer). Developers stay terminal: they carry no task permission, so their sessions have no spawn tool at all.
+
+Background subagents: opencode's `task(background=true)` needs `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` in the environment BEFORE opencode starts - project config cannot enable it later. When you select the opencode harness, the installer wires that flag for every launch context it can reach: your shell profile (`.zshrc`, `.bashrc`, or `.profile`) for terminal launches, `launchctl setenv` for GUI-spawned processes on macOS (covers the current login; refresh by re-running install after a reboot), and, from WSL, the Windows user environment via PowerShell interop when Windows-side opencode drives the same checkout. Pass `--no-background-subagents-env` to skip all of it. Restart your shell after installing, or one-shot it with `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true opencode`.
 
 If something is not being enforced, trace it rather than guessing:
 

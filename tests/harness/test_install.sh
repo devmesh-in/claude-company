@@ -24,6 +24,32 @@ WORK="$(mktemp -d -t ccharnessinstall.XXXXXX)"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
+# FAKEBIN shadows launchctl (and would shadow powershell.exe) for EVERY
+# install/update this suite runs, so the env-wiring branches record instead of
+# mutating the developer's real machine. Set up before the first invocation.
+# uname is shadowed to Darwin so the launchctl branch is exercised and pinned
+# identically on every platform CI runs - a branch that only fires on macOS
+# would otherwise be tested nowhere, since CI's macOS runner is the one place
+# a stray real call could not be tolerated either.
+FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
+LAUNCHCTL_LOG="$WORK/launchctl.log"
+cat > "$FAKEBIN/launchctl" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$LAUNCHCTL_LOG"
+exit 0
+STUB
+chmod +x "$FAKEBIN/launchctl"
+cat > "$FAKEBIN/uname" <<STUB
+#!/usr/bin/env bash
+case "\$*" in
+  -s) echo Darwin ;;
+  *)  /usr/bin/uname "\$@" ;;
+esac
+STUB
+chmod +x "$FAKEBIN/uname"
+PATH="$FAKEBIN:$PATH"
+export PATH
+
 # --- the overwrite set, which drives both copying and the manifest ----------
 printf '\nthe overwrite set is harness-scoped (FR-HA-16)\n'
 # shellcheck source=/dev/null
@@ -85,19 +111,28 @@ check "a default install wrote a manifest" test -s "$M_DEFAULT"
 refute "a default manifest names no .opencode file" grep -q '\.opencode/' "$M_DEFAULT"
 check "an opencode manifest names the adapter" grep -q 'company-harness\.js' "$M_BOTH"
 
-# --- AGENTS.md collision (FR-HA-18) ----------------------------------------
-printf '\nthe AGENTS.md collision is surfaced (FR-HA-18)\n'
+# --- canon reaches opencode regardless of AGENTS.md (FR-HA-18) -------------
+printf '\ncanon reaches opencode with or without AGENTS.md (FR-HA-18)\n'
+# opencode's AUTOMATIC walk drops CLAUDE.md when AGENTS.md exists. The
+# instructions array is combined with AGENTS.md rather than replaced by it, so
+# the generated config is what carries the canon. Verified live 2026-08-23 by
+# codeword probe in both directions.
+#
+# An earlier version of this suite asserted the installer WARNED about the
+# collision. The warning was false - the config had already solved it - and
+# the test passed anyway, because it only checked that the string appeared.
 T_AGENTS="$WORK/t-agents"; mkdir -p "$T_AGENTS"
 printf '# agents\n' > "$T_AGENTS/AGENTS.md"
-OUT="$(bash "$REPO/install.sh" --harness=claude,opencode "$T_AGENTS" 2>&1)"
-# opencode reads CLAUDE.md ONLY when no AGENTS.md exists. Silently installing
-# canon that will never be read looks exactly like a working install.
-check "installing over an AGENTS.md warns that CLAUDE.md will be ignored" \
-  bash -c "printf '%s' \"\$1\" | grep -qi 'AGENTS.md'" _ "$OUT"
-T_NOAGENTS="$WORK/t-noagents"; mkdir -p "$T_NOAGENTS"
-OUT2="$(bash "$REPO/install.sh" --harness=claude,opencode "$T_NOAGENTS" 2>&1)"
-refute "and stays quiet when there is no AGENTS.md" \
-  bash -c "printf '%s' \"\$1\" | grep -qi 'will IGNORE CLAUDE.md'" _ "$OUT2"
+bash "$REPO/install.sh" --harness=claude,opencode "$T_AGENTS" >/dev/null 2>&1
+check "a project with AGENTS.md still gets the generated config" \
+  test -f "$T_AGENTS/.opencode/opencode.json"
+check "and that config names CLAUDE.md in instructions" python3 -c "
+import json,sys
+cfg=json.load(open('$T_AGENTS/.opencode/opencode.json'))
+sys.exit(0 if 'CLAUDE.md' in (cfg.get('instructions') or []) else 1)"
+# The installer must not touch a file the user owns.
+check "the user's AGENTS.md is left exactly as it was" \
+  bash -c "[ \"\$(cat '$T_AGENTS/AGENTS.md')\" = '# agents' ]"
 
 # --- update detects, never selects (W-020) ---------------------------------
 printf '\nupdate refreshes what is there and adds nothing (FR-HA-17)\n'
@@ -107,6 +142,64 @@ refute "update does not ADD opencode to a claude-only project" \
 bash "$REPO/update.sh" "$T_BOTH" >/dev/null 2>&1
 check "update keeps the adapter in a project that has it" \
   test -f "$T_BOTH/.opencode/plugin/company-harness.js"
+
+# --- background-subagents env wiring ----------------------------------------
+# The flag is read from the process environment BEFORE opencode starts, and
+# neither project config nor a plugin can enable it later (verified live
+# 2026-08-24: the task tool schema is built without the background parameter).
+# So an opencode install must wire the export into the user's shell profile.
+# launchctl is stubbed at suite setup, above.
+printf '\nthe opencode install wires the background-subagents env\n'
+
+HOME_SND="$WORK/home-snd"; mkdir -p "$HOME_SND"
+env HOME="$HOME_SND" SHELL=/bin/zsh bash "$REPO/install.sh" --harness=opencode "$T_ONLY" >/dev/null 2>&1
+check "an opencode install adds the export to the zshrc" \
+  grep -q '^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true$' "$HOME_SND/.zshrc"
+# The block is one guarded export line.
+check "first install writes exactly one export line" \
+  bash -c "test \"\$(grep -c OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS '$HOME_SND/.zshrc')\" -eq 1"
+env HOME="$HOME_SND" SHELL=/bin/zsh bash "$REPO/install.sh" --harness=opencode "$T_ONLY" >/dev/null 2>&1
+check "a second install does not duplicate the export (idempotent)" \
+  bash -c "test \"\$(grep -c OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS '$HOME_SND/.zshrc')\" -eq 1"
+# A comment mentioning the variable is not a wired export: the guard matches
+# the exact active line only.
+HOME_CMT="$WORK/home-cmt"; mkdir -p "$HOME_CMT"
+printf '# OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS was here once\n' > "$HOME_CMT/.zshrc"
+env HOME="$HOME_CMT" SHELL=/bin/zsh bash "$REPO/install.sh" --harness=opencode "$T_BOTH" >/dev/null 2>&1
+check "a stale comment does not suppress the export" \
+  grep -q '^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true$' "$HOME_CMT/.zshrc"
+# GUI-spawned processes never read an rc file; on macOS the installer covers
+# them with launchctl setenv (stubbed here so we pin the call, not mutate).
+check "GUI launches are covered via launchctl setenv" \
+  grep -q "setenv OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS true" "$LAUNCHCTL_LOG"
+
+HOME_CLA="$WORK/home-cla"; mkdir -p "$HOME_CLA"
+env HOME="$HOME_CLA" SHELL=/bin/zsh bash "$REPO/install.sh" "$T_DEFAULT" >/dev/null 2>&1
+refute "a claude-only install touches no shell profile" \
+  grep -qs OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS "$HOME_CLA/.zshrc"
+
+HOME_OPT="$WORK/home-opt"; mkdir -p "$HOME_OPT"
+: > "$LAUNCHCTL_LOG"
+env HOME="$HOME_OPT" SHELL=/bin/zsh bash "$REPO/install.sh" --harness=opencode --no-background-subagents-env "$T_BOTH" >/dev/null 2>&1
+refute "--no-background-subagents-env writes nothing" \
+  grep -qs OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS "$HOME_OPT/.zshrc"
+refute "--no-background-subagents-env skips machine-level wiring too" \
+  grep -qs "OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS" "$LAUNCHCTL_LOG"
+
+# update brings the env wiring to an EXISTING opencode install too.
+ENV_UPD="$WORK/env-upd"; mkdir -p "$ENV_UPD/.opencode/plugin" "$ENV_UPD/company/state"
+cp "$REPO/.opencode/plugin/company-harness.js" "$ENV_UPD/.opencode/plugin/" 2>/dev/null
+printf '{}' > "$ENV_UPD/company/state/install-manifest.json"
+HOME_UPD="$WORK/home-upd"; mkdir -p "$HOME_UPD"
+: > "$LAUNCHCTL_LOG"
+env HOME="$HOME_UPD" SHELL=/bin/bash bash "$REPO/update.sh" "$ENV_UPD" >/dev/null 2>&1
+check "updating an existing opencode project wires the env (bash rc)" \
+  grep -q '^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true$' "$HOME_UPD/.bashrc"
+check "update also covers GUI launches" \
+  grep -q "setenv OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS true" "$LAUNCHCTL_LOG"
+env HOME="$HOME_UPD" SHELL=/bin/bash bash "$REPO/update.sh" --check "$ENV_UPD" >/dev/null 2>&1
+refute "--check never writes the env" \
+  bash -c "test \"\$(grep -c claude-company '$HOME_UPD/.bashrc')\" -gt 1"
 
 printf '\n================ SUMMARY ================\n'
 printf 'PASS: %d   FAIL: %d\n' "$PASS" "$FAIL"

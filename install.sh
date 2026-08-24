@@ -30,6 +30,10 @@ The target directory must already exist.
 
   --harness=LIST   comma-separated harnesses to wire, default "claude".
                    Supported: claude, opencode.
+  --no-background-subagents-env
+                   skip enabling background subagents on this machine (the
+                   shell-profile export and, on macOS, launchctl setenv;
+                   opencode harness only).
 
 Every harness shares one payload: the guards in .claude/hooks/ and the skills
 in .claude/skills/ are installed regardless of selection, because the opencode
@@ -50,9 +54,11 @@ SRC="$SCRIPT_DIR"
 # existed. Selection is an explicit act, made in the TUI or by this flag.
 HARNESSES="claude"
 TARGET_ARG=""
+BG_ENV=1
 for arg in "$@"; do
   case "$arg" in
     --harness=*) HARNESSES="${arg#--harness=}" ;;
+    --no-background-subagents-env) BG_ENV=0 ;;
     -h|--help)   usage ;;
     -*)          die "unknown option: $arg" ;;
     *)           [ -n "$TARGET_ARG" ] && usage; TARGET_ARG="$arg" ;;
@@ -124,11 +130,20 @@ copy_tree_if_absent() {
   find "$src" -type f -not -path '*/__pycache__/*' -not -name '*.pyc' -print | while IFS= read -r f; do
     rel="${f#$src/}"
     if [ ! -e "$dst/$rel" ]; then
-      mkdir -p "$dst/$(dirname "$rel")"
+      mkdir -p "$(dirname "$dst/$rel")"
       cp "$f" "$dst/$rel"
     fi
   done
 }
+
+# Ensure background subagents work in every launch context. The one
+# implementation lives in lib/payload_paths.sh next to cc_overwrite_relpaths -
+# the shared file both engines source, so install and update can never drift.
+# Sourced here rather than at the manifest step because the harness block runs
+# long before it.
+MANIFEST_ENUM="$SRC/lib/payload_paths.sh"
+# shellcheck source=/dev/null
+[ -f "$MANIFEST_ENUM" ] && . "$MANIFEST_ENUM"
 
 # --- 1. agents, hooks, skills (ours - update in place) --------------------
 info "Installing agents, hooks, and skills"
@@ -150,14 +165,21 @@ if harness_selected opencode; then
   # Marks .opencode/*.js as ES modules for plain node. opencode and bun infer
   # it; node does not, and warns on every import.
   copy_overwrite "$SRC/.opencode/package.json"  "$TARGET/.opencode/package.json"
-  # opencode reads CLAUDE.md only when no AGENTS.md exists (FR-HA-18). With
-  # both present the project canon is silently ignored, which looks exactly
-  # like a working install, so say so rather than letting it pass.
-  if [ -f "$TARGET/AGENTS.md" ]; then
-    warn "$TARGET/AGENTS.md exists, so opencode will IGNORE CLAUDE.md."
-    warn "Add a line to AGENTS.md pointing at CLAUDE.md, or the company canon"
-    warn "will not reach opencode sessions."
-  fi
+  # FR-HA-18. opencode's AGENTS.md SUPPRESSES CLAUDE.md - but only for the
+  # automatic walk. The generated .opencode/opencode.json names CLAUDE.md in
+  # its `instructions` array, and instruction files are combined with
+  # AGENTS.md rather than replaced by it, so the canon reaches the session
+  # either way. Verified 2026-08-23 with a codeword probe: present with the
+  # instructions line and AGENTS.md both there, absent without it.
+  #
+  # This block previously WARNED that canon would not reach opencode. That was
+  # false - the fix was already shipped one line above, in the generated
+  # config. Nothing to do here; the note stays as the record of why.
+
+# Ensure OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true reaches every way a
+# user may launch opencode - the flag is read from the process environment at
+# startup and CANNOT be enabled later; see the helper in lib/payload_paths.sh.
+wire_background_subagents_env "$BG_ENV"
 fi
 
 # --- 2. canon docs and orchestrator (ours - update in place) --------------

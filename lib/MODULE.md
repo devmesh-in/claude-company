@@ -47,3 +47,12 @@ machinery, not `company/` canon (the dual-nature rule does not apply here).
   an optional `HARNESSES` argument. The default stays `claude`, so an existing
   scripted install produces byte-for-byte the tree it produced before opencode
   support existed.
+- 2026-08-24 (harness-e2e): `renderConfig()` now emits `subagent_depth: 2` -
+  opencode's default of 1 strips the task tool from lead sessions, so a
+  tech-lead could never dispatch its crew. `payload_paths.sh` gained
+  `wire_background_subagents_env` (shared by install and update so they cannot
+  drift): shell-profile export plus, best-effort, launchctl setenv for
+  GUI-spawned macOS processes and the Windows user environment via PowerShell
+  interop under WSL. install's `--no-background-subagents-env` opts out. The
+  flag must be in the process env before opencode starts: verified live that
+  project config and plugins cannot enable it after launch.
