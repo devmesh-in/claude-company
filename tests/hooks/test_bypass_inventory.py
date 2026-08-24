@@ -92,20 +92,6 @@ class TestAnyBypassSites(InventoryBase):
         self.assertEqual(got["rc"], 0, "RISK-MST-01: ANY hotfix waives")
         self.assertIn("hotfix-b", got["adherence"])
 
-    def test_mode_c_is_an_any_site(self):
-        payload = self.bash_payload("git commit -m x")
-        armed = self.feature(execution="self", execution_why="glue")
-
-        self.reset_state()
-        self.alone(armed)
-        self.assertEqual(
-            self.capture("guard_provenance.py", payload)["rc"], 2)
-
-        self.reset_state()
-        self.arm(armed)
-        got = self.capture("guard_provenance.py", payload)
-        self.assertEqual(got["rc"], 0, "RISK-MST-01: ANY hotfix waives")
-        self.assertIn("hotfix-b", got["adherence"])
 
 
 # --------------------------------------------------------------------------
@@ -131,48 +117,7 @@ class TestPerEntryExemptionSites(InventoryBase):
         self.assertEqual(got["rc"], 2,
                          "guard_tests never reads hotfix and must still block")
 
-    def test_mode_b_pre_tracking_is_not_an_any_site(self):
-        """FR-DE-15 at the spawn: a hotfix entry does not start an unrelated
-        untracked feature's work.
 
-        Mode B-pre is the one place the build had to CHOOSE. It sits in the
-        same function as an ANY-hotfix bypass log, so making the tracking gate
-        ANY too would have been the natural-looking edit - and it would have
-        been a fifth waiver site nobody named. The gate runs over the
-        feature/program entries and blocks if ANY of them is untracked; the
-        hotfix entry is simply not one of the entries it evaluates.
-        """
-        # PR mode: the FR-DE-15 gate is only live with an origin remote.
-        git(self.root, "remote", "add", "origin", "https://example.com/x.git")
-        payload = self.spawn_payload(role="developer",
-                                     prompt="build task/feat-a per its brief")
-        untracked = {"task": "feat-a", "type": "feature"}
-
-        self.reset_state()
-        self.alone(untracked)
-        self.assertEqual(self.capture("guard_provenance.py", payload)["rc"], 2,
-                         "control: alone, the untracked spawn must block")
-
-        self.reset_state()
-        self.arm(dict(untracked, issues=[42]))
-        self.assertEqual(self.capture("guard_provenance.py", payload)["rc"], 0,
-                         "control: the same two entries with feat-a TRACKED "
-                         "allow, so the block below is the tracking gate and "
-                         "nothing else about this fixture")
-
-        self.reset_state()
-        self.arm(untracked)
-        got = self.capture("guard_provenance.py", payload)
-        self.assertEqual(got["rc"], 2,
-                         "a hotfix entry must NOT waive FR-DE-15 tracking for "
-                         "an unrelated untracked feature entry")
-        self.assertIn("feat-a", got["stderr"] + got["adherence"],
-                      "the block must name which entry caused it")
-
-
-# --------------------------------------------------------------------------
-# RISK-MST-02: the ANY test_scope grant. The other accepted weakening.
-# --------------------------------------------------------------------------
 class TestAnyTestScopeGrant(InventoryBase):
     def test_any_entry_opens_test_scope_and_the_grant_is_logged(self):
         payload = self.edit_payload("tests/test_x.py")

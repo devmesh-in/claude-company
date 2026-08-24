@@ -28,10 +28,9 @@ from test_hooks import Base, git, run_hook  # noqa: E402
 from test_hooks import HOOKS_DIR  # noqa: E402
 
 sys.path.insert(0, HOOKS_DIR)
-import guard_provenance as gp  # noqa: E402
+import dispatch_feed as gp  # noqa: E402
 import guard_spec  # noqa: E402
 
-HOOK = "guard_provenance.py"
 SPEC_HOOK = "guard_spec.py"
 
 MANIFEST = {
@@ -138,21 +137,6 @@ class TestNestedSourceReachesTheGates(ClassifierBase):
         self.assertEqual(r.returncode, 2, r.stderr)
         self.assertIn("brief", r.stderr.lower())
 
-    def test_dirty_source_paths_counts_nested_company_source(self):
-        # Deliberate widening of the audit demand: product code under a
-        # nested company/ directory now counts as dirty source, so it prices
-        # the same audit every other source file prices. Wider gate, on
-        # purpose.
-        #
-        # dirty_source_paths returns (answered, paths): git ran here, so the
-        # answer is affirmative and the classification question is about the
-        # paths half.
-        self.init_git()
-        self.write(self.NESTED, "x = 1")
-        git(self.root, "add", self.NESTED)
-        answered, paths = gp.dirty_source_paths(self.root)
-        self.assertTrue(answered)
-        self.assertIn(self.NESTED, paths)
 
 
 # --------------------------------------------------------------------------
@@ -214,38 +198,7 @@ class TestAuditVerdict(unittest.TestCase):
             self.assertIn(gp.audit_verdict(value), allowed, repr(value))
 
 
-class TestUnknownIsNotARejection(ClassifierBase):
-    def test_fresh_audit_accepts_a_recorded_unknown(self):
-        # OQ-HP-09: an ambiguous audit is not a rejection. Asserted, not
-        # assumed - the whole fail-open posture of Mode C rests on
-        # fresh_audit reading "unknown" as passing.
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        r = run_hook(HOOK, self.audit_payload("audit complete, no findings"),
-                     self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(self.last_verdict(), "unknown")
-        self.assertTrue(gp.fresh_audit(self.root, gp.read_ledger(self.root)))
 
-
-class TestModeBPostRecordsTheLabeledVerdict(ClassifierBase):
-    def test_a_report_naming_the_vocabulary_is_not_a_rejection(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        r = run_hook(HOOK, self.audit_payload(VOCAB_PASS), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertNotEqual(self.last_verdict(), "do-not-ship")
-        self.assertEqual(self.last_verdict(), "ship")
-
-    def test_a_content_block_list_response_is_parsed(self):
-        self.init_git()
-        self.set_manifest()
-        self.feature_task()
-        r = run_hook(HOOK, self.audit_payload(BLOCKS), self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(self.last_verdict(), "ship")
 
 
 # --------------------------------------------------------------------------

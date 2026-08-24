@@ -3,9 +3,11 @@
 _Type: quick | feature | program-workstream. Spec: <link or "none (quick)">.
 Lead: <tech-lead | direct-developer>. Date: YYYY-MM-DD._
 
-> Schema, contracts, kernel, shared UI, and anything in
-> `company/frozen-surfaces.json` are FROZEN - consume them exactly as shipped;
-> any change goes through `company/change-requests/`, never a local edit.
+> Frozen `surfaces[]` are judged at commit: `guard_commit` BLOCKs an
+> UNDECLARED change to a matching path (the path matches AND no file in
+> `company/change-requests/` names it). Unrecoverable `always[]` artifacts
+> (.env, evidence, witnesses, accepted ADRs) stay hard-BLOCK mid-flight.
+> Do not hand-edit `company/witnesses.json`.
 
 A vague brief is the main cause of a bad agent run. The agent reads this plus
 the project's `CLAUDE.md`, nothing of the CEO's context. Make it sealed and
@@ -34,7 +36,9 @@ lives outside these paths, report it; do not make it.
 - <which frozen surfaces this task sits close to, and what to do instead>
 
 ## Scope (ordered)
-1. <concrete step, citing FR-XX-NN>
+Each step names the mechanical oracle that proves it done (FR-ASR-17): a test, a stamp
+check, a path grep, a screenshot. A step without an oracle is not a step.
+1. <concrete step, citing FR-XX-NN; oracle: ...>
 2. ...
 
 ## Integration seams

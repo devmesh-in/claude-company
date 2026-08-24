@@ -9,7 +9,7 @@
     task is a founding commit and is exempt; merge on main is the owner's
     local integration and is exempt.
   - commit / merge: require a green, fresh, valid gates.status stamp - the
-    ACTING TREE's own, the tree the segment commits into, which is not the
+    ACTING TREE's own (FR-ASR-05 / BR-ASR-03), the tree the segment commits into, which is not the
     main checkout when the segment carries a -C or runs from a worktree. If
     gates.config is missing, has zero gates, or contains ONLY CONFIGURE-ME
     placeholders (a fresh project with nothing to gate yet), ALLOW + log
@@ -22,6 +22,7 @@
 Fails open on any internal error.
 """
 
+import fnmatch
 import os
 import sys
 
@@ -37,8 +38,6 @@ PROTECTED = {"main", "master"}
 #   - guard_secrets.py calls guard_commit.git_subcmd(seg), and
 #     tests/hooks/test_guard_parsers.py asserts that exact string appears in
 #     the guard_secrets source (FR-HP-12, one parser and one behavior),
-#   - guard_provenance.py calls guard_commit.segments and
-#     guard_commit.git_subcmd, and that file is owned by an open PR,
 #   - test_guard_parsers.py monkeypatches guard_commit.git_subcmd and asserts
 #     guard_secrets follows the patch, which works because the name is looked
 #     up on this module at call time.
@@ -150,6 +149,108 @@ def same_tree(a, b):
         return os.path.realpath(a) == os.path.realpath(b)
     except Exception:
         return False
+
+
+def _commit_has_all_flag(args):
+    for a in args or []:
+        if a in ("-a", "--all"):
+            return True
+        if a.startswith("-") and not a.startswith("--") and "a" in a[1:]:
+            return True
+    return False
+
+
+def _git_names(tree, extra_args):
+    """Project-relative paths from a git diff name-only, or []."""
+    out = c._git(tree, extra_args)
+    if not out:
+        return []
+    names = []
+    for line in out.splitlines():
+        rel = (line or "").strip()
+        if rel:
+            names.append(rel.replace("\\", "/"))
+    return names
+
+
+def committed_paths(tree, args):
+    """Paths this commit would include. Fail-open to [] on git trouble."""
+    paths = list(_git_names(tree, ["diff", "--cached", "--name-only"]))
+    if _commit_has_all_flag(args):
+        for rel in _git_names(tree, ["diff", "--name-only"]):
+            if rel not in paths:
+                paths.append(rel)
+    return paths
+
+
+def load_surfaces(root):
+    """surfaces[] patterns from frozen-surfaces.json. [] if missing."""
+    cfg = c.read_json_file(
+        os.path.join(root, "company", "frozen-surfaces.json")
+    )
+    out = []
+    if not isinstance(cfg, dict):
+        return out
+    for s in cfg.get("surfaces") or []:
+        if isinstance(s, dict) and s.get("pattern"):
+            out.append(s)
+    return out
+
+
+def cr_names_path(root, rel):
+    """True iff any file under company/change-requests/ contains `rel`.
+
+    OQ-ASR-04 assumption: substring match, no frontmatter required.
+    """
+    cr_dir = os.path.join(root, "company", "change-requests")
+    try:
+        for fn in os.listdir(cr_dir):
+            path = os.path.join(cr_dir, fn)
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path) as f:
+                    if rel in f.read():
+                        return True
+            except Exception:
+                continue
+    except Exception:
+        return False
+    return False
+
+
+def surface_matches(pattern, rel):
+    base = os.path.basename(rel) or rel
+    return fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(base, pattern)
+
+
+def undeclared_frozen_paths(tree, args):
+    """FR-ASR-05: staged (or -a) paths matching surfaces[] with no CR.
+
+    Context-free: path match AND no CR file contains the path.
+    """
+    surfaces = load_surfaces(tree)
+    if not surfaces:
+        return []
+    hits = []
+    for rel in committed_paths(tree, args):
+        for s in surfaces:
+            pat = s.get("pattern")
+            if not pat or not surface_matches(pat, rel):
+                continue
+            if not cr_names_path(tree, rel):
+                hits.append(rel)
+            break
+    return hits
+
+
+DRIFT_MSG = (
+    "BLOCKED: git commit includes an undeclared change to a frozen surface.\n"
+    "Paths: {paths}\n"
+    "A path matching company/frozen-surfaces.json surfaces[] may only land "
+    "when a file in company/change-requests/ names it. File a CR, or drop "
+    "the path from this commit."
+)
 
 
 def stamp_message(sub, reason, branch_dir, root):
@@ -264,39 +365,17 @@ def main():
                         c.qualify_reason("hotfix mode", tasks, hf),
                     )
                     continue
-                # The acting-tree rule, applied to the gate stamp: a hook
-                # judges the tree that contains the thing being acted on.
-                # These two resolutions MUST move together - see below.
-                #
-                # FR-HP-28 made company/run-gates.sh resolve its root from the
-                # runner's own location, so a ladder run inside a worktree
-                # gates and stamps THAT worktree. The stamp that describes the
-                # acting tree is therefore the acting tree's own. Reading the
-                # main checkout's stamp instead let a lane be green-lit by a
-                # sibling lane's run, and blocked by a sibling lane's drift,
-                # with no self-service fix in either direction. It is the
-                # single largest source of friction in the adherence log (23
-                # stale-stamp blocks) and three lanes filed it independently
-                # as CR-HP-2.
-                #
-                # Moving check_stamp while leaving gates_config on `root`
-                # would DEADLOCK every worktree in THIS repo. Per the
-                # dual-nature rule in CLAUDE.md the tracked
-                # company/gates.config holds only CONFIGURE-ME placeholders on
-                # purpose, and this repo's real gate commands exist only as an
-                # untracked modification in the main checkout. A worktree
-                # therefore inherits placeholders and can never produce a
-                # green stamp, so a split resolution - real gates read from
-                # the main checkout, stamp demanded from the worktree - would
-                # block every worktree commit permanently with no way out.
-                # Resolving both from the acting tree degrades that case to
-                # the existing, LOGGED placeholder bypass below, which is the
-                # same treatment a fresh install gets before onboarding.
-                #
-                # In a normal install, where gates.config is committed with
-                # real gates, the worktree inherits those real gates and the
-                # lane that runs its own ladder in its own worktree satisfies
-                # its own stamp. That is the behavior asked for.
+                # FR-ASR-05 / BR-ASR-02: undeclared surfaces[] drift on every
+                # non-hotfix commit, including the no-gates / placeholder
+                # bypass paths. Acting tree, never the main checkout.
+                if sub == "commit":
+                    drift = undeclared_frozen_paths(branch_dir, args)
+                    if drift:
+                        c.block(
+                            root, HOOK, "git commit",
+                            "undeclared frozen-surface: " + ", ".join(drift),
+                            DRIFT_MSG.format(paths=", ".join(drift)),
+                        )
                 cfg = c.gates_config(branch_dir)
                 gates = cfg.get("gates") if isinstance(cfg, dict) else None
                 if not gates:

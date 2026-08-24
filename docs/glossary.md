@@ -97,30 +97,21 @@ evidence; it does not judge it.
 
 ### Auditor
 
-An independent, read-only reviewer. Rechecks a risky or large merge with fresh
-context and returns a ship / ship-with-fixes / do-not-ship verdict. It cannot
-write code, which is the point.
-
-### Ideation strategist
-
-Divergent thinker for fuzzy or open-ended asks. The CEO spawns several in
-parallel with different assigned lenses and synthesizes an options memo.
+An independent, read-only reviewer. Rechecks every merge with fresh
+context and returns a ship / ship-with-fixes / do-not-ship verdict. Its brief
+is the negation of the builder's. It cannot write code, which is the point.
 
 ### Optional roles
 
-`devops-engineer` (CI, build tooling, release preparation), `security-reviewer`
-(adversarial read-only pass before a release), and `docs-librarian` (sync docs
-and canon to merged code). Present when a project needs them.
+`devops-engineer` (CI, build tooling, release preparation) and
+`security-reviewer` (adversarial read-only pass before a release that
+touches auth, session, or money). Copy-in from `company/EXTENDING.md` when
+a project needs them. `docs-librarian` is standing: it syncs docs and canon
+to merged code.
 
 ## Task classes
 
 The CEO classifies every request; ceremony scales with the class.
-
-### ideation
-
-The ask is ideas or direction, or is too fuzzy to build without guessing.
-Parallel strategists diverge, the CEO converges, the client gets an options
-memo, and the winning idea reclassifies as quick, feature, or program.
 
 ### quick
 
@@ -152,7 +143,8 @@ The company communicates through typed documents, not long conversations.
 ### Options memo
 
 Numbered ideas with reasoning, a scored recommendation, and the strongest
-rejected option. Written by strategists and the CEO for the owner.
+rejected option. Written by the product manager (in a spec) or the CEO for
+the owner. There is no dedicated strategist role in the default payload.
 
 ### Spec
 
@@ -280,9 +272,11 @@ plain. A CI job scans every tracked text file for the same glyphs.
 
 ### Frozen surface (protected file)
 
-A file with exactly one legitimate writer - a shipped migration, the schema, a
-lockfile, anything listed in `company/frozen-surfaces.json`. The hook blocks
-every edit; change comes only through a CR.
+A file with exactly one legitimate writer - a shipped migration, the schema,
+anything listed in `company/frozen-surfaces.json`. `always[]` (`.env`,
+evidence records, witnesses, accepted ADRs) is hard-blocked mid-flight.
+Project `surfaces[]` are judged at commit, not mid-flight. Dependency
+lockfiles WARN rather than BLOCK. Change to a frozen path comes through a CR.
 
 ### guard_secrets
 
@@ -297,21 +291,20 @@ The status line that freezes an ADR. Once an ADR reads `Status: accepted`, a
 guard blocks every edit to it; the decision changes only by a superseding ADR
 that names what it replaced.
 
-## Risk, cost, and provenance
+## Risk and provenance
 
-### Risk score
+### Audit-by-default
 
-A per-branch score across a handful of signals - diff size, nearness to a
-protected file, share of tests, whether it touches sensitive paths. A low score
-merges on the normal path; a high score makes an independent audit mandatory
-rather than a judgment call.
+Every merge gets an independent auditor. Fresh-context reads are cheap, so
+the company does not ration them with a score. The old per-branch risk score
+is gone.
 
 ### Provenance
 
-The record that a change was independently verified. The provenance hook blocks
-a commit or task close while the main checkout holds source changes no verifier
-context has audited at the current tree state. Delegated worktree work is exempt,
-because its verification already happened inside the hierarchy.
+The dispatch feed (`dispatch_feed.py`) still reads the ledger and
+`company/provenance.json` so the session pin and digest can show who built
+what. It does not BLOCK. Commit gates for "unaudited source" are gone;
+the auditor at merge is the check.
 
 ### Adherence log
 
@@ -333,14 +326,13 @@ All under `company/state/`, all owned by the CEO.
 
 | File | What it holds |
 |---|---|
-| `STATUS.md` | The current-truth board. Red stays red until proven green; a status is never averaged. |
-| `RESUME.md` | The session handoff: done, running, next, plus the facts every spawn needs. Read first on session start. |
-| `WORRIES.md` | A terse ledger of suspected-but-unproven risks. A row graduates out when it becomes a CR, a STATUS risk, or a verified fix. |
+| `RESUME.md` | The session handoff and current-truth board: done, running, next, plus the facts every spawn needs. Read first on session start. STATUS.md is retired. |
+| `WORRIES.md` | A terse ledger of suspected-but-unproven risks. A row graduates out when it becomes a CR, a RESUME note, or a verified fix. |
 | `DECISIONS.md` | Owner escalations and their outcomes, including recorded acceptance of a delivery. |
 | `active-task.json` | The machine-readable list of tasks in flight in this working tree, read by hooks. One entry per task; add your entry with a targeted Edit and remove ONLY your entry, never rewriting the whole file (`company/METHOD.md`). |
-| `provenance-ledger.json` | Audit and dispatch records for the task in flight, written only by the provenance hook. |
+| `provenance-ledger.json` | Dispatch records the pin and digest may read. Not a commit gate. |
 | `gates.status` | The stamped gate result, written only by the gate runner. |
 | `adherence.log` | Every hook block and bypass, one line each. |
 
-The board is `STATUS.md`: when a doc says the board is green, it means every
-active task's gates pass and nothing red is outstanding.
+The board is `RESUME.md` plus `active-task.json`: when a doc says the board is
+green, it means every active task's gates pass and nothing red is outstanding.

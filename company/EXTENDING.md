@@ -21,9 +21,10 @@ else. For most projects that means:
    transitions, money movements, audit writes). A module that hand-rolls its
    own approve/return/transfer has failed review regardless of whether it works.
 
-These surfaces are built first (Wave 0 of any program), then frozen: read-only
-to module agents, changed only via CR, guarded by the `guard_frozen` hook and
-listed in `company/frozen-surfaces.json`. Modules may REGISTER implementations
+These surfaces are built first (Wave 0 of any program), then frozen at
+commit: `always[]` is hard-BLOCK mid-flight; project `surfaces[]` are
+judged at commit by `guard_commit` (undeclared matching path, no CR).
+Listed in `company/frozen-surfaces.json`. Modules may REGISTER implementations
 for extension points the kernel declares (guards, jobs, manifest entries); they
 may not add transitions or edit the shell.
 
@@ -56,3 +57,41 @@ may not add transitions or edit the shell.
 An agent landing anywhere in the tree must be one file away from full context:
 every owned directory carries its `MODULE.md` pointing at spec, brief,
 contracts, owned routes, and seams.
+
+## Opt-in roles (not in the default payload)
+
+The standing team is product-manager, architect, tech-lead, developer,
+qa-engineer, auditor, docs-librarian. Two further roles are opt-in: copy
+the doctrine below into `.claude/agents/<role>.md` (with `model:` matching
+`company/models.json`) when the project needs them.
+
+### devops-engineer
+
+Use for CI pipelines, build tooling, dev-environment setup, containerization,
+and release PREPARATION (changelogs, version bumps, release checklists). It
+never deploys - deploy is a manual owner-only step, always.
+
+- CI mirrors `company/gates.config`, never forks from it. The PR check IS
+  `bash company/run-gates.sh` (or an exact translation).
+- The deploy boundary is absolute. Prepare changelogs, version bumps,
+  migration notes, rollback plans, checklists - and stop. Never trigger a
+  deploy, never add a merge-to-deploy CI step, never wrap deploy in a make
+  target an agent could run.
+- When the CEO invokes `/release`, assemble the release per
+  `company/RELEASE.md` from integrated `main`. Output ends at material the
+  CEO turns into a proposal on `DECISIONS.md`.
+- Migrations are forward-only and immutable once shipped. Secrets never
+  enter the repo. Pin versions; prefer lockfiles.
+
+### security-reviewer
+
+Use before a release, after any workstream touching auth, sessions, money,
+file upload, user input rendering, or secrets handling. Adversarial
+read-only review of the diff and exposed surfaces. Defensive only: find and
+explain weaknesses in YOUR code; do not write exploits.
+
+Priority order: authn/authz seams; input boundaries; state and money;
+secrets and config; new dependency posture. Findings risk-ranked
+(critical/high/medium/low). A critical finding means the merge waits.
+Read-only: no Agent, Edit, Write, MultiEdit, NotebookEdit.
+

@@ -115,16 +115,15 @@ is("the shipped settings.json parses into events", wiring !== null)
 eq("a Write routes to the full edit chain, in wiring order",
    core.scriptsFor(wiring, "PreToolUse", "Write"),
    ["guard_frozen.py", "guard_spec.py", "guard_tests.py", "no_slop.py",
-    "guard_models.py", "guard_provenance.py"])
+    "guard_models.py"])
 
 eq("Bash routes to the bash chain",
    core.scriptsFor(wiring, "PreToolUse", "Bash"),
-   ["guard_commit.py", "guard_secrets.py", "guard_tests.py",
-    "guard_provenance.py"])
+   ["guard_commit.py", "guard_secrets.py", "guard_tests.py"])
 
 eq("Task matches the Task|Agent matcher",
    core.scriptsFor(wiring, "PreToolUse", "Task"),
-   ["guard_models.py", "guard_provenance.py"])
+   ["guard_models.py"])
 
 // A matcher of "Edit|Write|MultiEdit" must not be satisfied by a substring.
 eq("a tool not named in a matcher gets no chain",

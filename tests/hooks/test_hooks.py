@@ -112,11 +112,15 @@ class TestGuardFrozen(Base):
         self.assertEqual(r.returncode, 2, r.stderr)
         self.assertIn("frozen", r.stderr.lower())
 
-    def test_lockfile_block(self):
+    def test_lockfile_warns_not_blocks(self):
+        # FR-ASR-08 / BR-ASR-01: lockfiles WARN (exit 0 + WARN log).
         r = run_hook("guard_frozen.py",
                      self.edit_payload("Write", "package-lock.json", "{}"),
                      self.root)
-        self.assertEqual(r.returncode, 2)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        self.assertTrue(os.path.exists(log))
+        self.assertIn("WARN", open(log).read())
 
     def test_env_example_allowed(self):
         r = run_hook("guard_frozen.py",
@@ -124,7 +128,8 @@ class TestGuardFrozen(Base):
                      self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_declared_surface_block_with_reason(self):
+    def test_declared_surface_allows_mid_flight(self):
+        # FR-ASR-08 / BR-ASR-02: surfaces[] is not blocked mid-flight.
         self.write("company/frozen-surfaces.json", json.dumps({
             "version": 1,
             "surfaces": [{"pattern": "src/core/transitions.*",
@@ -134,8 +139,7 @@ class TestGuardFrozen(Base):
         r = run_hook("guard_frozen.py",
                      self.edit_payload("Edit", "src/core/transitions.py", "x"),
                      self.root)
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("single writer of state", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_normal_source_allowed(self):
         r = run_hook("guard_frozen.py",

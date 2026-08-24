@@ -31,7 +31,7 @@ role yet. Optional argument focuses the tick: $ARGUMENTS
 
 ## The tick, in order
 
-1. **Read state** (RESUME first, then STATUS, WORRIES, DECISIONS,
+1. **Read state** (RESUME first, then WORRIES, DECISIONS,
    every entry in active-task.json, open CRs, `git worktree list`,
    `git log --oneline -10`).
    Create `company/state/BACKLOG.md` if it does not exist yet (owner wishes
@@ -42,16 +42,16 @@ role yet. Optional argument focuses the tick: $ARGUMENTS
    2. In-flight task stalled or finished-but-unintegrated -> unblock,
       verify, integrate it.
    3. WORRIES P0/P1 rows -> run the worry down (investigate; graduate it to
-      a fix, a CR, or a STATUS risk).
+      a fix, a CR, or a RESUME note).
    4. Open CRs awaiting arbitration -> decide them (owner-escalation CRs
       get surfaced instead).
-   5. Top of `company/state/BACKLOG.md` -> classify it (ideation items get
+   5. Top of `company/state/BACKLOG.md` -> classify it (fuzzy idea items get
       an options memo prepared for the owner rather than a build, when
       unattended) and run it through the normal pipeline.
 3. **Execute through the normal machinery.** Nothing about the loop relaxes
    the method: specs for features, sealed briefs, tech-lead teams, QA
    evidence, gates, verify-never-trust. The hooks apply to you.
-4. **Record.** Update RESUME (done / next), STATUS (red stays red), WORRIES
+4. **Record.** Update RESUME (done / next; red stays red), WORRIES
    (add what you noticed, graduate what you resolved), BACKLOG (pull what
    you took, append what triage discovered).
 5. **Report the tick** in one screen: what this tick did, evidence summary,

@@ -9,7 +9,7 @@ This page explains the method behind claude-company: why it is shaped like a com
   <a href="#the-gates">Gates</a> &bull;
   <a href="#protected-files">Protected Files</a> &bull;
   <a href="#architecture-decisions">ADRs</a> &bull;
-  <a href="#risk-cost-and-the-auditor">Risk &amp; Cost</a> &bull;
+  <a href="#risk-and-the-auditor">Auditor</a> &bull;
   <a href="#preparing-a-release">Release</a> &bull;
   <a href="#what-the-owner-keeps">Owner</a>
 </p>
@@ -71,7 +71,7 @@ The company runs on a few typed documents rather than long conversations:
 
 | Artifact | Written by | Read by | What it carries |
 |---|---|---|---|
-| Options memo | strategists + CEO | you | Numbered ideas with reasoning, scored recommendation, the strongest rejected option |
+| Options memo | product-manager + CEO | you | Numbered ideas with reasoning, scored recommendation, the strongest rejected option |
 | Spec | product-manager | CEO | Requirements with stable ids (FR-01, FR-02), acceptance criteria, options considered |
 | Brief | CEO | one builder | Mission, owned directories, definition of done, a decided fallback per ambiguity |
 | Report | every agent | its dispatcher | Facts only: the diff, gate output, screenshots, deviations |
@@ -127,7 +127,7 @@ One guard never yields. `guard_secrets` scans every commit for API keys, tokens,
 
 ## Protected files
 
-Some files hold the whole system up: database migrations that already shipped, the schema, lockfiles, anything with exactly one legitimate writer. These are listed in `company/frozen-surfaces.json`, and the hook blocks every edit to them.
+Some files hold the whole system up: database migrations that already shipped, the schema, anything with exactly one legitimate writer. These are listed in `company/frozen-surfaces.json`. The unrecoverable baseline (`.env`, evidence records, witnesses, accepted ADRs) is blocked mid-flight. Project surfaces are judged at commit. Dependency lockfiles warn rather than block.
 
 When an agent genuinely needs a protected file changed, it files a [change request (CR)](glossary.md#change-request-cr) instead:
 
@@ -151,11 +151,18 @@ Specs say what to build; architecture decision records (ADRs, in `company/adr/`)
 
 ## Risk and the auditor
 
-Not every merge deserves the same scrutiny, so the company measures rather than guesses. Each finished branch is scored across a handful of signals: how large the diff is, whether it strays near a protected file, how much of it is tests, whether it touches sensitive paths. A low score merges on the normal path; a high score makes an independent auditor's recheck mandatory, not a judgment call.
+Every merge gets an independent auditor whose brief is the negation of the
+builder's: prove this broken. Fresh-context reads are cheap, so the company
+does not ration them with a risk score. The auditor never writes code.
 
 ## Preparing a release
 
-Shipping is split in two: the company prepares, the owner ships. When `main` is green, `/release` proves the readiness list mechanically, assembles a changelog from the commit history, proposes the next version with its reasoning, and writes the notes as an evidence report. Then it stops. The company's last act is a proposal recorded in `company/state/DECISIONS.md`; tagging, publishing, and deploying are buttons only you press, and nothing the company runs crosses that line.
+Shipping is split in two: the company prepares, the owner ships. When `main`
+is green, `/release` proves the readiness list, assembles a changelog, bumps
+`package.json`, and writes the notes. Then it stops. You ship by publishing a
+GitHub release tagged `vX.Y.Z` matching that version; `.github/workflows/release.yml`
+re-runs the suites and publishes to npm via OIDC trusted publishing. No npm
+token lives in the repo.
 
 The same discipline closes a delivery. A delivery is not done when the code merges - it is done when your acceptance is recorded. Silence is never a yes.
 

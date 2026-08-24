@@ -33,6 +33,9 @@ HOOK = "guard_tests"
 
 TEST_DIR_SEGMENTS = {"tests", "test", "__tests__", "e2e"}
 
+# FR-ASR-06 / BR-ASR-04: non-source under a test dir is not the oracle.
+NON_SOURCE_EXT = {".md", ".json", ".txt"}
+
 # The token OUT_OF_SCOPE carries where the state file belongs. out_of_scope()
 # swaps it for the ABSOLUTE path of the file the hook actually read.
 STATE_FILE = "company/state/active-task.json"
@@ -66,6 +69,10 @@ def is_test_path(path):
         return False
     base = segs[-1]
     if any(s in TEST_DIR_SEGMENTS for s in segs[:-1]):
+        # FR-ASR-06: docs/config under tests/ are not the oracle.
+        _, ext = os.path.splitext(base)
+        if ext.lower() in NON_SOURCE_EXT:
+            return False
         return True
     if re.match(r"test_.*\.py$", base):
         return True

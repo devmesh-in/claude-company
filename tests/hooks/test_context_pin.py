@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Subprocess-driven tests for context_pin.py (the UserPromptSubmit pin).
 
-Ledger counts (dispatches, self-authored) are only ever seeded by driving REAL
-guard_provenance payloads - a Mode B-pre Task dispatch and a Mode A PostToolUse
-edit - never by hand-writing the ledger, so the pin reads state the real
-machinery produced. Every fixture that exercises exec/iss writes its own
-company/provenance.json (the manifest is the rollout switch the gp helpers
-consult).
+Ledger counts are seeded via dispatch_feed.write_sealed_ledger (FR-ASR-03),
+never by driving deleted provenance modes. Every fixture that exercises
+exec/iss writes its own company/provenance.json (the manifest is the rollout
+switch the feed helpers consult).
 """
 
 import json
@@ -17,10 +15,12 @@ import sys
 # (which seeds sys.path) and under `-m unittest tests.hooks.test_context_pin`
 # (which does not) - mirror the hooks' own sys.path insert.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_hooks import Base, git, run_hook  # noqa: E402
+from test_hooks import Base, HOOKS_DIR, git, run_hook  # noqa: E402
+
+sys.path.insert(0, HOOKS_DIR)
+import dispatch_feed as df  # noqa: E402
 
 HOOK = "context_pin.py"
-PROV = "guard_provenance.py"
 BUDGET = 160
 
 MANIFEST = {
@@ -52,19 +52,25 @@ class PinBase(Base):
             "https://example.com/x.git")
 
     def seed_dispatch(self, role="developer"):
-        # Mode B-pre: a real builder spawn records one dispatch.
-        payload = {"hook_event_name": "PreToolUse", "tool_name": "Task",
-                   "tool_input": {"subagent_type": role}, "cwd": self.root}
-        r = run_hook(PROV, payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        ledger = df.read_ledger(self.root)
+        slug = ""
+        try:
+            raw = json.load(open(os.path.join(
+                self.root, "company", "state", "active-task.json")))
+            if isinstance(raw, dict) and isinstance(raw.get("tasks"), list):
+                slug = (raw["tasks"][0] or {}).get("task") or ""
+            elif isinstance(raw, dict):
+                slug = raw.get("task") or ""
+        except Exception:
+            slug = ""
+        rec = df.task_record(ledger, slug)
+        rec["dispatches"].append({"role": role, "at": "2026-01-01T00:00:00Z"})
+        df.write_sealed_ledger(self.root, ledger)
 
     def seed_self_authored(self, rel):
-        # Mode A: a real PostToolUse edit appends one self-authored path.
-        payload = {"hook_event_name": "PostToolUse", "tool_name": "Write",
-                   "tool_input": {"file_path": rel, "content": "code"},
-                   "cwd": self.root}
-        r = run_hook(PROV, payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        ledger = df.read_ledger(self.root)
+        ledger.setdefault("self_authored", []).append(rel)
+        df.write_sealed_ledger(self.root, ledger)
 
     def lines(self, stdout):
         s = stdout.strip("\n")

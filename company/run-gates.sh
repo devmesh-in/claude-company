@@ -98,60 +98,103 @@ if [ -z "$GATE_LINES" ]; then
   exit 0
 fi
 
-# --- run each gate --------------------------------------------------------
+# FR-ASR-10 / BR-ASR-06 / OQ-ASR-05 assumption: reuse a green matching
+# stamp. Missing stamper, non-zero --check, hash trouble -> RUN, never skip.
+if [ -f "$STAMPER" ]; then
+  set +e
+  CLAUDE_PROJECT_DIR="$PROJECT_ROOT" python3 "$STAMPER" --check >/dev/null 2>&1
+  CHECK_RC=$?
+  set -e
+  if [ "$CHECK_RC" -eq 0 ]; then
+    # FR-ASR-10: a matching no-git hash is not evidence of freshness - RUN.
+    WH="$(CLAUDE_PROJECT_DIR="$PROJECT_ROOT" python3 -c '
+import os, sys
+root = os.environ["CLAUDE_PROJECT_DIR"]
+sys.path.insert(0, os.path.join(root, ".claude", "hooks"))
+import _common as c
+print(c.work_hash(root))
+' 2>/dev/null || true)"
+    case "$WH" in
+      ""|"no-git") CHECK_RC=2 ;;
+    esac
+  fi
+  if [ "$CHECK_RC" -eq 0 ]; then
+    echo "gates already green for this tree; reusing stamp"
+    SUITE_END=$(date +%s)
+    GATES_LOG="$PROJECT_ROOT/company/state/gates.log"
+    mkdir -p "$PROJECT_ROOT/company/state" 2>/dev/null || true
+    ( printf '%s | total=%ss | status=%s | reused=1\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$((SUITE_END - SUITE_START))" \
+        "green" >>"$GATES_LOG" ) 2>/dev/null || true
+    echo "${C_GREEN}${C_BOLD}all gates passed${C_RESET}"
+    exit 0
+  fi
+fi
+
+# --- run gates in parallel (FR-ASR-09). OQ-ASR-03 assumption: same tree,
+# isolated stdout/stderr/logs, no per-gate copies. bash 3.2: no wait -n.
 echo "${C_BOLD}Running gates from ${PROJECT_ROOT}${C_RESET}"
 echo
 
-NAMES=""
-OKS=""
 DETAILS_FILE="$(mktemp -t rungates.XXXXXX)"
 LADDER_FILE="$(mktemp -t rungates.XXXXXX)"
-OUT_FILE=""
-trap 'rm -f "$DETAILS_FILE" "$LADDER_FILE" "${OUT_FILE:-}"' EXIT
+JOB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rungates.XXXXXX")"
+trap 'rm -rf "$JOB_DIR" "$DETAILS_FILE" "$LADDER_FILE"' EXIT
 
-ANY_FAIL=0
-
-# Read tab-separated lines without a subshell (so vars persist in bash 3.2).
-while IFS=$'\t' read -r NAME ENC; do
-  [ -n "$NAME" ] || continue
-  CMD="$(printf '%s' "$ENC" | base64 --decode 2>/dev/null || printf '%s' "$ENC" | base64 -D)"
-
-  echo "${C_BOLD}-> gate: ${NAME}${C_RESET}"
+run_one_gate() {
+  _idx="$1"
+  _name="$2"
+  _cmd="$3"
+  _safe="$4"
   START=$(date +%s)
-  OUT_FILE="$(mktemp -t rungates.XXXXXX)"
-  # Run from the project root. Do not let a failing gate abort the runner.
+  OUT_FILE="$JOB_DIR/${_idx}.out"
   set +e
-  ( cd "$PROJECT_ROOT" && eval "$CMD" ) >"$OUT_FILE" 2>&1
+  ( cd "$PROJECT_ROOT" && eval "$_cmd" ) >"$OUT_FILE" 2>&1
   RC=$?
   set -e
   END=$(date +%s)
   DUR=$((END - START))
-
-  # Detail for the stamp is computed first: it must not depend on where the
-  # combined output ends up.
   LAST_LINE="$(awk 'NF{last=$0} END{print last}' "$OUT_FILE")"
+  printf '%s\n' "$RC" >"$JOB_DIR/${_idx}.rc"
+  printf '%s\n' "$DUR" >"$JOB_DIR/${_idx}.dur"
+  printf '%s\n' "$_name" >"$JOB_DIR/${_idx}.name"
+  printf '%s\n' "$_safe" >"$JOB_DIR/${_idx}.safe"
+  printf '%s\n' "$LAST_LINE" >"$JOB_DIR/${_idx}.last"
+}
 
-  # FR-HP-20 / FR-HP-21: a green gate contributes its tail, not its whole log -
-  # thousands of passing-test lines are transcript weight every later turn of
-  # the calling session re-reads. A red gate still echoes everything; that is
-  # when the detail is load-bearing. Either way the full combined stdout and
-  # stderr is preserved under company/state/gate-output/.
-  # OQ-HP-04 assumption: the tail is 3 non-empty lines plus one pointer line,
-  # with no configuration knob.
+INDEX=0
+while IFS=$'\t' read -r NAME ENC; do
+  [ -n "$NAME" ] || continue
+  INDEX=$((INDEX + 1))
+  CMD="$(printf '%s' "$ENC" | base64 --decode 2>/dev/null || printf '%s' "$ENC" | base64 -D)"
+  SAFE_NAME="$(printf '%s' "$NAME" | tr -c 'A-Za-z0-9._-' '_')"
+  run_one_gate "$INDEX" "$NAME" "$CMD" "$SAFE_NAME" &
+done <<EOF
+$GATE_LINES
+EOF
+
+set +e
+wait
+set -e
+
+ANY_FAIL=0
+i=1
+while [ "$i" -le "$INDEX" ]; do
+  NAME="$(cat "$JOB_DIR/$i.name")"
+  SAFE_NAME="$(cat "$JOB_DIR/$i.safe")"
+  RC="$(cat "$JOB_DIR/$i.rc")"
+  DUR="$(cat "$JOB_DIR/$i.dur")"
+  LAST_LINE="$(cat "$JOB_DIR/$i.last")"
+  OUT_FILE="$JOB_DIR/$i.out"
+
+  echo "${C_BOLD}-> gate: ${NAME}${C_RESET}"
   if [ "$RC" -eq 0 ]; then
-    # awk 'NF' drops blank lines and exits 0 even when nothing matches, so this
-    # pipeline cannot trip pipefail the way a grep -v pipeline would.
     awk 'NF' "$OUT_FILE" | tail -n 3
   else
     cat "$OUT_FILE"
   fi
 
-  # A gate name is not a filename: fold anything outside [A-Za-z0-9._-] to _ so
-  # a gate named with a slash cannot write outside the output directory.
-  SAFE_NAME="$(printf '%s' "$NAME" | tr -c 'A-Za-z0-9._-' '_')"
   GATE_LOG=""
-  # Preserving output is best-effort: a read-only company/state must not abort
-  # the run or change the exit code, so both steps are guarded.
   if mkdir -p "$GATE_OUT_DIR" 2>/dev/null; then
     if mv -f "$OUT_FILE" "$GATE_OUT_DIR/$SAFE_NAME.log" 2>/dev/null; then
       GATE_LOG="company/state/gate-output/$SAFE_NAME.log"
@@ -160,10 +203,8 @@ while IFS=$'\t' read -r NAME ENC; do
   if [ -z "$GATE_LOG" ]; then
     rm -f "$OUT_FILE"
   elif [ "$RC" -eq 0 ]; then
-    # Only point at a file that was actually written.
     echo "(full output: $GATE_LOG)"
   fi
-  OUT_FILE=""
 
   if [ "$RC" -eq 0 ]; then
     STATUS="PASS"; OK="true"
@@ -171,14 +212,12 @@ while IFS=$'\t' read -r NAME ENC; do
     STATUS="FAIL"; OK="false"; ANY_FAIL=1
   fi
 
-  # Record for the ladder and for stamping (base64 the detail for safe transport).
   DENC="$(printf '%s' "$LAST_LINE" | base64 | tr -d '\n')"
   printf '%s\t%s\t%s\n' "$NAME" "$OK" "$DENC" >>"$DETAILS_FILE"
   printf '%s\t%s\t%ss\n' "$NAME" "$STATUS" "$DUR" >>"$LADDER_FILE"
   echo
-done <<EOF
-$GATE_LINES
-EOF
+  i=$((i + 1))
+done
 
 # --- print the gate ladder ------------------------------------------------
 echo "${C_BOLD}Gate ladder${C_RESET}"

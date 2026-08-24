@@ -673,20 +673,14 @@ class WiringGate(unittest.TestCase):
         r = self.check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_unwiring_a_stop_hook_fails_naming_event_and_hook(self):
-        # The example used to be the standalone Stop-time gate DECISIONS #20
-        # deleted. guard_provenance's Stop binding is the Mode D close gate,
-        # and it is the one whose absence this assertion now protects.
+    def test_unwiring_session_start_fails_naming_event_and_hook(self):
         s = self.settings()
-        s["hooks"]["Stop"][0]["hooks"] = [
-            h for h in s["hooks"]["Stop"][0]["hooks"]
-            if "guard_provenance.py" not in h.get("command", "")
-        ]
+        del s["hooks"]["SessionStart"]
         self.save(s)
         r = self.check()
         self.assertEqual(r.returncode, 1, r.stdout)
-        self.assertIn("Stop", r.stdout)
-        self.assertIn("guard_provenance.py", r.stdout)
+        self.assertIn("SessionStart", r.stdout)
+        self.assertIn("session_start.py", r.stdout)
 
     def test_removing_the_bash_group_names_all_its_hooks(self):
         s = self.settings()
@@ -697,7 +691,7 @@ class WiringGate(unittest.TestCase):
         r = self.check()
         self.assertEqual(r.returncode, 1, r.stdout)
         for name in ("guard_commit.py", "guard_secrets.py",
-                     "guard_tests.py", "guard_provenance.py"):
+                     "guard_tests.py"):
             self.assertIn(name, r.stdout)
 
     def test_absent_hook_file_makes_its_rows_unchecked(self):
@@ -731,10 +725,7 @@ class WiringGate(unittest.TestCase):
     def test_settings_local_json_is_ignored(self):
         s = self.settings()
         stripped = json.loads(json.dumps(s))
-        stripped["hooks"]["Stop"][0]["hooks"] = [
-            h for h in stripped["hooks"]["Stop"][0]["hooks"]
-            if "guard_provenance.py" not in h.get("command", "")
-        ]
+        del stripped["hooks"]["SessionStart"]
         self.save(stripped)
         with open(os.path.join(self.root, ".claude",
                                "settings.local.json"), "w") as f:

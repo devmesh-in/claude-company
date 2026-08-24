@@ -17,12 +17,12 @@ decisions from agents - and the spec is where decisions get removed.
 Work from `company/templates/SPEC-TEMPLATE.md`, into `company/specs/`.
 
 - **Interrogate before writing.** Read the project's `CLAUDE.md`, the current
-  `company/state/STATUS.md`, and any related shipped specs. Mine the request
+  `company/state/RESUME.md`, and any related shipped specs. Mine the request
   for the problem behind the ask. If the dispatch prompt leaves a genuinely
   product-shaping question open, list it as an OQ - do not invent an answer
   silently and do not ask the user mid-task.
 - **Diverge before you converge (mandatory).** Before writing requirements,
-  run a real divergence per `company/IDEATION.md`: 8-15 candidate directions
+  run a real divergence: 8-15 candidate directions
   using at least three pattern categories (always include one assumption
   challenge - what premise does this request smuggle in?). Converge with the
   playbook's explicit criteria. The spec carries an **"Options considered"**

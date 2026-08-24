@@ -10,7 +10,13 @@ The concurrency primitives (state_lock, write_json_atomic, the active-task
 retry) hold that same line: a lock that cannot be taken proceeds UNLOCKED, an
 atomic write that cannot be made returns False, and a hash that cannot be
 computed falls back to the legacy digest. None of them ever raise, and none of
-them can turn into a block.
+them can turn into a block (BR-ASR-08). Hooks stay Python 3.8 stdlib only
+(BR-ASR-09).
+
+FR-ASR-04: sweep after deleting risk_score.py and provenance enforcement.
+risk_score used only shared helpers (_git, read_json_file, active_tasks,
+adherence_log). Provenance helpers moved to dispatch_feed.py. Nothing unique
+to those hooks remained in this file to delete.
 """
 
 import contextlib
@@ -92,6 +98,13 @@ def block(root, hook_name, target, short_reason, message):
 
 def log_bypass(root, hook_name, target, short_reason):
     adherence_log(root, hook_name, "BYPASS", target, short_reason)
+
+
+def log_warn(root, hook_name, target, short_reason, message=None):
+    """Log a WARN line. Does not exit. Optional stderr note (FR-ASR-08)."""
+    adherence_log(root, hook_name, "WARN", target, short_reason)
+    if message:
+        print(message, file=sys.stderr)
 
 
 def read_json_file(path):

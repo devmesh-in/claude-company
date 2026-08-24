@@ -103,7 +103,7 @@ files (the model forgets, the repo remembers):
   candidates. The loop pulls from the top; nothing enters the pipeline
   without becoming a classified engagement first.
 - `company/state/RESUME.md` - what the last tick finished and what the next
-  should do first.
-- `company/state/STATUS.md`, `WORRIES.md`, `DECISIONS.md`, `adherence.log` -
+  should do first. In-flight work lives here (STATUS.md is retired).
+- `company/state/WORRIES.md`, `DECISIONS.md`, `adherence.log` -
   the same truth the interactive company keeps; the loop reads them at every
   tick and writes them after every action.

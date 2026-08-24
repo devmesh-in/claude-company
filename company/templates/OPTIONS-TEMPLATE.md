@@ -1,7 +1,7 @@
 # OPTIONS MEMO: <topic>
 
 _Engagement: <slug>. Author: <role(s)>. Date: YYYY-MM-DD._
-_Patterns used: <categories from company/IDEATION.md>._
+_Patterns used: <lenses named in the engagement>._
 
 Client-facing. One screen if possible. The client reads this to see the
 option space and the reasoning - never to do process work.

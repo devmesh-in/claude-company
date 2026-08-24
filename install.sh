@@ -188,7 +188,6 @@ copy_overwrite "$SRC/ORCHESTRATOR.md"          "$TARGET/ORCHESTRATOR.md"
 copy_overwrite "$SRC/company/METHOD.md"        "$TARGET/company/METHOD.md"
 copy_overwrite "$SRC/company/GATES.md"         "$TARGET/company/GATES.md"
 copy_overwrite "$SRC/company/EXTENDING.md"     "$TARGET/company/EXTENDING.md"
-copy_overwrite "$SRC/company/IDEATION.md"      "$TARGET/company/IDEATION.md"
 copy_overwrite "$SRC/company/GIT.md"           "$TARGET/company/GIT.md"
 copy_overwrite "$SRC/company/LOOPS.md"         "$TARGET/company/LOOPS.md"
 copy_overwrite "$SRC/company/run-gates.sh"     "$TARGET/company/run-gates.sh"
@@ -260,8 +259,6 @@ scaffold_stub() {
   printf '%s\n' "$header" > "$dst"
   ok "${dst#$TARGET/}"
 }
-scaffold_stub "$TARGET/company/state/STATUS.md" \
-  "# STATUS - maintained by the orchestrator. Red stays red until proven green."
 scaffold_stub "$TARGET/company/state/RESUME.md" \
   "# RESUME - maintained by the orchestrator. Where we are and what happens next."
 scaffold_stub "$TARGET/company/state/WORRIES.md" \
@@ -301,7 +298,7 @@ except (FileNotFoundError, ValueError):
 # --- merge hooks: append our command entries unless already present -------
 # issue-67: dedup key is (matcher, command), not command-per-event. A command
 # may legitimately appear under several matcher groups of one event
-# (guard_provenance under Edit|Write|MultiEdit AND Task|Agent AND Bash); a
+# (guard_models under Edit|Write|MultiEdit AND Task|Agent); a
 # per-event set dropped every repeat after the first, emptying and then losing
 # whole groups. Keying by matcher keeps each group complete.
 _NO_MATCHER = object()  # sentinel key for groups that carry no matcher

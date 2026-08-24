@@ -1,21 +1,25 @@
 ---
 name: release
-description: Prepare a release for the owner to ship - verify the readiness list mechanically, then assemble the changelog, semver proposal, and release notes into the filled RELEASE-TEMPLATE, ending at a proposal entry on DECISIONS.md. Owner/CEO invoked only. Use when the user says /release, "prepare a release", "cut a release", or "are we ready to ship". It NEVER tags, publishes, or deploys - deploy is a manual owner step, always.
+description: Prepare a release for the owner to ship - verify the readiness list mechanically, then assemble the changelog, semver proposal, and release notes into the filled RELEASE-TEMPLATE, ending at a proposal entry on DECISIONS.md. Owner/CEO invoked only. Use when the user says /release, "prepare a release", "cut a release", or "are we ready to ship". It never runs `git tag`, `npm publish`, or deploy. `gh release create` runs only when the owner instructed that ship in-session; release.yml then publishes to npm via OIDC.
 disable-model-invocation: true
 ---
 
 # /release - prepare a release, hand it to the owner
 
-You are the CEO (or the devops-engineer acting under the CEO) preparing a
+You are the CEO (or an opt-in devops-engineer per `company/EXTENDING.md`) preparing a
 release. You are running this because the owner asked for it - never on your own
 initiative. `company/RELEASE.md` is the doctrine; read it first if this session
 has not, then `company/GATES.md` for the ladder the readiness list cites.
 
 **The boundary that outranks everything here:** you PREPARE a release; the owner
 SHIPS it. This skill never runs `git tag`, never pushes a tag, never runs
-`npm publish`, never deploys, and never instructs an agent to. It ends at a
-proposal on `company/state/DECISIONS.md`. If any step tempts you toward a ship
-command, stop - that is the owner's button (escalation-list item 3 in
+`npm publish`, and never deploys. The owner's ship button is one GitHub
+release (`gh release create` tagged `v` + `package.json` version);
+`release.yml` publishes to npm via OIDC. Direct in-session owner instruction
+to ship authorizes `gh release create` for that release only (DECISIONS #17).
+It ends at a proposal on `company/state/DECISIONS.md` unless that instruction
+is already on the record. If any step tempts you toward a local `npm publish`,
+stop - that is never the company's button (escalation-list item 3 in
 `company/METHOD.md`).
 
 ## 1. Verify readiness mechanically - run every command, paste every output
@@ -30,10 +34,11 @@ output. Do not summarize, do not trust a prior stamp, do not skip a rung.
 | R3 | `python3 .claude/hooks/trace_check.py` | exit 0, no orphan FR |
 | R4 | `python3 .claude/hooks/guard_models.py --check` | exit 0, no frontmatter drift |
 | R5 | the G8 audit command in `company/gates.config` | exit 0, no known-vulnerable dependency |
-| R6 | security-reviewer verdict (only if the release touches auth/session/money) | verdict is pass |
+| R6 | opt-in security-reviewer per `company/EXTENDING.md` (auth/session/money only) | verdict is pass, or n/a |
 | R7 | read `company/state/WORRIES.md` | no P0 or P1 row |
 | R8 | list `company/change-requests/` | no undecided CR |
-| R9 | read `company/state/STATUS.md` | no red task in release scope |
+| R9 | read `company/state/RESUME.md` | no red task in release scope |
+| R10 | `python3 .claude/hooks/rent_report.py` | idle non-exempt hooks named; unrecoverable-class exempt |
 
 Run R1 - R5 on integrated `main`, not a worktree. A rung genuinely not yet wired
 in `company/gates.config` is recorded as "not wired" in the readiness table, not
@@ -50,8 +55,9 @@ escalation. `/release` resumes only once the board is green.
 
 ## 3. Prepare - assemble the four artifacts
 
-Once readiness holds, dispatch (or act as) the **devops-engineer** to fill
-`company/templates/RELEASE-TEMPLATE.md` from `main`:
+Once readiness holds, fill `company/templates/RELEASE-TEMPLATE.md` from
+`main` (the CEO does this; an opt-in devops-engineer per
+`company/EXTENDING.md` is a copy-in, not a shipped agent):
 
 1. **Changelog** from conventional commits since the last tag:
 
@@ -85,22 +91,22 @@ The release lands as a proposal, not an action:
   decision (`Release <version> - accept and ship?`), Decision carries the
   proposed tag name, the target commit SHA, and the notes path, reading
   `proposed - awaiting owner` until answered; Affects is `release`.
-- The notes include the OWNER-ONLY ship commands as documentation of what the
-  owner runs - clearly marked, never invoked here:
+- The notes include the OWNER-ONLY ship command as documentation of what
+  the owner runs - clearly marked, never invoked here unless the owner
+  instructed this session to ship:
 
   ```bash
-  # OWNER-ONLY - the company never runs these
-  git tag -a v<version> <target-commit> -m "v<version>"
-  git push origin v<version>
-  npm publish            # or the project's publish/deploy step
+  # OWNER-ONLY - one GitHub release; release.yml publishes to npm via OIDC
+  gh release create v<version> --target <target-commit> \
+    --notes-file company/RELEASE-<version>.md
   ```
 
 - Report to the owner: readiness proved (paste the table), the proposed version
   and reasoning, the changelog summary, the notes path, and the DECISIONS.md
-  entry. Then stop. The owner tags and publishes; the CEO records the outcome
-  (`accepted` / `accepted-with-notes` / `rejected`) on the same decision.
-  Silence is not acceptance.
+  entry. Then stop unless the owner instructed the ship in this session.
+  The CEO records the outcome (`accepted` / `accepted-with-notes` /
+  `rejected`) on the same decision. Silence is not acceptance.
 
-Grep yourself before you finish: no `git tag`, `git push` of a tag, or
-`npm publish` appears anywhere in this run as something you executed - only
-inside OWNER-ONLY documentation blocks.
+Grep yourself before you finish: no `npm publish` appears anywhere in this
+run as something you executed. `gh release create` runs only when the owner
+explicitly instructed this session to ship.

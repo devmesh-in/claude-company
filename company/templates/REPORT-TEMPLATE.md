@@ -2,6 +2,11 @@
 
 _Agent: <role>. Brief: `company/briefs/brief-<slug>.md`. Date: YYYY-MM-DD._
 
+Hard summary budget (FR-ASR-16): about 1-2k tokens. Facts, pasted ladder, FR checklist.
+Bulky evidence (logs, screenshots beyond the four UI states, long diffs)
+lives under `company/evidence/<slug>/` and is referenced here by path.
+Do not paste transcripts.
+
 Reports contain facts, not adjectives. "Robust" and "comprehensive" are not
 facts. Never describe unverified work as working.
 
@@ -26,9 +31,9 @@ integration. Each: file + exact substring + why it is load-bearing.
 `git diff --stat <base>..HEAD` summary. Confirm: no paths outside the brief's
 "You own" list. If any, say so plainly.
 
-## Evidence (UI tasks)
-Screenshots: loaded / empty / error / after-action. Paths or embeds. You
-capture; the lead and CEO judge.
+## Evidence
+UI: screenshots loaded / empty / error / after-action, paths or embeds.
+Everything else: `company/evidence/<slug>/` referenced by path.
 
 ## CRs filed
 - CR-<n>: <slug> - status

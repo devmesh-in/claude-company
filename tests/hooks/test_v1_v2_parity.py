@@ -20,13 +20,12 @@ oracle for N == 1 against the SHIPPED behaviour is elsewhere: the roughly 45
 untouched set_task() call sites in the pre-existing suites, plus
 test_active_task_schema.Helpers (the per-entry helpers and the
 qualify_reason N <= 1 identity), test_multi_task_gates.SingleEntryParity, and
-test_multi_task_provenance.TestSingleEntryParity (which pin the exact exit
+test_multi_task_display.TestSingleEntryParity (which pin the exact exit
 code, stdout and adherence line at one entry). This file is one leg of that
 proof, not the whole of it.
 
-Coverage: the seven consumer hooks, plus each of the four guard_provenance
-events (Mode A, B-pre, B-post, C). Stop and PreToolUse Edit stay WIRED and
-inert, so there is nothing left there for two file shapes to differ about.
+Coverage: the surviving consumer hooks. Provenance enforcement modes are
+deleted (FR-ASR-03).
 
 Method: ONE fixture root per case. Run against the v1 file, capture, reset the
 mutable state that hooks write (adherence log, ledger), rewrite the SAME
@@ -291,46 +290,6 @@ class TestConsumerHookParity(ParityBase):
                     {"hook_event_name": "SessionStart", "cwd": self.root},
                     expect=prints)
 
-    def test_risk_score_cli(self):
-        def scored(v):
-            assert "RISK_JSON: " in v["stdout"], v["stdout"]
-        self.parity("risk_score.py", payload=None,
-                    argv=["--base", self.base_sha], expect=scored)
-
-
-# --------------------------------------------------------------------------
-# The six guard_provenance events
-# --------------------------------------------------------------------------
-class TestProvenanceModeParity(ParityBase):
-    HOOK = "guard_provenance.py"
-
-    def self_entry(self):
-        e = dict(ENTRY)
-        e["execution"] = "self"
-        e["execution_why"] = "glue only"
-        return e
-
-    def test_mode_a_nudge(self):
-        self.parity(self.HOOK,
-                    self.edit_payload("src/app.py", event="PostToolUse"),
-                    entry=self.self_entry(), expect=logs("NUDGE"))
-
-    def test_mode_b_pre_dispatch(self):
-        self.parity(self.HOOK, self.spawn_payload(), expect=logs("DISPATCH"))
-
-    def test_mode_b_post_audit(self):
-        payload = self.spawn_payload(event="PostToolUse", role="auditor")
-        payload["tool_response"] = "audit complete, ship it"
-        self.parity(self.HOOK, payload, expect=logs("AUDIT"))
-
-    def test_mode_c_commit_gate(self):
-        self.parity(self.HOOK, self.bash_payload("git commit -m x"),
-                    entry=self.self_entry(), expect=blocks)
-
-    def test_mode_c_hotfix_bypass(self):
-        self.parity(self.HOOK, self.bash_payload("git commit -m x"),
-                    entry={"task": "hf", "type": "hotfix"},
-                    expect=logs("BYPASS"))
 
 
 # --------------------------------------------------------------------------
@@ -385,15 +344,7 @@ class TestEmptyStateIndistinguishable(ParityBase):
         self.assertNotIn("commit on protected branch", first["adherence"])
         self.assertIn("requires green, fresh gates", first["stderr"])
 
-    def test_mode_c_allows_in_every_empty_state(self):
-        # The provenance leg of BR-MST-10. It used to be asserted at the
-        # execution gate; the commit gate is where guard_provenance still
-        # reads active-task.json on an Edit-free path, and `no entries` is one
-        # of its own early exits rather than a mode that no longer runs.
-        first = self.run_all("guard_provenance.py",
-                             self.bash_payload("git commit -m x"))
-        self.assertEqual(first["rc"], 0)
-
+    
     def test_context_pin_silent_in_every_empty_state(self):
         first = self.run_all("context_pin.py",
                              {"hook_event_name": "UserPromptSubmit",

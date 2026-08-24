@@ -62,7 +62,10 @@ build_source() {
 
   # our real files
   cp "$REPO/company/run-gates.sh" "$SRC/company/run-gates.sh"
-  cp "$REPO/company/gates.config" "$SRC/company/gates.config"
+  # Tracked template, never this checkout's local-only gates.config
+  # (BR-ASR-07 / dual-nature). git show HEAD is the payload a fresh
+  # install inherits.
+  git -C "$REPO" show HEAD:company/gates.config > "$SRC/company/gates.config"
   cp "$REPO/.mcp.json" "$SRC/.mcp.json"
 
   # real manifest helpers + a minimal package.json so install.sh's provenance
@@ -73,23 +76,22 @@ build_source() {
   printf '{"version":"9.9.9"}\n' > "$SRC/package.json"
 
   # our settings.json fixture (stands in for the other agent's final file).
-  # issue-67: multi-matcher shape - guard_provenance.py appears under THREE
-  # PreToolUse matchers, exactly the field case the command-per-event dedup used
-  # to collapse. Keeps no_slop.py + the adherence.log deny for the merge tests.
+  # issue-67: multi-matcher shape - guard_models.py appears under TWO
+  # PreToolUse matchers and guard_tests.py under TWO, the field case the
+  # command-per-event dedup used to collapse.
   cat > "$SRC/.claude/settings.json" <<'JSON'
 {
   "hooks": {
     "PreToolUse": [
       {"matcher": "Edit|Write|MultiEdit", "hooks": [
         {"type": "command", "command": ".claude/hooks/no_slop.py"},
-        {"type": "command", "command": ".claude/hooks/guard_provenance.py"}
+        {"type": "command", "command": ".claude/hooks/guard_models.py"}
       ]},
       {"matcher": "Task|Agent", "hooks": [
-        {"type": "command", "command": ".claude/hooks/guard_provenance.py"}
+        {"type": "command", "command": ".claude/hooks/guard_models.py"}
       ]},
       {"matcher": "Bash", "hooks": [
-        {"type": "command", "command": ".claude/hooks/guard_tests.py"},
-        {"type": "command", "command": ".claude/hooks/guard_provenance.py"}
+        {"type": "command", "command": ".claude/hooks/guard_tests.py"}
       ]}
     ]
   },
@@ -175,7 +177,7 @@ check "provenance.json copied"   test -f "$T1/company/provenance.json"
 check "provenance.json packaged bytes" cmp -s "$SRC/company/provenance.json" "$T1/company/provenance.json"
 check ".mcp.json copied"         test -f "$T1/.mcp.json"
 check "settings.json copied"     test -f "$T1/.claude/settings.json"
-check "STATUS.md stub"           test -f "$T1/company/state/STATUS.md"
+check "STATUS.md not scaffolded"  bash -c '! test -f "'"$T1"'/company/state/STATUS.md"'
 check "RESUME.md stub"           test -f "$T1/company/state/RESUME.md"
 check "WORRIES.md stub"          test -f "$T1/company/state/WORRIES.md"
 check "DECISIONS.md stub"        test -f "$T1/company/state/DECISIONS.md"
@@ -268,8 +270,10 @@ check "parity settings.json valid"               json_valid "$TP/.claude/setting
 check "fresh install hooks == payload"           settings_hooks_equal "$SRC/.claude/settings.json" "$TP/.claude/settings.json"
 # regression evidence: a command repeated across matchers survives in EVERY group
 check "Task|Agent group survived"                matcher_present "$TP/.claude/settings.json" PreToolUse "Task|Agent"
-[ "$(command_matcher_count "$TP/.claude/settings.json" PreToolUse guard_provenance.py)" -eq 3 ] \
-  && pass "guard_provenance under all 3 PreToolUse matchers" || fail "guard_provenance under all 3 PreToolUse matchers"
+[ "$(command_matcher_count "$TP/.claude/settings.json" PreToolUse guard_models.py)" -eq 2 ] \
+  && pass "guard_models under Edit and Task matchers" || fail "guard_models under Edit and Task matchers"
+[ "$(command_matcher_count "$TP/.claude/settings.json" PreToolUse guard_provenance.py)" -eq 0 ] \
+  && pass "guard_provenance not wired" || fail "guard_provenance not wired"
 
 echo "== settings.json merge keeps user group + completes payload (issue-67) =="
 # 3b: pre-seed a user hook group (custom matcher + custom command). After
@@ -289,8 +293,8 @@ check "merge settings.json valid"                json_valid "$TU/.claude/setting
 check "user custom command preserved"            grep -q "user-notebook-guard.sh" "$TU/.claude/settings.json"
 check "user custom matcher preserved"            matcher_present "$TU/.claude/settings.json" PreToolUse "Notebook"
 check "payload Task|Agent group present"         matcher_present "$TU/.claude/settings.json" PreToolUse "Task|Agent"
-[ "$(command_matcher_count "$TU/.claude/settings.json" PreToolUse guard_provenance.py)" -eq 3 ] \
-  && pass "merge keeps guard_provenance under all 3 payload matchers" || fail "merge keeps guard_provenance under all 3 payload matchers"
+[ "$(command_matcher_count "$TU/.claude/settings.json" PreToolUse guard_models.py)" -eq 2 ] \
+  && pass "merge keeps guard_models under both payload matchers" || fail "merge keeps guard_models under both payload matchers"
 
 echo "== settings.json idempotency (issue-67) =="
 # 3c: install twice -> byte-identical settings.json (re-run is a true no-op).

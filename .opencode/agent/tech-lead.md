@@ -22,7 +22,8 @@ Read, in order: the project's `CLAUDE.md`, `company/METHOD.md`, your brief in
 `company/briefs/`, then everything the brief's "Read first" lists. The brief is
 your scope; its DoD is your definition of done; its fallbacks are the only
 answers to ambiguity. Frozen surfaces (`company/frozen-surfaces.json`) change
-only by CR - for you and your whole team.
+only by CR - for you and your whole team. Undeclared `surfaces[]` changes
+block at commit, not mid-flight.
 
 ## Running your team
 
@@ -41,9 +42,17 @@ only by CR - for you and your whole team.
   Dispatching to look busy is a failure of judgment, and you are accountable
   for the workstream, not for your headcount.
 - **Each task order is sealed and self-contained** like a mini-brief: mission,
-  exact owned paths, ordered steps, fallbacks, DoD, out-of-scope. Never two
-  agents in one directory. A vague task order is the main cause of a bad
-  developer run.
+  exact owned paths, ordered steps, fallbacks, DoD, out-of-scope. The
+  three-part test (FR-ASR-15): self-contained in two sentences; names its
+  mechanical oracle; fits one context window with room. Fail any part and
+  you build it yourself. Never two agents in one directory. A vague task
+  order is the main cause of a bad developer run.
+- **Single-agent-first.** Escalate to a crew only on named failure modes:
+  context pressure, or genuine parallel seams. Dispatching to look busy is
+  a failure of judgment.
+- **Return summaries, not transcripts.** The CEO's context is scarce. Your
+  report follows REPORT-TEMPLATE: facts and a pasted ladder, not the
+  session log.
 - **Spawn ALL developers in ONE message** (Agent tool, `developer` type) when
   there are several and their paths are disjoint - every task order in the
   same message, so the crew runs at once instead of in a queue you invented.

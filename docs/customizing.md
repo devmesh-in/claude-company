@@ -55,13 +55,13 @@ Add an entry to `company/frozen-surfaces.json`:
 }
 ```
 
-Patterns match against the file path and its basename. From then on, every agent edit to a matching file is blocked, and the block message points the agent to the change-request process. Good candidates: schemas, shipped migrations, payment code, generated files, and anything with exactly one legitimate writer.
+Patterns match against the file path and its basename. From then on, an undeclared change to a matching project surface is blocked at commit, and the block message points the agent to the change-request process. The unrecoverable baseline (`.env`, evidence records, witnesses, accepted ADRs) is blocked mid-flight. Good candidates for `surfaces[]`: schemas, shipped migrations, payment code, generated files, and anything with exactly one legitimate writer.
 
-`.env` files, lockfiles, and the gate stamp are protected out of the box.
+`.env` files and the gate stamp are protected out of the box. Dependency lockfiles warn rather than block.
 
 ## Tune how much process a request gets
 
-The CEO sizes each request automatically: `ideation`, `quick`, `feature`, `program`, or `hotfix`. The sizing rules live in `company/METHOD.md` under "Ceremony scales with the task". Two useful overrides:
+The CEO sizes each request automatically: `quick`, `feature`, `program`, or `hotfix`. The sizing rules live in `company/METHOD.md` under "Ceremony scales with the task". Two useful overrides:
 
 - Say the class in your request ("treat this as a quick fix") and the CEO will honor it
 - For a production fire, say hotfix. Hooks log instead of block, and the process catches up afterward
@@ -78,7 +78,7 @@ Each role is one markdown file in `.claude/agents/`. The file's frontmatter sets
 
   Two pieces of advice from how we run it: give the CEO the strongest model you have - it does the judgment work (verification, arbitration, judging evidence) - and keep workers on `opus`. On a tighter budget, downshift roles in the manifest to `sonnet`: developers tolerate it best, the auditor worst. Check agreement anytime with `python3 .claude/hooks/guard_models.py --check`.
 
-- **Arm or disarm the delegation enforcer**: `company/provenance.json` is the switch. A fresh install ships it, so the enforcer is armed by default; delete it to disarm every provenance mode (same rollout posture as `company/models.json`). An `update` never creates it - if a project lacks the file, update prints a one-line notice and leaves the enforcement regime unchanged, so refreshing the payload never silently arms a project.
+- **Dispatch feed, not a commit gate**: `company/provenance.json` still lists verifier and builder roles so the session pin can name them. A fresh install ships it. Deleting it just empties that roster; it no longer arms a commit-blocking enforcer. An `update` never creates the file if a project lacks it.
 
 Two roles are load-bearing; change them carefully. `tech-lead` is the only agent allowed to spawn other agents, and `developer` carries the working rules every builder inherits.
 
@@ -100,7 +100,7 @@ Three surfaces the company keeps to hold its own history honest. Each is a plain
 
 - **Architecture decisions** live in `company/adr/`, one file per decision, written from `company/templates/ADR-TEMPLATE.md`. An ADR marked `Status: accepted` is frozen by a guard: you supersede it with a new record rather than editing it. The index in `company/adr/README.md` lists every decision and the next free number.
 
-- **Release readiness** is the checklist in `company/RELEASE.md`: the criteria that must all be green before `/release` prepares anything. Edit that list to match your project's bar - add a rung, tighten a criterion - and `/release` enforces the new version. It never tags or publishes; that stays yours.
+- **Release readiness** is the checklist in `company/RELEASE.md`. Edit that list to match your project's bar. `/release` prepares notes and bumps the version on `main`; you ship by publishing a GitHub release tagged `vX.Y.Z`, which runs `release.yml` and publishes to npm via OIDC. There is no local `npm publish`.
 
 ## Run on opencode instead of, or alongside, Claude Code
 

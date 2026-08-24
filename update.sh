@@ -241,7 +241,7 @@ done < <(cc_overwrite_relpaths "$SRC" "$TARGET_HARNESSES")
 # lacks them; never overwrite, never back up.
 # OQ-UPD-08 assumption: update never reads or writes gate detection or gate
 # results - it only ships the config file itself when absent, and never touches
-# user state (STATUS.md, specs, briefs, change-requests, logs, gate status).
+# user state (RESUME.md, specs, briefs, change-requests, logs, gate status).
 config_if_absent() {
   local rel="$1"
   if [ ! -f "$SRC/$rel" ]; then
@@ -353,7 +353,7 @@ except (FileNotFoundError, ValueError):
 # --- merge hooks: append our command entries unless already present -------
 # issue-67: dedup key is (matcher, command), not command-per-event. A command
 # may legitimately appear under several matcher groups of one event
-# (guard_provenance under Edit|Write|MultiEdit AND Task|Agent AND Bash); a
+# (guard_models under Edit|Write|MultiEdit AND Task|Agent); a
 # per-event set dropped every repeat after the first, emptying and then losing
 # whole groups. Keying by matcher keeps each group complete.
 _NO_MATCHER = object()  # sentinel key for groups that carry no matcher

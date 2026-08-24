@@ -12,7 +12,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_hooks import Base, run_hook  # noqa: E402
+from test_hooks import Base, HOOKS_DIR, run_hook  # noqa: E402
+
+sys.path.insert(0, HOOKS_DIR)
+import dispatch_feed as df  # noqa: E402
 
 HOOK = "session_start.py"
 
@@ -37,10 +40,10 @@ class SessionDigestBase(Base):
         return {"hook_event_name": "SessionStart", "cwd": self.root}
 
     def seed_dispatch(self, role="developer"):
-        payload = {"hook_event_name": "PreToolUse", "tool_name": "Task",
-                   "tool_input": {"subagent_type": role}, "cwd": self.root}
-        r = run_hook("guard_provenance.py", payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        ledger = df.read_ledger(self.root)
+        rec = df.task_record(ledger, "feat-x")
+        rec["dispatches"].append({"role": role, "at": "2026-01-01T00:00:00Z"})
+        df.write_sealed_ledger(self.root, ledger)
 
 
 class TestGateAlertLine(SessionDigestBase):
@@ -153,16 +156,12 @@ class TestGateAlertLine(SessionDigestBase):
         self.write("company/briefs/brief-feat-x.md", "# BRIEF\n\nmission\n")
         self.assertNotIn("gates:", self.digest())
 
-    def test_the_line_survives_a_saturated_resume_and_status(self):
-        """Placement is the whole delivery. RESUME's 40 lines plus STATUS's 20
-        plus their headers already exceed MAX_LINES, so a line appended after
-        them is truncated away and never reaches anybody - which is how this
-        repo's real RESUME.md is shaped today.
+    def test_the_line_survives_a_saturated_resume(self):
+        """Placement is the whole delivery. A huge RESUME must not push the
+        gates: line off the digest (FR-ASR-19: STATUS.md is retired).
         """
         self.write("company/state/RESUME.md",
                    "".join("resume %d\n" % i for i in range(300)))
-        self.write("company/state/STATUS.md",
-                   "".join("status %d\n" % i for i in range(300)))
         self.feature_task()
         self.assertIn("gates: no gates.status stamp", self.digest())
 

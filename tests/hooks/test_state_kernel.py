@@ -1174,37 +1174,7 @@ class TestWorktreeRelPath(Base):
         r = self.edit("guard_spec.py", target)
         self.assertEqual(r.returncode, 2, r.stderr)
 
-    def test_guard_provenance_delegated_exemption_survives_fr_hp_09(self):
-        """The one place a worktree SHOULD stay exempt stays exempt.
-
-        Delegated worktree work is verified inside the hierarchy, so
-        guard_provenance exempts it deliberately. That exemption must not be
-        collateral damage of this fix - it is checked before rel_path is used,
-        and this asserts it stays that way.
-
-        The exemption used to be observed at the execution gate, where a
-        worktree edit exited 0. That gate is gone and an exit 0 there would
-        now prove nothing, so the observable is Mode A: the exemption is what
-        stops the hook recording the path as self-authored, which means the
-        ledger must not exist at all. An exit code alone would still pass with
-        the exemption removed.
-        """
-        self.set_task({"task": "lane", "type": "feature",
-                       "brief": "company/briefs/brief-lane.md"})
-        self.write("company/briefs/brief-lane.md", "# Brief\n")
-        target = self.wt_file("src/app.py", "print('x')\n")
-        payload = {"hook_event_name": "PostToolUse", "tool_name": "Write",
-                   "tool_input": {"file_path": target, "content": "x"},
-                   "cwd": self.root}
-        r = run_hook("guard_provenance.py", payload, self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "")
-        self.assertFalse(
-            os.path.exists(os.path.join(self.root, "company", "state",
-                                        "provenance-ledger.json")),
-            "a worktree edit must leave no self-authored record behind",
-        )
-
+    # -- derivation
     # -- derivation, not convention ---------------------------------------
 
     def test_worktree_at_an_unconventional_path_fr_hp_09(self):
