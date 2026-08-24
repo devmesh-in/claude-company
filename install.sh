@@ -31,8 +31,9 @@ The target directory must already exist.
   --harness=LIST   comma-separated harnesses to wire, default "claude".
                    Supported: claude, opencode.
   --no-background-subagents-env
-                   skip writing the OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
-                   export into your shell profile (opencode harness only).
+                   skip enabling background subagents on this machine (the
+                   shell-profile export and, on macOS, launchctl setenv;
+                   opencode harness only).
 
 Every harness shares one payload: the guards in .claude/hooks/ and the skills
 in .claude/skills/ are installed regardless of selection, because the opencode
@@ -135,36 +136,14 @@ copy_tree_if_absent() {
   done
 }
 
-# Ensure OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true is exported by the
-# user's shell before any opencode process starts. The flag is read from the
-# process environment at startup and CANNOT be enabled later: verified live
-# 2026-08-24 that neither .opencode/opencode.json nor a plugin setting
-# process.env flips it (the task tool schema is built without the background
-# parameter). Idempotent via a plain grep guard; a write failure warns and
-# moves on - this is a convenience, never worth failing an install over.
-wire_background_subagents_env() {
-  [ "$BG_ENV" -eq 1 ] || { skip "background-subagents env (skipped by flag)"; return 0; }
-  local rc
-  case "${SHELL##*/}" in
-    zsh)  rc="$HOME/.zshrc"  ;;
-    bash) rc="$HOME/.bashrc" ;;
-    *)    rc="$HOME/.profile" ;;
-  esac
-  # Guard on the exact active line, not the bare variable name: a comment
-  # mentioning it must not read as "already wired" - that failure mode is
-  # invisible capability loss.
-  if grep -qs "^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true" "$rc"; then
-    skip "background-subagents env already present in ${rc#$HOME/}"
-    return 0
-  fi
-  {
-    printf '\n'
-    printf '# claude-company: background subagent tasks for opencode\n'
-    printf 'export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true\n'
-  } >> "$rc" 2>/dev/null && \
-    ok "export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true added to ${rc#$HOME/}" ||
-    warn "could not write to $rc - add 'export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true' yourself before running opencode"
-}
+# Ensure background subagents work in every launch context. The one
+# implementation lives in lib/payload_paths.sh next to cc_overwrite_relpaths -
+# the shared file both engines source, so install and update can never drift.
+# Sourced here rather than at the manifest step because the harness block runs
+# long before it.
+MANIFEST_ENUM="$SRC/lib/payload_paths.sh"
+# shellcheck source=/dev/null
+[ -f "$MANIFEST_ENUM" ] && . "$MANIFEST_ENUM"
 
 # --- 1. agents, hooks, skills (ours - update in place) --------------------
 info "Installing agents, hooks, and skills"
@@ -197,9 +176,10 @@ if harness_selected opencode; then
   # false - the fix was already shipped one line above, in the generated
   # config. Nothing to do here; the note stays as the record of why.
 
-  # Background subagents (task(background=true)) need the env var in the
-  # process environment BEFORE opencode starts - see the helper's comment.
-  wire_background_subagents_env
+# Ensure OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true reaches every way a
+# user may launch opencode - the flag is read from the process environment at
+# startup and CANNOT be enabled later; see the helper in lib/payload_paths.sh.
+wire_background_subagents_env "$BG_ENV"
 fi
 
 # --- 2. canon docs and orchestrator (ours - update in place) --------------

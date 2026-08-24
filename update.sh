@@ -51,34 +51,12 @@ safe_mkdir() { mkdir -p "$1" || die3 "cannot create directory: $1"; }
 safe_cp()    { cp "$1" "$2" || die3 "write failed: $2"; }
 safe_mv()    { mv "$1" "$2" || die3 "write failed: $2"; }
 
-# Mirror of install.sh's wire_background_subagents_env: background subagents
-# need OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true in the process env
-# BEFORE opencode starts; neither project config nor a plugin can enable it
-# later (verified live 2026-08-24). Update applies it to an EXISTING opencode
-# install so the capability arrives without a reinstall. Idempotent via grep;
-# failure warns and moves on. Never runs under --check.
-wire_background_subagents_env() {
-  local rc
-  case "${SHELL##*/}" in
-    zsh)  rc="$HOME/.zshrc"  ;;
-    bash) rc="$HOME/.bashrc" ;;
-    *)    rc="$HOME/.profile" ;;
-  esac
-  # Guard on the exact active line, not the bare variable name: a comment
-  # mentioning it must not read as "already wired" - that failure mode is
-  # invisible capability loss.
-  if grep -qs "^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true" "$rc"; then
-    skip "background-subagents env already present in ${rc#$HOME/}"
-    return 0
-  fi
-  {
-    printf '\n'
-    printf '# claude-company: background subagent tasks for opencode\n'
-    printf 'export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true\n'
-  } >> "$rc" 2>/dev/null && \
-    ok "export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true added to ${rc#$HOME/}" ||
-    warn "could not write to $rc - add 'export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true' yourself before running opencode"
-}
+# wire_background_subagents_env comes from lib/payload_paths.sh (sourced below
+# with the other shared helpers): background subagents need
+# OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true in the process env BEFORE
+# opencode starts; neither project config nor a plugin can enable it later
+# (verified live 2026-08-24). Update applies it to an EXISTING opencode install
+# so the capability arrives without a reinstall. Never runs under --check.
 
 # --- resolve source (this package's root), independent of cwd -------------
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -597,7 +575,7 @@ if [ "$CHECK" != "1" ]; then
     die3 "failed to rewrite manifest: $MANIFEST"
   fi
   case ",$TARGET_HARNESSES," in
-    *,opencode,*) wire_background_subagents_env ;;
+    *,opencode,*) wire_background_subagents_env 1 ;;
   esac
 fi
 

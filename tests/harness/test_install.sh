@@ -24,6 +24,20 @@ WORK="$(mktemp -d -t ccharnessinstall.XXXXXX)"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
+# FAKEBIN shadows launchctl (and would shadow powershell.exe) for EVERY
+# install/update this suite runs, so the env-wiring branches record instead of
+# mutating the developer's real machine. Set up before the first invocation.
+FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
+LAUNCHCTL_LOG="$WORK/launchctl.log"
+cat > "$FAKEBIN/launchctl" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$LAUNCHCTL_LOG"
+exit 0
+STUB
+chmod +x "$FAKEBIN/launchctl"
+PATH="$FAKEBIN:$PATH"
+export PATH
+
 # --- the overwrite set, which drives both copying and the manifest ----------
 printf '\nthe overwrite set is harness-scoped (FR-HA-16)\n'
 # shellcheck source=/dev/null
@@ -122,6 +136,7 @@ check "update keeps the adapter in a project that has it" \
 # neither project config nor a plugin can enable it later (verified live
 # 2026-08-24: the task tool schema is built without the background parameter).
 # So an opencode install must wire the export into the user's shell profile.
+# launchctl is stubbed at suite setup, above.
 printf '\nthe opencode install wires the background-subagents env\n'
 
 HOME_SND="$WORK/home-snd"; mkdir -p "$HOME_SND"
@@ -141,6 +156,10 @@ printf '# OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS was here once\n' > "$HOME_C
 env HOME="$HOME_CMT" SHELL=/bin/zsh bash "$REPO/install.sh" --harness=opencode "$T_BOTH" >/dev/null 2>&1
 check "a stale comment does not suppress the export" \
   grep -q '^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true$' "$HOME_CMT/.zshrc"
+# GUI-spawned processes never read an rc file; on macOS the installer covers
+# them with launchctl setenv (stubbed here so we pin the call, not mutate).
+check "GUI launches are covered via launchctl setenv" \
+  grep -q "setenv OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS true" "$LAUNCHCTL_LOG"
 
 HOME_CLA="$WORK/home-cla"; mkdir -p "$HOME_CLA"
 env HOME="$HOME_CLA" SHELL=/bin/zsh bash "$REPO/install.sh" "$T_DEFAULT" >/dev/null 2>&1
@@ -148,18 +167,24 @@ refute "a claude-only install touches no shell profile" \
   grep -qs OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS "$HOME_CLA/.zshrc"
 
 HOME_OPT="$WORK/home-opt"; mkdir -p "$HOME_OPT"
+: > "$LAUNCHCTL_LOG"
 env HOME="$HOME_OPT" SHELL=/bin/zsh bash "$REPO/install.sh" --harness=opencode --no-background-subagents-env "$T_BOTH" >/dev/null 2>&1
 refute "--no-background-subagents-env writes nothing" \
   grep -qs OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS "$HOME_OPT/.zshrc"
+refute "--no-background-subagents-env skips machine-level wiring too" \
+  grep -qs "OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS" "$LAUNCHCTL_LOG"
 
 # update brings the env wiring to an EXISTING opencode install too.
 ENV_UPD="$WORK/env-upd"; mkdir -p "$ENV_UPD/.opencode/plugin" "$ENV_UPD/company/state"
 cp "$REPO/.opencode/plugin/company-harness.js" "$ENV_UPD/.opencode/plugin/" 2>/dev/null
 printf '{}' > "$ENV_UPD/company/state/install-manifest.json"
 HOME_UPD="$WORK/home-upd"; mkdir -p "$HOME_UPD"
+: > "$LAUNCHCTL_LOG"
 env HOME="$HOME_UPD" SHELL=/bin/bash bash "$REPO/update.sh" "$ENV_UPD" >/dev/null 2>&1
 check "updating an existing opencode project wires the env (bash rc)" \
   grep -q '^export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true$' "$HOME_UPD/.bashrc"
+check "update also covers GUI launches" \
+  grep -q "setenv OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS true" "$LAUNCHCTL_LOG"
 env HOME="$HOME_UPD" SHELL=/bin/bash bash "$REPO/update.sh" --check "$ENV_UPD" >/dev/null 2>&1
 refute "--check never writes the env" \
   bash -c "test \"\$(grep -c claude-company '$HOME_UPD/.bashrc')\" -gt 1"
