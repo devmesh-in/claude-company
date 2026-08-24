@@ -27,6 +27,10 @@ trap cleanup EXIT
 # FAKEBIN shadows launchctl (and would shadow powershell.exe) for EVERY
 # install/update this suite runs, so the env-wiring branches record instead of
 # mutating the developer's real machine. Set up before the first invocation.
+# uname is shadowed to Darwin so the launchctl branch is exercised and pinned
+# identically on every platform CI runs - a branch that only fires on macOS
+# would otherwise be tested nowhere, since CI's macOS runner is the one place
+# a stray real call could not be tolerated either.
 FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
 LAUNCHCTL_LOG="$WORK/launchctl.log"
 cat > "$FAKEBIN/launchctl" <<STUB
@@ -35,6 +39,14 @@ printf '%s\n' "\$*" >> "$LAUNCHCTL_LOG"
 exit 0
 STUB
 chmod +x "$FAKEBIN/launchctl"
+cat > "$FAKEBIN/uname" <<STUB
+#!/usr/bin/env bash
+case "\$*" in
+  -s) echo Darwin ;;
+  *)  /usr/bin/uname "\$@" ;;
+esac
+STUB
+chmod +x "$FAKEBIN/uname"
 PATH="$FAKEBIN:$PATH"
 export PATH
 
