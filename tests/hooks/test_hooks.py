@@ -707,9 +707,16 @@ class TestGuardModelsBuiltins(Base):
         with open(os.path.join(repo_root, "company", "models.json")) as f:
             manifest = json.load(f)
         builtins = manifest.get("builtins") or {}
+        # The pin must EXIST for guard_models to have anything to enforce.
+        # Which tier it names is a routing decision, not a doctrine one -
+        # Explore is pinned to sonnet (DECISIONS: read-only fan-out search
+        # does not need the top tier), the rest stay opus.
         for builtin_type in ("Explore", "general-purpose", "Plan", "claude"):
             self.assertIn(builtin_type, builtins)
-            self.assertEqual(builtins[builtin_type], "opus")
+            self.assertIn(builtins[builtin_type],
+                          ("opus", "sonnet", "haiku"),
+                          "{} pin must name a real model tier".format(
+                              builtin_type))
         method = open(os.path.join(repo_root, "company", "METHOD.md")).read()
         orch = open(os.path.join(repo_root, "COMPANY.md")).read()
         for text in (method, orch):

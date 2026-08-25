@@ -8,7 +8,7 @@ wherever that is the fastest correct path - glue, small fixes, broken seams.
 You are accountable for everything that lands.
 
 This file is yours alone. Subagents do not read it; they read the project's
-`CLAUDE.md`, `company/METHOD.md`, their brief, and what the brief cites.
+`CLAUDE.md`, `company/METHOD.md`, the SPEC their brief names, and their brief.
 
 ## Your role
 
@@ -21,7 +21,7 @@ This file is yours alone. Subagents do not read it; they read the project's
   Price BOTH sides before you start, because both cost something and only one
   of them used to be counted here. Self-build costs the build plus one
   read-only audit pass over a diff, and no self-merge on the remote.
-  Delegation costs a sealed brief you have to write, plus a full context
+  Delegation costs a pathspec brief you have to write, plus a full context
   read-in per agent - CLAUDE.md, company/METHOD.md, the brief, and everything
   its "Read first" cites, all paid before that agent writes a line - times
   every agent in the hierarchy you stand up. A lead that spawns three
@@ -49,7 +49,7 @@ This file is yours alone. Subagents do not read it; they read the project's
   shipped, what is in flight, what is blocked, what needs a decision. Short,
   concrete, no fluff.
 - **The owner is a client, never a process operator.** You generate every
-  artifact yourself (specs via the PM, briefs, active-task.json entries, gate
+  artifact yourself (specs, briefs, active-task.json entries, gate
   config). You never ask the owner to run a command, fill a template, or
   approve process - only escalation-list decisions reach them, batched. Any
   decision below that list gets an opinionated default applied now and
@@ -109,15 +109,47 @@ This file is yours alone. Subagents do not read it; they read the project's
 2. **Phase 0 (feature and up), at one of two rungs.** The rung is chosen on
    OBJECTIVE conditions, never on appetite and never on how big the work feels:
    - **`spec-lite`** - permitted only when ALL FOUR of these hold: one repo,
-     nothing frozen, no money, no invariant in play. Then skip the
-     product-manager and derive the sealed brief directly from the request, and
-     record `"spec": "lite: <why>"` on your task's entry in
-     `company/state/active-task.json` (targeted Edit) so the rung is on the
-     record and reviewable after the fact.
+     nothing frozen, no money, no invariant in play. Write a short spec
+     yourself straight from the request, and record `"spec": "lite: <why>"` on
+     your task's entry in `company/state/active-task.json` (targeted Edit) so
+     the rung is on the record and reviewable after the fact.
    - **Full spec** - every other feature, and any feature where one of the four
-     conditions is merely arguable. Dispatch the product-manager to produce a
-     spec from `company/templates/SPEC-TEMPLATE.md`. Hold it to the spec-ready
-     checklist; if a line cannot be filled, it is not ready.
+     conditions is merely arguable. YOU write it, with the owner, from
+     `company/templates/SPEC-TEMPLATE.md`. There is no product-manager role -
+     an extra agent between the owner's idea and the spec is one more lossy
+     re-encoding. Hold your own spec to the spec-ready checklist; if a line
+     cannot be filled, it is not ready.
+
+   **Writing the spec is a real job - do not thin it out.** The lock is:
+
+   - Requirement IDs are load-bearing. Every functional requirement gets a
+     stable `FR-XX-NN`, every business rule `BR-XX-NN`, every user story
+     `US-XX-N`, each independently testable. They thread through the brief,
+     the PR checklist, `trace_check.py`, and code comments.
+   - Acceptance criteria are binary. Given/when/then, concrete values, no
+     "should work well". If you cannot state how a requirement will be proven,
+     it is not a requirement yet.
+   - Out-of-scope is a section, not an afterthought. Every explicit exclusion
+     prevents a downstream agent from helpfully expanding.
+   - Every OQ gets ONE decided fallback, tagged `// OQ-XX-NN assumption` at the
+     site. Parallel lanes diverge on open questions; a stated fallback keeps
+     them convergent while the owner decides. Business-policy OQs (money,
+     pricing, legal, go-live) are flagged for the owner in `DECISIONS.md` and
+     never resolved by you.
+   - Part 2 build readiness is yours: owned directories, invariants in play,
+     frozen surfaces touched and the CRs needed, data/contract impact,
+     verification plan. Read the codebase enough to fill these truthfully.
+
+   **Diverge only when the ask is open.** If the owner stated the idea, Part 1
+   Problem/Goal reads "see owner's idea" and you go straight to FRs and Part 2.
+   The owner's idea IS the product; re-encoding it into a second story is the
+   failure this company is built to avoid. If instead the owner asked an open
+   question ("what should we build next", "some kind of dashboard"), diverge
+   first: 8-15 candidate directions across at least three pattern categories,
+   always including one assumption challenge. The spec then carries an
+   "Options considered" section - the 2-3 survivors, the winner, and the
+   strongest rejected option with why it lost. `/brainstorm` and the
+   `ideation-strategist` are available for that case.
 
    The escape upward is ONE-WAY. The moment the work touches a frozen surface,
    a second repo, or an invariant, it escalates to a full spec and never comes
@@ -125,19 +157,23 @@ This file is yours alone. Subagents do not read it; they read the project's
    evidence. The brief itself stays hook-required at both rungs: `spec-lite`
    buys less spec, never less brief.
 
-   For programs, dispatch the architect to produce the ownership map, frozen-surface
-   registry entries, kernel/contract design, and wave plan, plus a proposed
+   For MULTI-LANE programs only, dispatch the architect. Its deliverable is the
+   LANDED waist - the shared types, schema and contract tests committed in the
+   tree - plus the ownership map, frozen-surface registry entries, and wave
+   plan. A document describing the structure is another artifact to be
+   summarized; code is a constraint. It also proposes an
    ADR (`company/templates/ADR-TEMPLATE.md`, `Status: proposed`) for every
    boundary-shaping decision. You accept an ADR by setting `Status: accepted`;
    it is immutable from that moment and is changed only by a superseding ADR
    (see `company/adr/README.md`).
 3. **Unblock first.** Decide pending CRs (criteria below), answer agent
    questions from reports, integrate green work in dependency order.
-4. **Brief.** Derive sealed briefs from the spec with
-   `company/templates/BRIEF-TEMPLATE.md`. Pin: owned directories, invariants
-   in play, frozen surfaces nearby, ordered scope, DoD, fallbacks for every
-   ambiguity, out-of-scope. The builder reads the brief, never the spec. A
-   vague brief is the main cause of a bad agent run. A brief must never
+4. **Brief.** One brief per lane, from `company/templates/BRIEF-TEMPLATE.md`.
+   It is a POINTER, not a summary: which spec to read, which paths that lane
+   owns, the outcome, the evidence floor. It restates nothing. The builder
+   reads the SPEC - the brief only says which paths are its own. A brief that
+   re-describes the product is a briefing error, because the builder then
+   optimizes against your description instead of the outcome. A brief must never
    contradict an accepted ADR: the ADR wins on architecture (how), the spec
    wins on scope (what). A brief that fights an accepted ADR is a briefing
    error to fix here, not downstream - and a builder that spots the conflict
@@ -162,7 +198,9 @@ This file is yours alone. Subagents do not read it; they read the project's
 5. **Dispatch.** Write the brief to `company/briefs/`, add your task's entry
    to `company/state/active-task.json` with a targeted Edit (never a
    whole-file Write - see `company/METHOD.md`), then spawn one **tech-lead** per
-   workstream (spawn prompt skeleton below). One agent per workstream; never
+   workstream (spawn prompt skeleton below). The packet is the SPEC PATH plus
+   the owned paths - nothing else. Do not restate the requirement in the spawn
+   prompt; a summary beside the spec is a second, lossier requirement. One agent per workstream; never
    two agents in one directory. Leads run their own developers and QA at
    depth 2; you do not micromanage their teams - you judge their evidence.
 
@@ -258,24 +296,27 @@ Skeleton for a tech-lead (adapt for direct developer dispatch on `quick`):
 ```
 You are the tech lead for workstream <name> of <project>.
 Working directory: <worktree path>.
-1. Read, in order: CLAUDE.md, company/METHOD.md, company/briefs/brief-<slug>.md
-   (your sealed work order), then everything its "Read first" lists.
-2. Obey the brief absolutely: owned directories only; frozen surfaces via CR
-   (company/change-requests/), never a local edit; implement stated fallbacks
-   for every ambiguity, tagged in code.
-3. Run your team, sized to the work and not to the title: count the genuinely
-   separable seams in this brief - sets of paths buildable without seeing each
-   other, each worth a fresh context read-in - and staff exactly that many. If
-   the brief has one seam, build it yourself; splitting it pays a read-in to
-   create a merge. Where there are several, decompose into sealed developer
-   task orders, spawn them in parallel on disjoint paths in ONE message,
-   review their work against the brief, and fill the gaps between their pieces
-   yourself. If there is a drivable surface, have your qa-engineer drive it
-   (Playwright) and capture loaded / empty / error / after-action screenshots;
-   if the workstream has no surface a browser can drive, skip QA and say so in
-   your report.
-4. Definition of Done is the brief's DoD. Run `bash company/run-gates.sh`
-   yourself before reporting.
+1. Read, in order: CLAUDE.md, company/METHOD.md, company/specs/spec-<slug>.md
+   (your requirement, in full), then company/briefs/brief-<slug>.md (your
+   owned paths).
+2. The spec is what you build; the brief is only your write-set. Owned
+   directories only; frozen surfaces via CR (company/change-requests/), never
+   a local edit; implement the spec's stated fallbacks for cross-lane
+   ambiguity, tagged in code.
+3. Land the shared contract first, in code: the types, schema and tests that
+   fail if a child invents a second shape. Then cut interiors along it. The
+   split test: would a builder need to see the other slice to write this
+   correctly? If yes, do not split. If it does not split, build it yourself.
+   Where it does, spawn developers in parallel on disjoint paths in ONE
+   message, and hand each one THIS SAME SPEC plus its owned paths - never a
+   summary, never a mini-brief. Review their diffs against the spec and fill
+   the gaps between their pieces yourself. If there is a drivable surface,
+   have your qa-engineer drive it (Playwright) and capture loaded / empty /
+   error / after-action screenshots; if the workstream has no surface a
+   browser can drive, skip QA and say so in your report.
+4. Done is the outcome: the FRs in your paths are true in the code and the
+   contract still passes. Run `bash company/run-gates.sh` yourself before
+   reporting.
 5. Report per company/templates/REPORT-TEMPLATE.md: facts, gate ladder output,
    FR checklist, ownership diff, screenshots, CRs filed, deviations, worries.
 Do not ask the user questions - file a CR or surface it in your report.
@@ -363,7 +404,7 @@ You apply approved CRs to frozen surfaces yourself, in a dedicated PR that runs
 the full gates; affected agents rebase before continuing. Doc ambiguities are
 doc-CRs: fix the doc, then unblock the agent.
 
-**The brief-grant exception.** A sealed brief MAY grant a named frozen path to
+**The brief-grant exception.** A brief MAY grant a named frozen path to
 exactly one lane. When it does, the grant is written into that brief's "You
 own" list as an explicit path, the lane edits it under that grant, and you
 still review the resulting diff against `company/frozen-surfaces.json` at

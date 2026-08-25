@@ -68,15 +68,12 @@ The main Claude session. Dispatches the other roles, arbitrates change requests,
 verifies and integrates finished work, and reports upward. Writes only glue code
 and small fixes itself.
 
-### Product manager
-
-Owns Phase 0. Turns a request into a spec-ready document with requirement IDs
-and a decided fallback for every open question.
-
 ### Architect
 
-Owns structure before build. For a `program`, produces the ownership map, the
-frozen-surface list, and the wave plan with hard exit criteria.
+Owns structure before build. For a multi-lane `program`, lands the shared
+contract in code and produces the ownership map, the frozen-surface list, and
+the wave plan with hard exit criteria. There is no product-manager role: Phase
+0 specs are written by the CEO with the owner.
 
 ### Tech lead
 
@@ -86,8 +83,9 @@ QA, runs the gates, and reports upward with evidence.
 
 ### Developer
 
-Builds exactly what its task order says, inside its owned directories, in an
-isolated worktree. Never redefines the plan, because it does not own the plan.
+Makes the spec's outcome true inside its owned directories, in an isolated
+worktree. It reads the same spec the lead read, and owns the quality of its
+own slice. It may not widen its directories or redefine the shared contract.
 
 ### QA engineer
 
@@ -126,8 +124,9 @@ team, QA evidence, verify, integrate.
 
 ### program
 
-A multi-workstream build such as a v1 or a large subsystem. The architect
-produces an ownership map and wave plan; leads run in parallel within each wave.
+A multi-workstream build such as a v1 or a large subsystem. The architect lands
+the shared contract and produces an ownership map and wave plan; leads run in
+parallel within each wave.
 
 ### hotfix
 
@@ -143,14 +142,15 @@ The company communicates through typed documents, not long conversations.
 ### Options memo
 
 Numbered ideas with reasoning, a scored recommendation, and the strongest
-rejected option. Written by the product manager (in a spec) or the CEO for
-the owner. There is no dedicated strategist role in the default payload.
+rejected option. Written by the CEO for the owner, and folded into the spec
+when the owner's ask was open rather than a stated idea.
 
 ### Spec
 
-The rich, human-facing requirements document produced in Phase 0. Carries stable
-requirement IDs, acceptance criteria, and the options considered. Builders never
-read the spec directly; they read the brief derived from it.
+The requirements document produced in Phase 0, written by the CEO with the
+owner. Carries stable requirement IDs, acceptance criteria, and a decided
+fallback per open question. It is replicated verbatim to every agent that
+builds against it - never summarized into a substitute.
 
 ### Requirement ID (FR / BR / OQ)
 
@@ -162,17 +162,18 @@ assumed.
 
 ### Brief
 
-The lean execution slice derived from the spec: mission, read-first list, owned
-directories, invariants in play, nearby frozen surfaces, ordered scope,
-definition of done, fallbacks, and out-of-scope. This is what a builder actually
-reads. A vague brief is the main cause of a bad agent run.
+A pointer, not a summary: which spec to read, which directories this lane owns,
+the outcome, and the evidence floor. It restates nothing. A brief that
+re-describes the product is a briefing error, because the builder then
+optimizes against the description instead of the outcome.
 
 ### Work order (task order)
 
-The directive that puts an agent to work inside named directories with a defined
-scope. A brief is the work order for a whole workstream; a task order is the
-developer-level slice a tech lead hands down. Source-code changes with no
-approved work order are hook-blocked.
+The directive that puts an agent to work inside named directories. It is the
+spec plus a pathspec: the same requirement everyone else got, and a smaller set
+of paths. There is no separate developer-level task order - a lead hands down
+the spec it read, never a summary of it. Source-code changes with no approved
+work order are hook-blocked.
 
 ### Report
 

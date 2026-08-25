@@ -36,16 +36,14 @@ A feature moves through separated roles, each checking the one before:
 sequenceDiagram
     actor You
     participant CEO
-    participant PM as product-manager
     participant TL as tech-lead
     participant Dev as developers (parallel)
     participant QA as qa-engineer
 
     You->>CEO: build me X
-    CEO->>PM: dispatch: write the spec
-    PM-->>CEO: spec: options considered, FR ids, fallbacks
-    CEO->>TL: sealed brief, isolated worktree
-    TL->>Dev: task orders on disjoint directories
+    Note over CEO: writes the spec with you:<br>FR ids, fallbacks, verification plan
+    CEO->>TL: spec + owned paths, isolated worktree
+    TL->>Dev: the SAME spec + disjoint paths each
     Dev-->>TL: code + evidence reports
     Note over TL: fills the gaps between pieces
     TL->>QA: drive the running app
@@ -59,9 +57,9 @@ sequenceDiagram
 
 The structure copies what makes real engineering organizations work: separated roles with separated incentives.
 
-- **Thinkers and builders are different agents.** The product manager and architect explore options and write plans. Developers build. A builder never quietly redefines the plan, because it never owns the plan.
+- **Everyone builds against the same requirement.** The CEO writes the spec and every agent below reads that same file. Nobody works from a summary of it, because a summary is a proxy and agents optimize proxies perfectly while the product stays hollow.
 - **Producers never grade their own work.** Each layer catches what the layer below was too close to see: developers report, leads verify, QA captures, the CEO judges, an auditor rechecks the big merges.
-- **Everyone owns their own directories.** Work orders name the exact directories an agent may touch. Two agents never share one directory, so parallel work cannot collide.
+- **Everyone owns their own directories.** Work orders name the exact directories an agent may touch. Two agents never share one directory, so parallel work cannot collide. Narrowing what an agent may WRITE is not a reason to narrow what it may KNOW.
 
 The hierarchy stays shallow on purpose: the CEO, then tech leads, then their developers and QA. Deeper pyramids add token cost and lose information at every handoff.
 
@@ -71,14 +69,14 @@ The company runs on a few typed documents rather than long conversations:
 
 | Artifact | Written by | Read by | What it carries |
 |---|---|---|---|
-| Options memo | product-manager + CEO | you | Numbered ideas with reasoning, scored recommendation, the strongest rejected option |
-| Spec | product-manager | CEO | Requirements with stable ids (FR-01, FR-02), acceptance criteria, options considered |
-| Brief | CEO | one builder | Mission, owned directories, definition of done, a decided fallback per ambiguity |
+| Options memo | CEO | you | Numbered ideas with reasoning, scored recommendation, the strongest rejected option |
+| Spec | CEO, with you | every agent that builds | Requirements with stable ids (FR-01, FR-02), acceptance criteria, a decided fallback per ambiguity |
+| Brief | CEO | one builder | Which spec to read, which directories that builder owns, the outcome. It restates nothing |
 | Report | every agent | its dispatcher | Facts only: the diff, gate output, screenshots, deviations |
 
 Two design choices matter most:
 
-- **Builders read the [brief](glossary.md#brief), never the [spec](glossary.md#spec).** The spec is rich and human-facing; the brief is the lean slice derived from it. The builder's context stays small and its instructions stay exact.
+- **Builders read the [spec](glossary.md#spec); the [brief](glossary.md#brief) only says which paths are theirs.** Intent is copied down verbatim, never compressed. The write-set is what gets decomposed.
 - **Ambiguity is handled once, in writing.** Every open question gets one decided fallback, so ten parallel agents make the same assumption instead of ten different ones. Questions only a human should answer wait in `company/state/DECISIONS.md` while the build proceeds on the fallback.
 
 ## The gates

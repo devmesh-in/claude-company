@@ -18,9 +18,10 @@ Invariant. Second workstream. One-way: does not come back.
 
 ## The run
 
-1. Ten-line brief to `company/briefs/brief-<slug>.md` (mission, owned paths,
-   DoD, out of scope). Same text in the spawn prompt. `guard_spec` requires
-   the file; it is also the copy that survives this session dying.
+1. Short spec to `company/specs/spec-<slug>.md`, then a pointer brief to
+   `company/briefs/brief-<slug>.md` (spec link, owned paths, outcome). The
+   spawn prompt carries the spec path plus the paths - not a restatement.
+   `guard_spec` requires the brief file; it also survives this session dying.
 2. Targeted Edit adding your entry in `company/state/active-task.json`.
    Classify honestly (`quick` or `feature`). Never rewrite the whole file.
 3. One `developer` in a worktree

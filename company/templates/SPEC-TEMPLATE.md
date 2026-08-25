@@ -1,15 +1,19 @@
 # SPEC: <feature name>
 
-_Type: feature | program-module. Author: product-manager. Date: YYYY-MM-DD._
+_Type: feature | program-module. Author: CEO, with the owner. Date: YYYY-MM-DD._
 _Status: DRAFT | SPEC-READY | SHIPPED (move to company/specs/shipped/ when shipped)._
 
-The spec is rich and human-facing; it can be long. The builder agent NEVER
-reads it - it reads the brief derived from it. Reference, do not embed.
+This file is replicated verbatim to every builder at every level. It is the
+requirement they work against, not a document that gets compressed into one.
+Keep it readable and keep it honest; do not write a second story on top of the
+owner's idea.
 
 ## Part 1 - Product requirements
 
 ### Problem
-What hurts, for whom, and what it costs today. No solutions here.
+What hurts, for whom, and what it costs today. No solutions here. When the
+owner already stated the idea, this is "see owner's idea" and you move on -
+re-encoding an idea the owner gave you adds a lossy hop and buys nothing.
 
 ### Goal and success metrics
 The observable outcome that means this worked. Binary where possible.
@@ -63,7 +67,8 @@ Phase 0: caught before any build tokens are spent.
 - [ ] Data/contract impact stated (or "none")
 - [ ] Verification plan covers every FR
 
-## Part 3 - Brief handoff
+## Part 3 - Handoff
 
-Derive the brief(s) with `company/templates/BRIEF-TEMPLATE.md`. The brief links
-this spec; it does not embed it.
+Write one brief per lane with `company/templates/BRIEF-TEMPLATE.md`. The brief
+is a pathspec pointer to this file: which paths that lane owns, and nothing
+else. It never restates, summarizes or replaces what is written here.

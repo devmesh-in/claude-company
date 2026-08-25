@@ -329,14 +329,18 @@ class DoctrineClauses(unittest.TestCase):
                 "full-surface sweep",
             ])
 
-    # -- company/templates/BRIEF-TEMPLATE.md -------------------------------
+    # -- .claude/agents/developer.md ---------------------------------------
 
     def test_fr_hp_60_test_quality_dod(self):
         """FR-HP-60: the four test-quality clauses. The deletion clause is the
         one that keeps a rework diff honest - accreted dead tests read as
         coverage of behavior that no longer exists.
+
+        These live in the AGENT definition, not the brief. Standing craft is
+        replicated to every spawn; a per-task brief that restates it is the
+        compression this harness removed.
         """
-        self.assertClauses("company/templates/BRIEF-TEMPLATE.md", "FR-HP-60", [
+        self.assertClauses(".claude/agents/developer.md", "FR-HP-60", [
             "falsifiable",
             "restating-implementation",
             "extend the existing test file",

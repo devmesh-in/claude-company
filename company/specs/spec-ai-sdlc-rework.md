@@ -145,11 +145,14 @@ clean delegated build cannot skip independent read.
 
 - **FR-ASR-01:** `company/METHOD.md` opens with the four-law philosophy
   preamble (attention, evidence, scripts-sense-judges-judge, mechanism-or-dead)
-  and the DECISIONS #21 standing test. Frozen-surface doctrine in the same
-  file describes merge-time drift detection, not mid-flight `surfaces[]`
-  blocking.
+  and the DECISIONS #21 standing test. Law 1 scopes scarcity to the WRITE-SET:
+  intent is replicated verbatim to every spawn, never compressed into a proxy,
+  and judgment about how to hit the outcome is required inside the slice.
+  Frozen-surface doctrine in the same file describes merge-time drift
+  detection, not mid-flight `surfaces[]` blocking.
   - AC: the four laws are present as numbered prose; no sentence claims a
-    script judges situational intent.
+    script judges situational intent; no sentence claims a builder does not
+    read the spec.
 - **FR-ASR-02:** Delete `.claude/hooks/risk_score.py` and every live
   reference (COMPANY.md step 6, doctrine tests that pin the invocation,
   models/docs that treat the band as a dispatch trigger). Audit-by-default
@@ -246,19 +249,29 @@ clean delegated build cannot skip independent read.
   names an opt-in security pass via EXTENDING.md, not a missing agent file).
   - AC: auditor.md does not mention risk band, provenance ledger recording,
     or `DO-NOT-SHIP` as a token the reader must avoid for a deleted parser.
-- **FR-ASR-15:** Company skill and `tech-lead.md` carry the three-part
-  subtask test: (1) self-contained in two sentences, (2) names its
-  mechanical oracle, (3) fits one context window with room. Single-agent-first
-  escalation only on named failure modes (context pressure, genuine parallel
-  seams). CEO context budget: leads return summaries not transcripts;
-  routine restart at the threshold in OQ-ASR-07.
+- **FR-ASR-15:** Company skill and `tech-lead.md` carry the SPLIT test: would
+  a builder need to see the other slice to write this correctly? If yes, do
+  not split. The lead lands the shared contract in code (types, schema, tests
+  that fail on a second shape) before cutting interiors, and every spawned
+  packet is the SAME spec plus a smaller pathspec - never a mini-brief and
+  never a restatement. Single-agent-first escalation only on named failure
+  modes (context pressure, genuine parallel seams). CEO context budget: leads
+  return summaries not transcripts; routine restart at the threshold in
+  OQ-ASR-07.
+  - AC: no agent definition or skill instructs an agent to write a
+    self-contained task order in place of handing down the spec.
 - **FR-ASR-16:** `company/templates/REPORT-TEMPLATE.md` hard summary budget
   (~1-2k tokens: facts, pasted ladder, FR checklist). Bulky evidence lives
   under `company/evidence/<slug>/` and is referenced by path.
-- **FR-ASR-17:** `company/templates/BRIEF-TEMPLATE.md`: each ordered Scope
-  step names the mechanical oracle that proves it done. Frozen-surface note
-  describes the merge-time drift model (undeclared `surfaces[]` change
-  blocks at commit), not mid-flight CR-or-stop.
+- **FR-ASR-17:** `company/templates/BRIEF-TEMPLATE.md` is a pathspec pointer:
+  the spec link, `## You own`, the outcome, and a short evidence floor (gates
+  green, no edits outside owned paths, tests for what was built, MODULE.md).
+  It carries no Mission, no ordered Scope and no DoD checklist - a checklist
+  is a proxy, and a builder optimizing a proxy hits it while the product stays
+  hollow. Frozen-surface note describes the merge-time drift model (undeclared
+  `surfaces[]` change blocks at commit), not mid-flight CR-or-stop.
+  - AC: `## You own` with backticked path bullets survives, so
+    `seam_check.parse_you_own` still resolves ownership.
 - **FR-ASR-18:** Dedup sweep across `.claude/agents/*.md` and the
   company skill: remove lines that restate what hooks enforce, and all
   live references to STATUS.md, ideation, standup, risk_score,
@@ -289,6 +302,31 @@ clean delegated build cannot skip independent read.
   - AC: `import guard_provenance as g; g.audit_verdict("Verdict: HALT.")`
     still returns `do-not-ship`; settings.json does not invoke the shim as a
     hook.
+- **FR-ASR-23:** Intent replication. Every spawn packet at every depth carries
+  the spec path; no layer summarizes the spec into a substitute. `COMPANY.md`
+  dispatch skeleton, `tech-lead.md` and `developer.md` all state that the
+  pathspec narrows what may be WRITTEN, not what may be KNOWN.
+- **FR-ASR-24:** Outcome DoD. A builder's done is "the FRs in your paths are
+  true in the code and the shared contract still passes", followed by the
+  mechanical evidence floor. The FR-HP-60 test-quality clauses move from
+  BRIEF-TEMPLATE to `.claude/agents/developer.md`, where they are replicated
+  every spawn, and `tests/hooks/test_doctrine_canon.py` asserts them there.
+- **FR-ASR-25:** Waist as code. The shared contract is committed types, schema
+  and seam tests before interiors are cut - not a document describing them.
+  Owned by the tech lead on a single lane, by the architect on a multi-lane
+  program.
+- **FR-ASR-26:** The product-manager role is deleted (`.claude/agents/`,
+  `company/models.json`, `.opencode/`). Its lock - stable FR/BR/US ids, binary
+  acceptance criteria, explicit out-of-scope, one decided fallback per OQ,
+  Part 2 build readiness, the spec-ready checklist - moves verbatim into
+  `COMPANY.md` step 2 as the CEO's own job.
+- **FR-ASR-27:** Divergence is conditional. When the owner states the idea,
+  Part 1 reads "see owner's idea" and no options memo is produced. When the
+  owner's ask is open, the CEO runs the 8-15 direction divergence and the spec
+  carries an "Options considered" section.
+- **FR-ASR-28:** The architect is a default only for MULTI-LANE programs;
+  single-lane contract work belongs to the tech lead. `company/EXTENDING.md`
+  states the narrowing.
 
 ### Business rules and validations
 

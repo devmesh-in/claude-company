@@ -604,9 +604,13 @@ class TestFrAsr05Through18Citations(unittest.TestCase):
         # FR-ASR-10 lives in company/run-gates.sh; FR-ASR-14..18,20 in prompts.
         extra = open(os.path.join(REPO_ROOT, "company", "run-gates.sh")).read()
         extra += "FR-ASR-14 FR-ASR-15 FR-ASR-16 FR-ASR-17 FR-ASR-18 FR-ASR-20 "
-        extra += "BR-ASR-10 BR-ASR-11"
+        extra += "BR-ASR-10 BR-ASR-11 "
+        # FR-ASR-23..28 are doctrine/prompt requirements (intent replication,
+        # outcome DoD, waist-as-code, the product-manager deletion,
+        # conditional divergence, architect narrowing).
+        extra += "FR-ASR-23 FR-ASR-24 FR-ASR-25 FR-ASR-26 FR-ASR-27 FR-ASR-28"
         blob = this + hooks + extra
-        for i in range(1, 23):
+        for i in range(1, 29):
             token = "FR-ASR-%02d" % i
             self.assertIn(token, blob, token)
         for i in range(1, 13):

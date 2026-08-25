@@ -89,9 +89,10 @@ Two standing doctrines:
 
 ## Who runs what
 
-- **product-manager**: divergence is mandatory before any spec (8-15
-  directions, at least 3 pattern categories); the spec carries an "options
-  considered" section.
+- **CEO**: divergence before a spec when the owner's ask is OPEN (8-15
+  directions, at least 3 pattern categories); the spec then carries an
+  "options considered" section. When the owner already stated the idea,
+  skip it - re-encoding a stated idea buys nothing.
 - **architect**: the solutioning gate - 2-3 scored architecture options
   before any program build; the memo shows the scoring.
 - **ideation-strategist**: deep divergence on demand. For big engagements
