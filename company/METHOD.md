@@ -81,7 +81,8 @@ Every FR/BR ID in a live spec must appear in a test and in source (BR-ASR-10).
    that built something never judges it done. Developers report with evidence;
    tech leads re-check against the brief; QA drives the running product and
    captures screenshots but does not judge them; leads and the CEO judge. The
-   CEO re-runs gates, diff-checks ownership, and spot-reads before integrating.
+   CEO runs the gates that cover the change (or stamps a run already done
+   this session), diff-checks ownership, and spot-reads before integrating.
    The auditor is dispatched on every merge; its brief is the negation of the
    builder's ("prove this broken"). Self-authored main-checkout work is not a
    special provenance ledger gate - it is the same falsification audit.

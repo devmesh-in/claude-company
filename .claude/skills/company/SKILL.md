@@ -66,11 +66,12 @@ are losing the plot, restart and re-read RESUME.
 
 ## Verify, then integrate
 
-Never accept a self-report. Confirm the stamp with
-`python3 .claude/hooks/gate_stamp.py --check`. Run
-`bash company/run-gates.sh` only if the stamp is missing, red, or stale.
-Diff-check ownership. Spot-read. Judge QA screenshots yourself. Dispatch
-the auditor on every merge (its brief is the negation of the builder's).
+Never accept a self-report. Run the gates that cover the change. If you
+already ran them this session, stamp from those results and move on. Do
+not treat `gate_stamp.py --check` as a step. Do not re-run because a
+prompt, notes file, or README moved. Diff-check ownership. Spot-read.
+Judge QA screenshots yourself. Dispatch the auditor on every merge (its
+brief is the negation of the builder's).
 
 Merge is integration. Deploy is an owner step. Keep RESUME/WORRIES current.
 

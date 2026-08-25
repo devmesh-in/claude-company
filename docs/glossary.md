@@ -234,14 +234,15 @@ reaches the network).
 ### Stamp (gates.status)
 
 The recorded result of the last gate run, fingerprinted against the working
-tree and written to `company/state/gates.status`. The stamp is what gives gates
-teeth: a bare pass is not enough, the pass has to match the current tree.
+tree and written to `company/state/gates.status`. It is a lock on `git commit`,
+not a second opinion on the code. The gates themselves are the quality check.
 
 ### Stale
 
-The state of a stamp after any tracked file changes since the gates ran. A stale
-stamp counts as not-passing, so "it passed earlier" stops mattering. Nobody,
-including the CEO, can commit past a red or stale stamp.
+The state of a stamp after gated content changed. A stale stamp blocks
+commit until you write a new one. If you already ran the project's gates
+this session, stamp from those results. Do not re-run because a prompt,
+notes file, or README moved.
 
 ### Witness
 

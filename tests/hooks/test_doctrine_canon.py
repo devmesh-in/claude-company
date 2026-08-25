@@ -332,13 +332,12 @@ class DoctrineClauses(unittest.TestCase):
     # -- .claude/agents/ ---------------------------------------------------
 
     def test_fr_hp_51_auditor_verifies_the_stamp(self):
-        """FR-HP-51: the auditor checking the stamp instead of re-running the
-        ladder the CEO runs in parallel is what makes an audit cheap enough to
-        be mandatory in the high band.
+        """FR-HP-51: the auditor does not pay the project's ladder. A stale
+        stamp is a finding, not a second suite run.
         """
         self.assertClauses(".claude/agents/auditor.md", "FR-HP-51", [
-            "gate_stamp.py --check",
-            "missing, red, or stale",
+            "Do not run the project's ladder",
+            "finding, not a reason",
         ])
 
     def test_fr_hp_52_delta_scoped_re_audit(self):

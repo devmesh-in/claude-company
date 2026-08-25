@@ -94,8 +94,8 @@ stateDiagram-v2
     Unstamped --> Green: run gates, all pass
     Unstamped --> Red: any gate fails
     Red --> Green: fix the cause, rerun
-    Green --> Stale: any tracked file changes
-    Stale --> Green: rerun gates
+    Green --> Stale: gated content changes
+    Stale --> Green: stamp a run you already have, or rerun if the change can break a gate
     Green --> [*]: git commit allowed
     note right of Red
         commit hook blocks
@@ -103,7 +103,7 @@ stateDiagram-v2
     end note
 ```
 
-Change one file after the gates ran and the stamp goes stale, so "it passed earlier" stops counting. Nobody, including the CEO, can commit past a red or stale stamp.
+The stamp is a lock on `git commit`, not a quality judgment. Run the commands in `company/gates.config` when the change can break what they test. If you already ran them, write the stamp from those results. Do not re-run because a prompt, notes file, or README moved.
 
 The ladder runs cheap to expensive. Beyond your own tests and linter, claude-company ships mechanical rungs every project inherits:
 

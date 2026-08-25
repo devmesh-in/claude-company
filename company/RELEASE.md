@@ -27,13 +27,9 @@ gh release create v<version> --target <sha> \
 The tag must equal `v` plus `package.json`'s version or `release.yml` exits
 before publish.
 
-A version-bump commit still needs a green fresh stamp (`guard_commit`).
-Confirm `python3 .claude/hooks/gate_stamp.py --check`. Run this project's
-real suites (the ones `CLAUDE.md` names, not placeholder `run-gates.sh`)
-only if the stamp cannot support the commit. Do not re-run because you
-wrote the notes file after a green stamp: bump, stamp if needed, commit,
-then write notes, or exclude notes from the hash by committing them with
-the bump in one shot after the suites.
+A version-bump commit still needs a stamp so `guard_commit` will let it
+through. If the suites already ran this session, stamp from those results.
+Do not re-run because a notes file or prompt moved. CI is the ladder.
 
 ## Semver
 

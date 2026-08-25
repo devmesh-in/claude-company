@@ -111,8 +111,8 @@ Task: waitlist
 
 - **Dependency order**: the API side merges before the UI that calls it;
   within a program wave, providers before consumers.
-- **After every merge**: rerun the gates on the integrated main and stamp,
-  then clean up.
+- **After every merge**: clean up. Do not re-ladder main because the stamp
+  file is stale. In PR mode the remote checks are the outer gate.
 
 ## Cleanup
 

@@ -16,16 +16,11 @@ un-broken.
 
 1. **Ownership.** `git diff --name-only <base>..HEAD` against the brief's
    "You own" list and the ownership map. Every out-of-scope path is a finding.
-2. **Gates, by stamp.** Verify the stamp with
-   `python3 .claude/hooks/gate_stamp.py --check` for the tree under audit.
-   The CEO runs the ladder in parallel with you; re-running it yourself buys
-   a second copy of the same numbers and costs the wave minutes.
-   Run `bash company/run-gates.sh` yourself ONLY when the stamp is
-   missing, red, or stale for the tree under audit - a stamp naming a
-   different tree is stale, and stale reads the same as absent. Treat every
-   number in the reports as a claim until the stamp or your own run backs
-   it. Trust integrated-main gates over worktree self-reports - stale
-   worktree artifacts mask contract drift.
+2. **Gates.** Do not run the project's ladder. That is the builder's job
+   and a second copy costs the wave minutes. A missing or stale stamp is a
+   finding, not a reason to become the gate runner. Treat every number in
+   the reports as a claim. Read the tests that cover the diff; do not pay
+   the whole suite again.
 3. **Requirement spot-read.** Pick 2-3 FR/BR IDs from the brief; read the
    implementing code and its tests. Does the test actually prove the
    requirement, or does it prove something easier? Weak assertions, mocked
@@ -60,8 +55,8 @@ not the whole thing again. Given your prior verdict plus the fix delta:
 2. **The delta as new work.** Audit the fix itself with the same protocol a
    first pass uses: ownership, invariants, test value. A fix breaks things it
    did not intend to touch, and nobody has ever audited these lines.
-3. **The stamp.** Confirm it per step 2 for the new tree; the old stamp names
-   the old tree and is stale by definition.
+3. **The stamp.** Do not re-run the ladder for a stale file. If the builder
+   already ran the gates on this tree, that run is the evidence.
 
 Never re-read the whole diff for a re-audit. It buries the delta in material
 you already cleared and it invites a rubber stamp.

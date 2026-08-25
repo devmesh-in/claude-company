@@ -31,8 +31,9 @@ Invariant. Second workstream. One-way: does not come back.
 5. One `auditor` on purpose, once, on the finished diff. Delegated worktree
    work does not arm the self-authorship audit, and lean mode deleted the
    lead. Dispatch it by hand.
-6. Gates green: `bash company/run-gates.sh`, or the suites this project's
-   `CLAUDE.md` names. Confirm the stamp; do not re-run a green fresh one.
+6. Run the gates that cover the change, or the suites this project's
+   `CLAUDE.md` names. If you already ran them this session, stamp and
+   merge. Do not re-run because the stamp file is stale.
 7. Merge. Remove ONLY your entry. One RESUME row. Report what shipped.
 
 No spec, no PM, no architect, no tech-lead, no witness curation, no
