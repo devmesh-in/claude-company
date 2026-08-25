@@ -46,7 +46,7 @@ gates_detect PROPOSALS, never template edits.
 - `company/witnesses.json` (new - you create and seed it)
 
 Nothing else. Anything not listed is read-only to you. Doctrine docs
-(GATES.md, ORCHESTRATOR.md, METHOD.md, templates, agents) belong to a
+(GATES.md, COMPANY.md, METHOD.md, templates, agents) belong to a
 parallel workstream - do NOT touch them even to "help".
 
 ## Invariants in play (must not break)
@@ -146,7 +146,7 @@ parallel workstream - do NOT touch them even to "help".
 ## Integration seams
 
 - The doctrine workstream (parallel, not yours) documents your tools in
-  GATES.md/ORCHESTRATOR.md using these EXACT contract points: gate names
+  GATES.md/COMPANY.md using these EXACT contract points: gate names
   `witnesses`, `trace`, `audit`, `models`; CLI paths as above; RISK_JSON
   bands low/medium/high; witness IDs W-NNN. Keep them stable.
 - You guarantee: witness_check --check output ends with the WITNESS_JSON
@@ -185,7 +185,7 @@ Universal DoD plus:
 
 ## Out of scope
 
-- ALL doctrine/docs: GATES.md, METHOD.md, ORCHESTRATOR.md, LOOPS.md,
+- ALL doctrine/docs: GATES.md, METHOD.md, COMPANY.md, LOOPS.md,
   templates, agent definitions, company/adr/ content (parallel workstream)
 - README rows (docs-librarian pass after the wave)
 - RELEASE/acceptance/postmortem (wave 3); lessons loop; loop workers

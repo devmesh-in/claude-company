@@ -635,7 +635,7 @@ class HashBase(KernelBase):
         super(HashBase, self).setUp()
         self.init_git()
         self.write("src/app.py", "print('one')\n")
-        self.write("ORCHESTRATOR.md", "# Orchestrator\n\nDoctrine.\n")
+        self.write("COMPANY.md", "# Company\n\nDoctrine.\n")
         self.write(".claude/agents/auditor.md", "# Auditor\n\nRole.\n")
         self.commit("seed")
 
@@ -836,7 +836,7 @@ class TestHashExcludes(HashBase):
         Everything else stays in, and the tests below are the other half of
         this assertion. The kernel this was ported from drops *.md and *.txt
         wholesale on the argument that prose reaches no gate verdict. False
-        here: markdown IS this product. ORCHESTRATOR.md, METHOD.md, the agent
+        here: markdown IS this product. COMPANY.md, METHOD.md, the agent
         definitions and the skills are executable product, and no_slop,
         trace_check and guard_models all gate them. Widening this tuple toward
         the fork, in either direction, is the failure this asserts against.
@@ -846,9 +846,9 @@ class TestHashExcludes(HashBase):
             ("company/state", "company/briefs", "company/specs"),
         )
 
-    def test_editing_orchestrator_md_moves_the_hash_fr_hp_06(self):
+    def test_editing_company_md_moves_the_hash_fr_hp_06(self):
         before = self.hash()
-        self.write("ORCHESTRATOR.md", "# Orchestrator\n\nRewritten.\n")
+        self.write("COMPANY.md", "# Company\n\nRewritten.\n")
         self.assertNotEqual(self.hash(), before)
 
     def test_editing_an_agent_definition_moves_the_hash_fr_hp_06(self):

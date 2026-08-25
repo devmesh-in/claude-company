@@ -219,15 +219,6 @@
       "added_at": "2026-07-26T17:30:00Z"
     },
     {
-      "id": "W-032",
-      "task": "multi-session-tasks",
-      "file": ".claude/skills/orchestrator/SKILL.md",
-      "must_contain": "remove ONLY your entry on integration",
-      "regex": false,
-      "why": "active-task.json holds N entries; a session must add and remove only its OWN entry with a targeted Edit, or it silently drops a concurrent session's task",
-      "added_at": "2026-07-27T13:54:29Z"
-    },
-    {
       "id": "W-034",
       "task": "hp-guards",
       "file": ".claude/hooks/guard_commit.py",
@@ -298,7 +289,16 @@
       "regex": false,
       "why": "dispatch credit must stay PER-SLUG after the provenance cut",
       "added_at": "2026-08-24T21:42:32Z"
+    },
+    {
+      "id": "W-042",
+      "task": "lean-prompts",
+      "file": ".claude/skills/company/SKILL.md",
+      "must_contain": "remove ONLY your entry on integration",
+      "regex": false,
+      "why": "active-task.json holds N entries; a session must add and remove only its OWN entry with a targeted Edit, or it silently drops a concurrent session's task",
+      "added_at": "2026-08-24T23:20:40Z"
     }
   ],
-  "checksum": "2d85f146e28be59d403e8d0d8cb5300e149cdc1a4c815015a1bb936734e98e7f"
+  "checksum": "e527b14f86cd1acc1d0d3e1ff5ce276db94a88fba8aceb2d50085c526b351fa6"
 }

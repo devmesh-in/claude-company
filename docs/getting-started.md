@@ -32,14 +32,14 @@ After it finishes, your project has three new things:
 |---|---|
 | `.claude/` | The agent team, the commands, and the enforcement hooks |
 | `company/` | The process documents, templates, and state files |
-| `ORCHESTRATOR.md` | The CEO's private runbook |
+| `COMPANY.md` | The CEO's private runbook |
 
 ## Step 2: start the company
 
-Open your project in Claude Code and give the orchestrator your first request:
+Open your project in Claude Code and give the company your first request:
 
 ```text
-/orchestrator build me a REST API for tracking workouts, with user accounts
+/company build me a REST API for tracking workouts, with user accounts
 ```
 
 For one small piece of work, `/lean-company` is the same company with the hierarchy and the paperwork cut back and every gate still in force.
@@ -48,7 +48,7 @@ You do not need to initialize anything first. The company notices it is new here
 
 ```mermaid
 flowchart LR
-    A([first /orchestrator run]) --> B{company files<br>present?}
+    A([first /company run]) --> B{company files<br>present?}
     B -->|yes| E[resume from state files]
     B -->|no| C[study the codebase<br>or found a new one<br>from your request]
     C --> D[auto-detect test and lint<br>commands as gates<br>+ protect key files]
@@ -79,7 +79,7 @@ The company interrupts you for two things only:
 | Delivery | What shipped, the evidence (green gates, screenshots), what is next |
 | Your decisions | Anything involving money, deploys, or business policy, batched in `company/state/DECISIONS.md` |
 
-To check on things at any time, run `/orchestrator` with no work given. You get
+To check on things at any time, run `/company` with no work given. You get
 done, in flight, blocked, decisions you owe, and current gate status, from
 `company/state/RESUME.md` and `company/state/active-task.json`.
 
@@ -92,7 +92,7 @@ BLOCKED: git commit requires green, fresh gates.
 Fix: run `bash company/run-gates.sh` and repair any failure.
 ```
 
-This is the system working. The block message contains the fix, agents get the same messages, and most blocks resolve without you. For a production emergency, tell the orchestrator it is a hotfix: hooks then log instead of block, and the process catches up afterward.
+This is the system working. The block message contains the fix, agents get the same messages, and most blocks resolve without you. For a production emergency, tell the company it is a hotfix: hooks then log instead of block, and the process catches up afterward.
 
 ## Updating an installed project
 
@@ -106,12 +106,15 @@ claude-company update /path/to/your/project
 
 It never overwrites a file you customized. If you edited a shipped file, your version stays exactly as-is and the new upstream version lands beside it as `<file>.new` for you to reconcile at your leisure. Your own things - `company/gates.config`, your specs, briefs, and everything under `company/state` - are never touched. Anything the update does replace is backed up first to `company/state/.update-backups/<timestamp>/`, so a refresh is always reversible.
 
+`--override` is the other door: every shipped file is replaced with the packaged bytes, and payload this version no longer ships (old `/orchestrator`, `/release`, `/gates`, and `ORCHESTRATOR.md`) is deleted. No backups, no `.new`. Use it when you want this package's prompts, not a merge. Gates, specs, briefs, and `company/state` stay yours.
+
 Update keeps the CLI itself current first. Before it touches the project it makes one optional HTTPS request to the npm registry, and if a newer claude-company has shipped it hands off to that version once - so a stale `npx` cache or an old global install still applies the latest refresh. This check fails open: offline, a timeout, or a bad answer prints one WARN line and proceeds with the version you are running, so an update never bricks or hangs because the registry is away. It is the only network call update makes; the refresh itself is still fully local. (Earlier versions were fully offline.)
 
 Three flags shape the run:
 
 - `--check` prints the plan and writes nothing, so you can see what a refresh would do before it does it.
 - `--force` is only needed to override a downgrade - when the installed version is newer than the package you are running.
+- `--override` replaces every shipped file with the packaged bytes and deletes retired payload. No backups, no `.new`.
 - `--no-self-update` skips the newer-version check entirely, making no network call - update runs with the version you invoked.
 
 Update needs the same POSIX tools as install: python3, git, and bash.

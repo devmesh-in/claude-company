@@ -100,7 +100,7 @@ Three surfaces the company keeps to hold its own history honest. Each is a plain
 
 - **Architecture decisions** live in `company/adr/`, one file per decision, written from `company/templates/ADR-TEMPLATE.md`. An ADR marked `Status: accepted` is frozen by a guard: you supersede it with a new record rather than editing it. The index in `company/adr/README.md` lists every decision and the next free number.
 
-- **Release readiness** is the checklist in `company/RELEASE.md`. Edit that list to match your project's bar. `/release` prepares notes and bumps the version on `main`; you ship by publishing a GitHub release tagged `vX.Y.Z`, which runs `release.yml` and publishes to npm via OIDC. There is no local `npm publish`.
+- **Release** is in `company/RELEASE.md`. The owner ships with `gh release create` tagged `vX.Y.Z` matching `package.json`; `release.yml` publishes to npm via OIDC. There is no local `npm publish` and no `/release` skill.
 
 ## Run on opencode instead of, or alongside, Claude Code
 

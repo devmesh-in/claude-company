@@ -852,7 +852,7 @@ def _git_env(root, args, env):
 # Everything else stays IN, and that is not an oversight to be tidied up. A
 # downstream fork of this kernel drops *.md and *.txt wholesale on the argument
 # that prose decides no gate outcome. True there, FALSE here: markdown IS this
-# product. ORCHESTRATOR.md, company/METHOD.md, .claude/agents/** and
+# product. COMPANY.md, company/METHOD.md, .claude/agents/** and
 # .claude/skills/** are executable product, no_slop and trace_check and
 # guard_models all gate them, and a shipped install is mostly prose. Excluding
 # doctrine would mean a green stamp survives replacing every role in the

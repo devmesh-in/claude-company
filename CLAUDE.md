@@ -45,7 +45,7 @@ to catch you, and it is the one nobody runs by habit.
 |---|---|
 | `bin/`, `lib/`, `install`, `install.sh` | The CLI and installer that copy the payload into a project |
 | `.claude/hooks/` | The enforcement hooks (Python) and their CLIs |
-| `.claude/skills/` | Slash commands (`/orchestrator`, `/release`, `/gates`, ...) |
+| `.claude/skills/` | Slash commands (`/company`, `/lean-company`, `/company-init`, `/brainstorm`) |
 | `.claude/agents/` | The role definitions the CEO dispatches |
 | `.opencode/` | GENERATED view of `.claude/` for the opencode harness, plus the hand-written adapter. Never hand-edit: run `node lib/render-opencode.js` |
 | `company/` | The canon, templates, and state that ship into installs |

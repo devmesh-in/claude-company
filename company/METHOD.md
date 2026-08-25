@@ -1,9 +1,9 @@
 # METHOD.md - How this company works
 
 claude-company turns a repository into a small software company run by AI agents
-under one accountable orchestrator (the CEO, your main Claude session). This file
+under the company CEO (your main Claude session). This file
 is the method. Every agent reads it once and holds to it. The CEO's private
-runbook is `ORCHESTRATOR.md` (repo root); subagents never read that file.
+runbook is `COMPANY.md` (repo root); subagents never read that file.
 
 This harness is an AI SDLC, not a human SDLC with agents in the seats. Human
 process manages intent because humans have private context, misaligned
@@ -101,15 +101,15 @@ on the outside, hard-gated on the inside:
   enforcement stays mechanical.
 - **Defaults over questions.** Every decision that is not on the owner
   escalation list gets an opinionated default, applied immediately and
-  recorded (DECISIONS.md, OQ fallbacks, STATUS notes) where the owner can
+  recorded (DECISIONS.md, OQ fallbacks, RESUME) where the owner can
   veto it later. Asking is the exception; the escalation list is the whole
   list of exceptions.
 - **Interruptions are batched.** The client hears from the company twice per
   engagement in the common case: owner decisions (batched, once) and
-  delivery (evidence bundle: what shipped, gate ladder, screenshots, what is
-  next). Process narration is noise. Delivery is not done until the owner's
-  acceptance is recorded in `DECISIONS.md`; silence is not acceptance.
-- **Uninitialized is not an error.** The orchestrator self-onboards on first
+  delivery (what shipped, gates, screenshots, what is next). Process
+  narration is noise. Record the owner's reply in `DECISIONS.md` when they
+  give one; do not chase silence.
+- **Uninitialized is not an error.** `/company` self-onboards on first
   contact - audits, wires gates, applies frozen defaults - instead of sending
   the client to a setup command.
 
@@ -249,10 +249,9 @@ prose only, never a hook.)
 1. Weakening any design invariant or frozen surface's guarantees.
 2. Money and billing behavior.
 3. Deploys, prod migrations, cutover. Merge is integration; deploy is a manual
-   owner step, never in any script or agent's tooling. Release preparation is
-   doctrine in `company/RELEASE.md` and ends at a proposal on `DECISIONS.md` -
-   the company prepares, the owner publishes one GitHub release; `release.yml`
-   publishes to npm via OIDC. There is no local `npm publish`.
+   owner step, never in any script or agent's tooling. The owner ships with
+   `gh release create`; `release.yml` publishes to npm via OIDC. There is no
+   local `npm publish`.
 4. Scope changes beyond a brief.
 5. A gate failing twice on the same cause after a respawn - that signals a
    design problem, not an agent problem. Stop and surface.

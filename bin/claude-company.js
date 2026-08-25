@@ -68,7 +68,7 @@ function helpText() {
     "  --detect-gates/--no-detect-gates, --orientation/--no-orientation,",
     "  --no-background-subagents-env",
     "",
-    "The update subcommand forwards: --check, --force, --no-self-update,",
+    "The update subcommand forwards: --check, --force, --override, --no-self-update,",
     "  --target DIR, -y/--yes, --plain, --no-color",
     "",
     "Docs: docs/getting-started.md",

@@ -133,7 +133,7 @@ No new privilege surface is introduced.
 
 - **US-MRA-5**: As any agent reading canon, I learn the Workflow tool is
   off-limits by default and the exact conditions to use it.
-  - AC: given `company/METHOD.md` and `ORCHESTRATOR.md`, when an agent reads
+  - AC: given `company/METHOD.md` and `COMPANY.md`, when an agent reads
     them, then both state that the Workflow tool is outside hook enforcement,
     forbidden by default, permitted only with explicit owner authorization AND a
     model pin in every `agent()` call including all early stages (the resume
@@ -198,7 +198,7 @@ traceability gate checks these IDs against the PR.
   outside hook enforcement, forbidden by default in company projects, and
   permitted only with explicit owner authorization AND a model pin in every
   `agent()` call including all early stages (the resume trap).
-- **FR-MRA-12**: `ORCHESTRATOR.md` gains a line (at or near the dispatch section)
+- **FR-MRA-12**: `COMPANY.md` gains a line (at or near the dispatch section)
   stating the same Workflow-tool ban and the pin-every-stage rule, cross-
   referencing METHOD.md. Both files are in the overwrite payload
   (`lib/payload_paths.sh`), so the doctrine propagates on update.
@@ -267,7 +267,7 @@ traceability gate checks these IDs against the PR.
 - An idempotent, additive `models.json` builtins merge in BOTH `install.sh` and
   `update.sh` (byte-identical merge python), backup per update conventions,
   config-if-absent still restoring a missing manifest.
-- Workflow-tool doctrine in `company/METHOD.md` and `ORCHESTRATOR.md`.
+- Workflow-tool doctrine in `company/METHOD.md` and `COMPANY.md`.
 - Regression tests in `tests/hooks/test_hooks.py` and
   `tests/install/test_update.sh`.
 
@@ -319,7 +319,7 @@ traceability gate checks these IDs against the PR.
   `install.sh` (add the additive builtins merge after the `copy_if_absent
   company/models.json` line ~125); `update.sh` (add the same merge via
   `finalize_merge` after `config_if_absent "company/models.json"` line ~248);
-  `company/METHOD.md` and `ORCHESTRATOR.md` (Workflow-tool doctrine);
+  `company/METHOD.md` and `COMPANY.md` (Workflow-tool doctrine);
   `tests/hooks/test_hooks.py` (extend `TestGuardModels`, ~lines 375-514);
   `tests/install/test_update.sh` (models.json merge coverage). Optionally a one-
   line note in `company/GATES.md` G7 that the gate now also asserts wiring - if
@@ -377,7 +377,7 @@ traceability gate checks these IDs against the PR.
     now block when bare or contradicting. Roles behavior and the frontmatter mode
     are unchanged.
   - No CLI flags, no new files in the pack list (guard_models.py, models.json,
-    install.sh, update.sh, METHOD.md, ORCHESTRATOR.md are all already packed).
+    install.sh, update.sh, METHOD.md, COMPANY.md are all already packed).
 
 - **Open questions and chosen fallbacks:**
   - **OQ-MRA-01**: Mechanism for the one-time `builtins` injection into an
@@ -440,7 +440,7 @@ traceability gate checks these IDs against the PR.
     write); delete `models.json` and assert config-if-absent restores it (which
     already carries `builtins`).
   - FR-MRA-11 / FR-MRA-12 / SM-7: a `no_slop`-clean read of the added METHOD.md
-    and ORCHESTRATOR.md doctrine; `npm test` (which includes the pack manifest and
+    and COMPANY.md doctrine; `npm test` (which includes the pack manifest and
     install/update suites) and `python3 -m unittest discover -s tests/hooks -q`
     both green.
 

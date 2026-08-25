@@ -5,8 +5,8 @@
 # --check byte-identity, updated (backup+overwrite), downgrade guard, second-run
 # idempotency, user-state preservation, and the manifest determinism tripwire.
 #
-# Self-contained: installs this repo into temp targets via install.sh, then
-# drives update.sh directly (the engine is testable without the Node CLI).
+# Self-contained: one real install.sh into a gold tree, then cp -a per case.
+# Drives update.sh directly (the engine is testable without the Node CLI).
 set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -42,15 +42,42 @@ json.dump(d, open(m, "w"), indent=2, sort_keys=True); open(m, "a").write("\n")
 PY
 }
 snapshot() { # recursive content snapshot, excluding volatile files + .git
-  local dir="$1"
-  ( cd "$dir" && find . -type f ! -path './.git/*' ! -name 'adherence.log' \
-      | LC_ALL=C sort | while IFS= read -r f; do
-      printf '%s:' "$f"; python3 "$MAN_PY" hash "$f"
-    done )
+  python3 - "$1" <<'PY'
+import hashlib, os, sys
+root = sys.argv[1]
+lines = []
+for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [d for d in dirnames if d != ".git"]
+    for name in filenames:
+        if name == "adherence.log":
+            continue
+        path = os.path.join(dirpath, name)
+        if not os.path.isfile(path):
+            continue
+        rel = os.path.relpath(path, root).replace(os.sep, "/")
+        if rel == ".git" or rel.startswith(".git/"):
+            continue
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        lines.append("./%s:%s" % (rel, h.hexdigest()))
+lines.sort()
+sys.stdout.write("\n".join(lines) + ("\n" if lines else ""))
+PY
 }
-fresh_install() { # <target>
-  local t="$1"; mkdir -p "$t"; git -C "$t" init -q
-  bash "$REPO/install.sh" "$t" >/dev/null 2>&1
+GOLD="$WORK/gold"
+_gold_ready=0
+fresh_install() { # <target> - clone the gold install; do not re-run install.sh
+  local t="$1"
+  if [ "$_gold_ready" = 0 ]; then
+    mkdir -p "$GOLD"
+    git -C "$GOLD" init -q
+    bash "$REPO/install.sh" "$GOLD" >/dev/null 2>&1
+    _gold_ready=1
+  fi
+  rm -rf "$t"
+  cp -a "$GOLD" "$t"
 }
 # issue-67 helpers - parsed from the JSON, never hardcoded names.
 matcher_present() { # <file> <event> <matcher>
@@ -86,6 +113,18 @@ echo "-- vercmp --"
 [ "$(python3 "$MAN_PY" vercmp 0.1.1 0.1.2)" = "-1" ] && pass "vercmp older<newer = -1" || fail "vercmp older<newer"
 [ "$(python3 "$MAN_PY" vercmp 1.0.0 0.9.9)" = "1" ]  && pass "vercmp newer>older = 1"  || fail "vercmp newer>older"
 [ "$(python3 "$MAN_PY" vercmp 2.0 2.0.0)" = "0" ]    && pass "vercmp equal-padded = 0" || fail "vercmp equal-padded"
+echo "-- hashtree / filemap --"
+H_ONE="$(python3 "$MAN_PY" hash "$REPO/lib/manifest.py")"
+H_TREE="$(printf '%s\n' "lib/manifest.py" | python3 "$MAN_PY" hashtree --root "$REPO" | awk -F '\t' '{print $2}')"
+[ "$H_ONE" = "$H_TREE" ] && pass "hashtree matches hash" || fail "hashtree matches hash"
+REL_M="$(python3 - "$WORK/m1.json" <<'PY'
+import json, sys
+print(next(iter(json.load(open(sys.argv[1]))["files"])))
+PY
+)"
+H_GET="$(python3 "$MAN_PY" get "$WORK/m1.json" "$REL_M")"
+H_MAP="$(python3 "$MAN_PY" filemap "$WORK/m1.json" | awk -F '\t' -v r="$REL_M" '$1==r {print $2; exit}')"
+[ "$H_GET" = "$H_MAP" ] && pass "filemap matches get" || fail "filemap matches get"
 
 # --- 1. pristine: install then update -> no drift, no .new, no backup -----
 echo "== pristine flow =="
@@ -416,6 +455,7 @@ import json, sys
 p = sys.argv[1]; d = json.load(open(p))
 d.pop("builtins", None)            # strip the section update must re-inject
 d["myTeamKey"] = {"keep": "me"}    # a custom top-level key update must preserve
+d["pricing"] = {"opus": {"in": 15, "out": 75}}  # user key; template no longer ships this
 json.dump(d, open(p, "w"), indent=2, sort_keys=False); open(p, "a").write("\n")
 PY
 ROLES_BEFORE="$(mj_get "$MJ" roles)"
@@ -576,6 +616,57 @@ bash "$REPO/update.sh" "$T20" >/dev/null 2>&1; RC=$?
 [ "$RC" -eq 0 ] && pass "update with no active-task.json exits 0" || fail "update with no active-task.json exits 0 (rc=$RC)"
 nott "update creates no active-task.json"          test -e "$T20/company/state/active-task.json"
 nott "update creates no active-task.json.new"      test -e "$T20/company/state/active-task.json.new"
+
+# --- 14. --override: packaged bytes win, retired payload dies, no backup --
+echo "== --override =="
+TOV="$WORK/tov"; fresh_install "$TOV"
+printf '\nOVERRIDE SENTINEL\n' >> "$TOV/.claude/agents/developer.md"
+mkdir -p "$TOV/.claude/skills/release"
+printf 'OLD RELEASE SKILL\n' > "$TOV/.claude/skills/release/SKILL.md"
+printf '# leftover runbook\n' > "$TOV/ORCHESTRATOR.md"
+printf '{"gates":[{"name":"mine","command":"echo hi","blocking":true}]}\n' \
+  > "$TOV/company/gates.config"
+GH_OV="$(hashf "$TOV/company/gates.config")"
+SNAP_OV_A="$(snapshot "$TOV")"
+OUT="$(bash "$REPO/update.sh" "$TOV" --check --override 2>&1)"; RC=$?
+SNAP_OV_B="$(snapshot "$TOV")"
+[ "$RC" -eq 0 ] && pass "--check --override exits 0" || fail "--check --override exits 0 (rc=$RC)"
+[ "$SNAP_OV_A" = "$SNAP_OV_B" ] && pass "--check --override writes nothing" \
+  || fail "--check --override writes nothing"
+grep -qE "OVERRIDE +.claude/agents/developer.md" <<< "$OUT" \
+  && pass "--check --override plans OVERRIDE for the edit" \
+  || fail "--check --override plans OVERRIDE for the edit"
+grep -qE "RETIRED +ORCHESTRATOR.md" <<< "$OUT" \
+  && pass "--check --override plans RETIRED for ORCHESTRATOR.md" \
+  || fail "--check --override plans RETIRED for ORCHESTRATOR.md"
+grep -qE "RETIRED +.claude/skills/release/SKILL.md" <<< "$OUT" \
+  && pass "--check --override plans RETIRED for /release" \
+  || fail "--check --override plans RETIRED for /release"
+
+OUT="$(bash "$REPO/update.sh" "$TOV" --override 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "--override exits 0" || fail "--override exits 0 (rc=$RC)"
+cmp -s "$TOV/.claude/agents/developer.md" "$REPO/.claude/agents/developer.md" \
+  && pass "--override replaced the customized agent" \
+  || fail "--override replaced the customized agent"
+nott "--override wrote no .new" test -e "$TOV/.claude/agents/developer.md.new"
+nott "--override made no backup dir" test -d "$TOV/company/state/.update-backups"
+nott "--override deleted ORCHESTRATOR.md" test -f "$TOV/ORCHESTRATOR.md"
+nott "--override deleted /release" test -f "$TOV/.claude/skills/release/SKILL.md"
+[ "$GH_OV" = "$(hashf "$TOV/company/gates.config")" ] \
+  && pass "--override left gates.config untouched" \
+  || fail "--override left gates.config untouched"
+grep -q "retired:" <<< "$OUT" && pass "--override reports retired" \
+  || fail "--override reports retired"
+
+# default path still preserves a later edit (the matrix did not flip)
+printf '\nKEEP ME\n' >> "$TOV/.claude/agents/developer.md"
+OUT="$(bash "$REPO/update.sh" "$TOV" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && pass "default update after override exits 0" \
+  || fail "default update after override exits 0 (rc=$RC)"
+grep -q "KEEP ME" "$TOV/.claude/agents/developer.md" \
+  && pass "default update still preserves a user edit" \
+  || fail "default update still preserves a user edit"
+check "default update still writes .new" test -f "$TOV/.claude/agents/developer.md.new"
 
 echo
 echo "================ SUMMARY ================"

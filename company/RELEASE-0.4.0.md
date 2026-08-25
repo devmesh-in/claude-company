@@ -44,7 +44,7 @@ stays: `active-task.json`, worktrees, the pin, and the session digest.
   the frozen adapter test. (`Task: ai-sdlc-rework`)
 - `risk_score.py` deleted. Audit-by-default at merge replaces the unused band. (`Task: ai-sdlc-rework`)
 - `/standup`, `/brainstorm`, ideation-strategist, STATUS.md leave the payload.
-  In-flight status is `/orchestrator` with no work given. (`Task: ai-sdlc-rework`)
+  In-flight status is `/company` with no work given. (`Task: ai-sdlc-rework`)
 - devops-engineer and security-reviewer are opt-in via `company/EXTENDING.md`. (`Task: ai-sdlc-rework`)
 - Lockfiles no longer hard-BLOCK mid-flight (WARN + log). `.env`, evidence
   records, witnesses, and accepted ADRs stay hard-BLOCK. (`Task: ai-sdlc-rework`)

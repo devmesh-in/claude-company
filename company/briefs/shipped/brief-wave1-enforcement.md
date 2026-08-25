@@ -171,7 +171,7 @@ Universal DoD plus:
 
 - risk_score.py, witness manifest, trace_check, CVE gate (wave 2)
 - RELEASE/acceptance/postmortem doctrine (wave 3)
-- Any change to company/gates.config template content, ORCHESTRATOR.md,
+- Any change to company/gates.config template content, COMPANY.md,
   GATES.md, agent definitions, models.json roles
 - README/docs beyond the two rows named in scope
 

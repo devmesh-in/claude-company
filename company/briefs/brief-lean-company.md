@@ -8,7 +8,7 @@ Date: 2026-08-13. Tracking issue: #109._
 
 Build `/lean-company`: a second entry point to this harness for quick
 iteration. It is a SEPARATE command, deliberately, not a mode flag on
-`/orchestrator` - a flag would branch the main path and multiply the test
+`/company` - a flag would branch the main path and multiply the test
 matrix, while a separate door costs neither.
 
 The line it walks: it cuts the HIERARCHY and the PAPERWORK, and it never cuts
@@ -27,12 +27,12 @@ hierarchy and the gates; lean mode thins the first and keeps the second whole.
 1. `CLAUDE.md` (project canon - and note it names all FIVE gate suites)
 2. `company/METHOD.md` - the five mechanisms, and the ceremony table. Read
    mechanism 5 carefully; lean mode must still satisfy it.
-3. `.claude/skills/orchestrator/SKILL.md` - the full-ceremony command you are
+3. `.claude/skills/company/SKILL.md` - the full-ceremony command you are
    writing the lean sibling of. Match its voice and structure; a reader should
    feel these are two doors into one building.
 4. `.claude/skills/feature/SKILL.md` and `.claude/skills/gates/SKILL.md` - the
    house style for a skill file.
-5. `ORCHESTRATOR.md` - READ ONLY, do not edit. It is owned by another lane
+5. `COMPANY.md` - READ ONLY, do not edit. It is owned by another lane
    in flight.
 
 ## You own
@@ -44,7 +44,7 @@ hierarchy and the gates; lean mode thins the first and keeps the second whole.
 - `tests/install/run_tests.sh` - one assertion, see DoD
 
 Nothing else. THREE OTHER LANES ARE BUILDING RIGHT NOW and you must not
-collide: `ORCHESTRATOR.md`, `company/METHOD.md`, `company/GATES.md`,
+collide: `COMPANY.md`, `company/METHOD.md`, `company/GATES.md`,
 `company/templates/BRIEF-TEMPLATE.md`, `.claude/agents/**` and
 `.github/workflows/ci.yml` belong to the doctrine lane; every file under
 `.claude/hooks/` belongs to two others. If lean mode needs a doctrine change or
@@ -82,7 +82,7 @@ a hook change, WRITE IT DOWN in your report - do not make it.
    what the hooks read; it is not where the time goes.
 8. **The hard upgrade trigger, one-way.** A lean task that reaches a FROZEN
    SURFACE, a MIGRATION, AUTH or BILLING or MONEY, an INVARIANT, or a SECOND
-   WORKSTREAM stops and moves to `/orchestrator`. Not as advice - as the rule
+   WORKSTREAM stops and moves to `/company`. Not as advice - as the rule
    that keeps this command safe to offer, because those are exactly the cases
    where being wrong is expensive. Note that the hooks will block several of
    them anyway, so the trigger mostly tells the CEO to stop arguing with a
@@ -101,7 +101,7 @@ a hook change, WRITE IT DOWN in your report - do not make it.
 - [ ] `tests/install/run_tests.sh` gains ONE assertion that the lean skill is
       copied by an install, matching the existing `skills copied` idiom. Note
       that suite builds a STUB source tree, so add the stub file alongside the
-      existing `skills/orchestrator` stub or your assertion will fail for the
+      existing `skills/company` stub or your assertion will fail for the
       wrong reason.
 - [ ] Gates: run all five suites named in `CLAUDE.md` from your worktree root
       and paste them. Do NOT run `bash company/run-gates.sh`.
@@ -124,10 +124,10 @@ a hook change, WRITE IT DOWN in your report - do not make it.
 
 ## Out of scope
 
-- Any change to `/orchestrator` or to any doctrine file.
+- Any change to `/company` or to any doctrine file.
 - Any hook change, including making `quick` entries cheaper. Another lane owns
   that.
-- Renaming `/orchestrator` to `/company`, which is a separate open question.
+- Renaming `/company` to `/company`, which is a separate open question.
 - Building a profile or mode system. This is one command, nothing more.
 
 ## Report back

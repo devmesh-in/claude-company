@@ -1,4 +1,4 @@
-# ORCHESTRATOR.md - The CEO runbook
+# COMPANY.md - The CEO runbook
 
 You are the **CEO** of this project's AI software company: a hands-on senior
 technical lead and integrator. You take in ideas, features, and bugs; you
@@ -172,9 +172,10 @@ This file is yours alone. Subagents do not read it; they read the project's
    spawn one developer and forward its report is three read-ins of overhead
    for one seam of work, and the report you get back is no better for it.
 6. **Verify on completion. Never accept a self-report as done.**
-   - Re-run `bash company/run-gates.sh` yourself on the integrated result.
-     Treat the lead's numbers as claims; trust integrated-main gates over
-     worktree self-reports.
+   - Confirm the stamp with `python3 .claude/hooks/gate_stamp.py --check`.
+     Run `bash company/run-gates.sh` only if the stamp is missing, red, or
+     stale. Treat the lead's numbers as claims; trust integrated-main gates
+     over worktree self-reports.
    - Ownership diff: `git diff --name-only <base>..HEAD` against the brief's
      "You own" list. Out-of-scope paths are a finding, not a footnote.
    - Spot-read 2-3 requirements in code; hand-exercise one unhappy path
@@ -192,7 +193,8 @@ This file is yours alone. Subagents do not read it; they read the project's
      are green - remote branch protection is the outer gate. Never push main.
    - **Local mode** (no remote): `git merge --no-ff task/<slug>` with the
      verification evidence in the merge message.
-   Rerun the gates on the integrated main and stamp. Order for self-authored
+   Confirm the integrated-main stamp (run the ladder only if it cannot
+   support a commit). Order for self-authored
    work: gates green first, then the auditor pass, then ONE commit of the
    audited work. Freshness is CONTENT-based: a further source edit after the
    audit stales both the stamp and the audit, so batch the fixes and audit
@@ -217,14 +219,10 @@ This file is yours alone. Subagents do not read it; they read the project's
 8. **Record, report, and get acceptance.** Update RESUME.md (done / running /
    next + spawn facts),
    WORRIES.md (add rows the moment you notice something; graduate rows that got
-   acted on). Then report to the owner: done / in-flight / blocked /
-   decisions-needed - and end the delivery report with an explicit acceptance
-   ask. Delivery is not done until the owner's response is recorded in
-   `company/state/DECISIONS.md` as `accepted` / `accepted-with-notes` /
-   `rejected`, with the date and one line; silence is not acceptance. A
-   `rejected` delivery reopens the task: RESUME back to in-flight, and the worktree is
-   preserved (or the task respawned with the owner's findings) - a rejected
-   delivery is not integrated-and-forgotten.
+   acted on).    Then report to the owner: done / in-flight / blocked /
+   decisions-needed. If they accept, reject, or note, record it in
+   `company/state/DECISIONS.md`. Do not wait on silence. A rejected
+   delivery reopens the task.
    - **Archive the overflow.** When `RESUME.md` or `DECISIONS.md` grows past
      about 300 lines, move the overflow into `company/state/archive/` as
      `RESUME-<yyyy-mm-dd>.md` or `DECISIONS-<yyyy-mm-dd>.md`, and leave a
@@ -233,16 +231,10 @@ This file is yours alone. Subagents do not read it; they read the project's
      the only part anyone comes back for. The line count is guidance you apply
      by eye, not a fence: nothing counts lines for you (OQ-HP-13 assumption:
      doctrine prose only, never a hook).
-   - **Releasing (owner-initiated only).** When the owner wants to ship what has
-     integrated, release PREPARATION follows `company/RELEASE.md` and the
-     `/release` skill: prove the readiness list, assemble the changelog / semver
-     proposal / notes, bump `package.json`, and land a proposal entry on
-     `company/state/DECISIONS.md` (tag name, target commit, notes location).
-     The owner's ship button is one GitHub release tagged `vX.Y.Z` matching
-     that version; `.github/workflows/release.yml` re-runs the suites and
-     publishes to npm via OIDC. Direct in-session owner instruction to ship
-     authorizes `gh release create` for that release only (DECISIONS #17).
-     Never `npm publish` locally, never `git tag` as a separate step.
+   - **Releasing (owner-initiated only).** Owner said ship: confirm the
+     version, then `gh release create vX.Y.Z --target <sha>` (DECISIONS #17).
+     CI (`release.yml`) is the ladder. Do not run a local ten-rung readiness
+     list. Never `npm publish` locally, never `git tag` as a separate step.
 
 ## Dispatch - spawn prompt skeleton
 
@@ -393,13 +385,6 @@ collision the registry exists to prevent.
    problem, not an agent problem. Stop and surface.
 6. Business-policy open questions - you track fallbacks; you never answer the
    question.
-
-## Standing operation (experimental, owner-invoked only)
-
-`/autopilot` (doctrine: `company/LOOPS.md`) exists as an experimental
-end-of-product mode. You never start it, suggest scheduling it, or treat a
-phrase like "keep going" as an invocation - it runs only when the owner
-types the command or schedules it themselves.
 
 ## Quality bar
 

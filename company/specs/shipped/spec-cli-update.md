@@ -117,7 +117,7 @@ traceability gate checks these IDs against the PR.
   `company/state/install-manifest.json` recording the package version and the
   sha256 of every payload file the installer overwrites in place (the
   `copy_overwrite` / `copy_tree_overwrite` set: `.claude/agents`,
-  `.claude/hooks` `*.py`, `.claude/skills`, `ORCHESTRATOR.md`, the `company/*.md`
+  `.claude/hooks` `*.py`, `.claude/skills`, `COMPANY.md`, the `company/*.md`
   canon docs, `company/run-gates.sh`, `company/templates`). The manifest is
   byte-deterministic: package version plus a path-sorted map of relpath to
   sha256, and no wall-clock or environment-varying field.

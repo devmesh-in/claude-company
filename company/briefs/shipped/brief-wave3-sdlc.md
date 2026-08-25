@@ -24,7 +24,7 @@ deploy, tag push, or npm publish - the skill ENDS at a proposal).
    `company/METHOD.md` as the canon and continue)
 2. `company/METHOD.md` (you edit it - study voice first; note the new
    ADR/precedence sections from wave 2)
-3. `ORCHESTRATOR.md` (you edit step 8; steps 6-7 were just extended by
+3. `COMPANY.md` (you edit step 8; steps 6-7 were just extended by
    wave 2 - do not disturb them)
 4. `company/GATES.md` (read-only for you: the G0 witnesses / G6 trace /
    G7 models / G8 audit ladder your release-readiness list cites)
@@ -42,7 +42,7 @@ deploy, tag push, or npm publish - the skill ENDS at a proposal).
 - `company/templates/RELEASE-TEMPLATE.md`, `company/templates/POSTMORTEM-TEMPLATE.md` (new)
 - `company/templates/REPORT-TEMPLATE.md` (acceptance line only)
 - `company/METHOD.md` (hotfix postmortem rule + release pointer only)
-- `ORCHESTRATOR.md` (step 8 acceptance record + release pointer only)
+- `COMPANY.md` (step 8 acceptance record + release pointer only)
 - `.claude/skills/release/` (new)
 - `.claude/agents/devops-engineer.md` (release-prep duty only)
 
@@ -103,7 +103,7 @@ LOOPS.md, ADR files: read-only to you.
    devops-engineer to produce changelog/semver/notes per
    RELEASE-TEMPLATE; end at the DECISIONS.md proposal handoff. The skill
    text must state it never tags/publishes/deploys.
-4. **Owner acceptance record** (#24): ORCHESTRATOR.md step 8 - the
+4. **Owner acceptance record** (#24): COMPANY.md step 8 - the
    delivery report to the owner ends with an acceptance ask, and the CEO
    records the owner's response in company/state/DECISIONS.md as
    `accepted | accepted-with-notes | rejected` + date + one line; a
@@ -130,7 +130,7 @@ LOOPS.md, ADR files: read-only to you.
 
 - Cite the wave-2 mechanisms by their exact names: `witness_check.py
   --check`, the G0/G6/G7/G8 ladder rows, risk bands. Do not redefine them.
-- Wave-2 doctrine already owns ORCHESTRATOR steps 2/4/6/7 - your edits
+- Wave-2 doctrine already owns COMPANY steps 2/4/6/7 - your edits
   touch step 8 (and the release pointer) only.
 - You guarantee: RELEASE-TEMPLATE readiness criteria are each one runnable
   command + expected result (mechanically checkable, no vibes).

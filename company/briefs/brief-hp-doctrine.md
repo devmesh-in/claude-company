@@ -32,7 +32,7 @@ gates. The owner settled this in DECISIONS #18: scope it, do not remove it.
 1. `CLAUDE.md` (project canon). **Note: the copy on your branch is STALE.** It
    says two suites gate this repo. That is wrong and is fixed in the main
    checkout but uncommitted. See Definition of Done for the real list.
-2. `company/METHOD.md`, `company/GATES.md`, `ORCHESTRATOR.md` - you are editing
+2. `company/METHOD.md`, `company/GATES.md`, `COMPANY.md` - you are editing
    all three.
 3. `.claude/hooks/stop_gate.py` (whole file - it is short) and
    `.claude/hooks/_common.py` `active_tasks` / `check_stamp`.
@@ -43,14 +43,14 @@ gates. The owner settled this in DECISIONS #18: scope it, do not remove it.
 6. `company/specs/spec-harness-port.md`, FR-HP-50 through FR-HP-65, OQ-HP-01,
    OQ-HP-13.
 7. `/Users/redomic/Documents/Projects/DevMesh/` - the reference fork, for the
-   doctrine prose only (its ORCHESTRATOR parallel-discipline and
+   doctrine prose only (its COMPANY parallel-discipline and
    don't-fight-the-harness sections). Its `settings.json` is NOT a reference:
    it un-wired stop_gate, which is the thing we are refusing to copy.
 
 ## You own
 
 - `.claude/hooks/stop_gate.py`
-- `ORCHESTRATOR.md`
+- `COMPANY.md`
 - `company/METHOD.md`, `company/GATES.md`
 - `company/templates/BRIEF-TEMPLATE.md`
 - `.claude/agents/auditor.md`, `docs-librarian.md`, `qa-engineer.md`,
@@ -89,7 +89,7 @@ them touches a single file above. Do NOT touch `_common.py`, any `guard_*.py`,
    session can tell whose tree is red.
 2. **FR-HP-51 to FR-HP-65 - doctrine sync.** GATES.md and METHOD.md document
    the runner changes L3 built (quiet-pass, `gates.log`, worktree root
-   resolution). ORCHESTRATOR gains the parallel-discipline section (dispatch a
+   resolution). COMPANY gains the parallel-discipline section (dispatch a
    wave in ONE message, never idle while lanes build, integrate per-lane rather
    than barrier-waiting, CRs are interrupt-priority) and the
    don't-fight-the-harness rules (the block message is the recipe,
@@ -120,7 +120,7 @@ them touches a single file above. Do NOT touch `_common.py`, any `guard_*.py`,
    `"spec": "lite: <why>"` on the task entry, with a ONE-WAY escape upward the
    moment the work touches a frozen surface, a second repo, or an invariant.
    The brief itself stays hook-required. Also: `quick` entries need no brief.
-   Both go in METHOD.md's ceremony table and ORCHESTRATOR's classify step.
+   Both go in METHOD.md's ceremony table and COMPANY's classify step.
    The spec lists these as parked; the owner unparked them after it was written.
 8. **NEWER THAN THE SPEC - a mechanical canon check.** Add a CI step asserting
    that every test suite `ci.yml` runs is NAMED in `CLAUDE.md`. Rationale to
@@ -142,7 +142,7 @@ them touches a single file above. Do NOT touch `_common.py`, any `guard_*.py`,
    instruction and reported the conflict. That is the behavior canon should
    reward, so whatever you decide should make the reporting path explicit.
 9. **Doctrine reconciliation the CEO owes you** (see CR-2's decision remarks):
-   ORCHESTRATOR says the CEO applies approved CRs to frozen surfaces itself,
+   COMPANY says the CEO applies approved CRs to frozen surfaces itself,
    but a brief granted a lane a frozen file outright and the lane correctly
    followed its brief. Resolve it one way - either briefs stop granting frozen
    files, or the rule gains an explicit brief-grant exception. Your call; state

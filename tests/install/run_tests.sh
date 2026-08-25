@@ -30,16 +30,16 @@ SRC="$WORK/src"
 build_source() {
   rm -rf "$SRC"; mkdir -p "$SRC"
   cp "$REPO/install.sh" "$SRC/install.sh"
-  mkdir -p "$SRC/.claude/agents" "$SRC/.claude/hooks" "$SRC/.claude/skills/orchestrator" "$SRC/.claude/skills/lean-company"
+  mkdir -p "$SRC/.claude/agents" "$SRC/.claude/hooks" "$SRC/.claude/skills/company" "$SRC/.claude/skills/lean-company"
   mkdir -p "$SRC/company/templates" "$SRC/company/specs" "$SRC/company/briefs" "$SRC/company/change-requests"
 
   # stubs for other-agent-owned files
   printf 'stub agent\n' > "$SRC/.claude/agents/dev.md"
   printf '#!/usr/bin/env python3\nprint("no slop")\n' > "$SRC/.claude/hooks/no_slop.py"
   printf '#!/usr/bin/env python3\nimport sys\nprint("gate_stamp", sys.argv)\n' > "$SRC/.claude/hooks/gate_stamp.py"
-  printf 'stub skill\n' > "$SRC/.claude/skills/orchestrator/SKILL.md"
+  printf 'stub skill\n' > "$SRC/.claude/skills/company/SKILL.md"
   printf 'stub skill\n' > "$SRC/.claude/skills/lean-company/SKILL.md"
-  printf '# ORCHESTRATOR\n' > "$SRC/ORCHESTRATOR.md"
+  printf '# COMPANY\n' > "$SRC/COMPANY.md"
   printf '# METHOD\n' > "$SRC/company/METHOD.md"
   printf '# GATES\n' > "$SRC/company/GATES.md"
   printf '# EXTENDING\n' > "$SRC/company/EXTENDING.md"
@@ -162,9 +162,9 @@ if run_install "$T1"; then pass "install succeeds on empty dir"; else fail "inst
 check "agents copied"            test -f "$T1/.claude/agents/dev.md"
 check "hooks copied"             test -f "$T1/.claude/hooks/no_slop.py"
 check "gate_stamp copied"        test -f "$T1/.claude/hooks/gate_stamp.py"
-check "skills copied"            test -f "$T1/.claude/skills/orchestrator/SKILL.md"
+check "skills copied"            test -f "$T1/.claude/skills/company/SKILL.md"
 check "lean-company skill copied" test -f "$T1/.claude/skills/lean-company/SKILL.md"
-check "ORCHESTRATOR.md copied"   test -f "$T1/ORCHESTRATOR.md"
+check "COMPANY.md copied"   test -f "$T1/COMPANY.md"
 check "METHOD.md copied"         test -f "$T1/company/METHOD.md"
 check "GATES.md copied"          test -f "$T1/company/GATES.md"
 check "EXTENDING.md copied"      test -f "$T1/company/EXTENDING.md"
@@ -314,7 +314,7 @@ cat > "$T4/company/gates.config" <<'JSON'
 JSON
 run_install "$T4" || { fail "install with pre-seeded state"; cat "$WORK/install.out"; }
 check "STATUS.md content untouched"  grep -q "payments module has no tests" "$T4/company/state/STATUS.md"
-check "STATUS.md not overwritten by stub" bash -c '! grep -q "maintained by the orchestrator" "'"$T4"'/company/state/STATUS.md"'
+check "STATUS.md not overwritten by stub" bash -c '! grep -q "maintained by the company" "'"$T4"'/company/state/STATUS.md"'
 check "user gates.config preserved"  grep -q "mytest" "$T4/company/gates.config"
 
 echo "== idempotency (second run changes nothing except adherence.log) =="

@@ -55,8 +55,8 @@ it.
   `guard_models.py`, `guard_commit.py`, `stop_gate.py`, `context_pin.py`,
   `session_start.py`, `cost_capture.py`, `risk_score.py`
 - Doctrine: `company/METHOD.md`, `company/GATES.md`, `company/RELEASE.md`,
-  `ORCHESTRATOR.md`, `docs/glossary.md`
-- Skills: `.claude/skills/{orchestrator,feature,standup,autopilot}/SKILL.md`
+  `COMPANY.md`, `docs/glossary.md`
+- Skills: `.claude/skills/{company,feature,standup,autopilot}/SKILL.md`
 - State: `company/state/WORRIES.md`; `company/witnesses.json` ONLY via
   `python3 .claude/hooks/witness_check.py --add`
 - Tests: `tests/hooks/test_active_task_schema.py` (new),
@@ -320,9 +320,9 @@ Tracking issue #92.
     ONCE: an `Edit` replaces against current disk content, so two sessions
     editing at different anchors both survive; a whole-file `Write` drops the
     other session's entry. Sites: `company/METHOD.md:122,146`,
-    `company/GATES.md:80`, `ORCHESTRATOR.md:69-71,92-108,146-150`,
+    `company/GATES.md:80`, `COMPANY.md:69-71,92-108,146-150`,
     `docs/glossary.md:143,339,340`, and the skills
-    `orchestrator/SKILL.md:41,82`, `feature/SKILL.md:25,37`,
+    `company/SKILL.md:41,82`, `feature/SKILL.md:25,37`,
     `standup/SKILL.md:13,26,39`, `autopilot/SKILL.md:35`. Line numbers are a
     starting map, not a guarantee - grep for the real sites. NO CLI and NO
     freeze: both were scoped out by the owner.
@@ -337,7 +337,7 @@ Tracking issue #92.
     uniformly at every N, and it never changes a decision.
 28. **FR-MST-26** - two witnesses, added ONLY via
     `python3 .claude/hooks/witness_check.py --add`. One on the replacement for
-    `.claude/skills/orchestrator/SKILL.md:82` ("Set active-task.json on dispatch;
+    `.claude/skills/company/SKILL.md:82` ("Set active-task.json on dispatch;
     clear it on integration"). One `must_contain` on
     `.claude/hooks/guard_provenance.py` for the per-slug dispatch lookup, so a
     regression to slug-matching is caught.

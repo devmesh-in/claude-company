@@ -13,9 +13,9 @@ untouched (OQ-ASR-10); session_start does not read it.
 
 | Slug | What |
 |---|---|
-| ai-sdlc-rework | AI-SDLC harness rework + 0.4.0 release. Task branch `task/ai-sdlc-rework`. |
+| lean-prompts | Ceremony cut, `/company` door, `COMPANY.md`, 0.4.1. Branch `task/lean-prompts`. |
 
-NEXT ACTION: land the PR, then owner ships with `gh release create v0.4.0`.
+NEXT ACTION: six suites, stamp, PR, merge, then `gh release create v0.4.1`.
 
 CLOSED by this work (graduated from WORRIES): P0 unmechanized risk band
 (audit-by-default), P1 umbrella dirty-check (provenance enforcement cut),
@@ -48,16 +48,16 @@ its changed paths can reach.
 CLOSED since this was written, verified 2026-08-22 by grep on the live tree:
 modes D and E are cut, and the three dangling `stop_gate` references are gone
 (`git grep stop_gate` over `.claude/hooks`, `company/*.md`, `company/templates`,
-`ORCHESTRATOR.md`, `CLAUDE.md` and `docs/` returns nothing; `stop_gate.py` is
+`COMPANY.md`, `CLAUDE.md` and `docs/` returns nothing; `stop_gate.py` is
 absent from `.claude/hooks/` and from the Stop group in `.claude/settings.json`,
 which now runs `guard_provenance.py` and `cost_capture.py`). One instance of
 that same drift class DID survive in the doctrine and was fixed on 2026-08-22:
-`ORCHESTRATOR.md` step 4b and `.claude/skills/orchestrator/SKILL.md` both
+`COMPANY.md` step 4b and `.claude/skills/company/SKILL.md` both
 claimed a hook blocks main-checkout source edits until the execution decision
 exists. That was mode E. Both now state what actually enforces - mode C at
 commit, mode B-pre at spawn. Checked at the same time and found ACCURATE, so
 do not "fix" them: `lean-company/SKILL.md:81` (guard_spec really does block the
-first source edit on a missing brief) and `ORCHESTRATOR.md:18` and `:431` (mode
+first source edit on a missing brief) and `COMPANY.md:18` and `:431` (mode
 C really does block the commit).
 
 OLD, for reference - wave 1 branched off 55cf436. Spec:
@@ -113,7 +113,7 @@ DEFERRED DELIBERATELY TO THE L1 MERGE, do not lose these:
 3. `company/adr/README.md` still says "Next free number: ADR-0002" and needs
    ADR-0002's row once L1 merges.
 
-WHY DEFERRED, and it is a real deviation from ORCHESTRATOR step 7 rather than
+WHY DEFERRED, and it is a real deviation from COMPANY step 7 rather than
 an oversight: every one of those actions moves HEAD or dirties the tree, and
 under today's history-based `work_hash` each one stales the stamp and demands
 another full ladder run. Four have already been spent this session, 1570s
@@ -174,7 +174,7 @@ witnesses/models/tests/audit. Owner acceptance recorded (DECISIONS #3).
    (`{"version": 2, "tasks": [...]}`), `_common.active_task` is gone and
    `active_tasks` replaces it, and the provenance ledger is v2 with per-slug
    dispatches - the slug-mismatch wipe at guard_provenance.py:302 is deleted,
-   which was the reported bug. Witnesses W-032 (the orchestrator entry idiom)
+   which was the reported bug. Witnesses W-032 (the company entry idiom)
    and W-033 (per-slug dispatch credit) recorded; registry 32/32.
    THE SESSION THAT DISPATCHED THIS DIED before close-out, and main sat three
    commits behind origin with the board still reading IN FLIGHT for two days.

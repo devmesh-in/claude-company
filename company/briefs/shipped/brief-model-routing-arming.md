@@ -39,7 +39,7 @@ fails LOUD.
 9. `lib/payload_paths.sh` (what propagates by overwrite vs config-if-absent)
 10. `tests/hooks/test_hooks.py` (`TestGuardModels`, ~lines 375-514)
 11. `tests/install/test_update.sh` (the update suite you extend)
-12. `ORCHESTRATOR.md` (dispatch section - doctrine target)
+12. `COMPANY.md` (dispatch section - doctrine target)
 
 ## You own
 
@@ -48,7 +48,7 @@ fails LOUD.
 - `install.sh` (the models.json merge addition only)
 - `update.sh` (the models.json merge addition only)
 - `company/METHOD.md` (Workflow-tool doctrine addition only)
-- `ORCHESTRATOR.md` (Workflow-tool doctrine line only)
+- `COMPANY.md` (Workflow-tool doctrine line only)
 - `company/GATES.md` (optional one-line G7 note that the gate also asserts wiring - doc-only)
 - `tests/hooks/test_hooks.py`
 - `tests/install/test_update.sh`
@@ -64,7 +64,7 @@ lives outside these paths, report it; do not make it.
 - Dual-nature rule: `company/` ships verbatim into installs. `models.json`
   content must stay generic (pins are `"opus"`, the template default). NEVER
   put this repo's real gate commands into `company/gates.config`.
-- `.claude/hooks/` and doctrine files (`company/METHOD.md`, `ORCHESTRATOR.md`)
+- `.claude/hooks/` and doctrine files (`company/METHOD.md`, `COMPANY.md`)
   are overwrite payload - changes propagate on update automatically.
   `company/models.json` is config-if-absent - it does NOT propagate by
   overwrite; that is exactly why the additive merge exists.
@@ -147,7 +147,7 @@ lives outside these paths, report it; do not make it.
    FORBIDDEN by default in company projects, and is permitted only with
    explicit owner authorization AND a `model` pin in EVERY `agent()` call
    including all early stages - resuming a dead workflow re-runs incomplete
-   early-stage agents live, so partial pinning does not hold. `ORCHESTRATOR.md`
+   early-stage agents live, so partial pinning does not hold. `COMPANY.md`
    gains a matching line at the dispatch section cross-referencing METHOD.md.
    Keep both terse and hook-clean.
 8. **FR-MRA-08/13** `tests/hooks/test_hooks.py` (extend `TestGuardModels` or
