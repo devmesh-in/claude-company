@@ -88,8 +88,8 @@ done, in flight, blocked, decisions you owe, and current gate status, from
 Sooner or later you will see a message like this:
 
 ```text
-BLOCKED: git commit requires green, fresh gates.
-Fix: run `bash company/run-gates.sh` and repair any failure.
+BLOCKED: git merge onto a protected branch requires green, fresh gates.
+Fix: run `bash company/run-gates.sh` until green, then retry the merge onto main/master.
 ```
 
 This is the system working. The block message contains the fix, agents get the same messages, and most blocks resolve without you. For a production emergency, tell the company it is a hotfix: hooks then log instead of block, and the process catches up afterward.

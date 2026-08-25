@@ -8,15 +8,17 @@
     Hotfix tasks are exempt (ALLOW + log BYPASS); a commit with no active
     task is a founding commit and is exempt; merge on main is the owner's
     local integration and is exempt.
-  - commit / merge: require a green, fresh, valid gates.status stamp - the
-    ACTING TREE's own (FR-ASR-05 / BR-ASR-03), the tree the segment commits into, which is not the
-    main checkout when the segment carries a -C or runs from a worktree. If
+  - commit: undeclared frozen-surface drift BLOCK. The gate stamp is NOT
+    required at commit (DECISIONS #25). A shared suite can be red for
+    reasons a lane cannot legally fix; secrets, branch, slop, tests, and
+    spec still gate the commit via their own hooks.
+  - merge onto a protected branch: require a green, fresh, valid
+    gates.status stamp - the ACTING TREE's own (FR-ASR-05 / BR-ASR-03).
+    Merge of main into a task branch does not require the stamp (that is
+    the update path; requiring it re-deadlocks parallel lanes). If
     gates.config is missing, has zero gates, or contains ONLY CONFIGURE-ME
-    placeholders (a fresh project with nothing to gate yet), ALLOW + log
-    BYPASS - unconfigured gates must not deadlock founding commits, and the
-    bypass stays visible in the adherence log. Placeholders still fail loudly
-    in run-gates.sh; only the commit path treats them as not-yet-configured.
-    If the active task is a hotfix, ALLOW + log BYPASS.
+    placeholders, ALLOW + log BYPASS. Placeholders still fail loudly in
+    run-gates.sh. If the active task is a hotfix, ALLOW + log BYPASS.
   - everything else: allow.
 
 Fails open on any internal error.
@@ -256,14 +258,16 @@ DRIFT_MSG = (
 def stamp_message(sub, reason, branch_dir, root):
     """The gate-stamp block message, naming the tree whose stamp was judged.
 
+    The stamp gates merge onto main/master, not commit (DECISIONS #25).
     `Fix: run bash company/run-gates.sh` is a correct recipe only from the
     tree that was judged. Run from anywhere else it gates and stamps a
     DIFFERENT tree, so the retry blocks on exactly the same reason and the
     reader has no way to tell why. When the acting tree is not the project
     root, the path is spelled out absolutely and the judged tree is named.
     """
-    head = "BLOCKED: git {} requires green, fresh gates. {}.\n".format(
-        sub, reason
+    head = (
+        "BLOCKED: git merge onto a protected branch requires green, fresh "
+        "gates. {}.\n".format(reason)
     )
     placeholder = (
         "If company/gates.config still has only CONFIGURE-ME placeholders, "
@@ -273,7 +277,8 @@ def stamp_message(sub, reason, branch_dir, root):
     if same_tree(branch_dir, root):
         return (
             head
-            + "Fix: run `bash company/run-gates.sh` until green, then retry.\n"
+            + "Fix: run `bash company/run-gates.sh` until green, then retry "
+            "the merge onto main/master.\n"
             + placeholder
         )
     return (
@@ -281,9 +286,9 @@ def stamp_message(sub, reason, branch_dir, root):
         + "Judged: the acting tree {}. This gate reads THAT tree's own "
         "company/state/gates.status - a green stamp in another checkout does "
         "not stand in for it.\n"
-        "Fix: run `bash {}/company/run-gates.sh` until green, then retry. Use "
-        "the absolute path: from any other directory the runner gates a "
-        "different tree.\n".format(branch_dir, branch_dir)
+        "Fix: run `bash {}/company/run-gates.sh` until green, then retry "
+        "the merge. Use the absolute path: from any other directory the "
+        "runner gates a different tree.\n".format(branch_dir, branch_dir)
         + placeholder
     )
 
@@ -376,6 +381,21 @@ def main():
                             "undeclared frozen-surface: " + ", ".join(drift),
                             DRIFT_MSG.format(paths=", ".join(drift)),
                         )
+                    # DECISIONS #25: the stamp is not a commit lock. A lane
+                    # cannot make a shared suite green without touching other
+                    # lanes' files. Commit still pays secrets, branch, slop,
+                    # tests, spec, and frozen drift.
+                    continue
+                # merge: stamp only when integrating onto a protected branch.
+                # `sub == "merge" and branch in PROTECTED` is the witness:
+                # revert it and parallel sessions deadlock on a shared suite
+                # at commit time again.
+                # OQ-MGS-01 assumption: unknown branch is not protected, so
+                # merge in a detached HEAD fails open (same as the commit
+                # branch rule).
+                branch = c.current_branch(branch_dir)
+                if branch not in PROTECTED:
+                    continue
                 cfg = c.gates_config(branch_dir)
                 gates = cfg.get("gates") if isinstance(cfg, dict) else None
                 if not gates:

@@ -47,7 +47,7 @@ instead of silently invalidating a written safety argument.
 |---|---|---|---|
 | 1 | Content-based `work_hash` (tree the working copy would commit as) | ASSIGNED | L1. Closes the WORRIES row "staging stales a provenance audit". |
 | 1b | `HASH_EXCLUDES` also excluding `*.md` and `*.txt` | REJECTED | Catalog tags this generic and it is wrong for us. Markdown IS the product here (agent definitions, skills, doctrine) and `no_slop`, `trace_check` and `guard_models` all gate it. Excluding it would let a doctrine rewrite stale nothing. |
-| 2 | Gate the merge, not the commit | DEFERRED | Amends METHOD mechanism 4. Most of the supporting evidence was staleness loops that item 1 deletes on its own, so re-measure after L1 lands. Must land paired with the stop_gate decision and with DevMesh's later correction that a waiver must itself require a green fresh stamp. |
+| 2 | Gate the merge, not the commit | APPLIED | DECISIONS #25. `guard_commit` stamp-checks `git merge` onto main/master only. Commits are not stamp-gated. Pairing met: stop_gate is deleted; hotfix is the only waiver. |
 | 3 | Repo-scoped gate runs with cached skips (`repo` field) | REJECTED | Single-repo upstream, so the field is inert. `company/specs/spec-repo-scoped-enforcement.md` is already parked with evidence refuting the premise. Their `stamp_is_green` also returns green UNCONDITIONALLY when the tree_hashes map is empty, which is every non-polyrepo project - a false-green generator. |
 | 3b | Cheap-to-expensive gate ordering | N/A | Already ours. `company/GATES.md` states it; it is config authoring, not code. |
 | 4 | Low-band waiver at 20 changed source lines | REJECTED | DECISIONS #5 vetoed exactly this shape - a numeric fence. A scored model with numbers inside is fine, a bare line cap as a gate is not. See parked decision 2 for the principled version. |
@@ -111,7 +111,7 @@ held.
 
 | # | Decision | Status | Where |
 |---|---|---|---|
-| 1 | Move the green-stamp requirement from commit to merge | **STILL PARKED, deliberately** | The instruction to cut ceremony does not change the arithmetic. Most of its supporting evidence was staleness that content hashing deletes on its own, so this gets decided at wave-1 integration against a real block count, not on appetite. Holding it is the honest reading of "balance efficiency with quality". |
+| 1 | Move the green-stamp requirement from commit to merge | **APPLIED** | DECISIONS #25 (2026-08-25). Unparked on unsatisfiability under parallel ownership, not the staleness ADR-0002 already removed. |
 | 2 | A risk-scaled audit band | **ADOPTED** | Derived from `risk_score.py`'s EXISTING bands, never a new line-count fence, and the same change ARMS a mandatory audit in the high band. This is the version worth having: it cuts ceremony at the bottom and ADDS rigor at the top, closing the worry about a large clean delegated build integrating with no independent read. Wave 2. |
 | 3 | Phase 0 spec-lite rung, plus 4c (quick needs no brief) | **ADOPTED** | Objective conditions, one-way escape upward, hooks force the upgrade. Wave 2, L6. |
 | 4 | Model tiering | REJECTED | Standing veto, DECISIONS #1. Unchanged. |

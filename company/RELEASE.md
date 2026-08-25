@@ -27,9 +27,10 @@ gh release create v<version> --target <sha> \
 The tag must equal `v` plus `package.json`'s version or `release.yml` exits
 before publish.
 
-A version-bump commit still needs a stamp so `guard_commit` will let it
-through. If the suites already ran this session, stamp from those results.
-Do not re-run because a notes file or prompt moved. CI is the ladder.
+A version-bump commit does not need a stamp. Merge onto main still does. If
+the suites already ran this session, stamp from those results before
+integrating. Do not re-run because a notes file or prompt moved. CI is the
+ladder.
 
 ## Semver
 

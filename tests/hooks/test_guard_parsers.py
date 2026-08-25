@@ -285,22 +285,15 @@ class TestSegGitDirEndToEnd(Base):
     def test_worktree_commit_not_blocked_by_branch_rule(self):
         # Main checkout on main, worktree on task/x, one non-hotfix entry.
         # The commit lands on task/x, so the protected-branch message must NOT
-        # appear. The segment IS now seen, so the gate-stamp check below it
-        # refuses instead - which is why this asserts on the ABSENCE of the
-        # branch string rather than on the exit code alone.
-        # The gates.config goes in the WORKTREE: that is the tree the commit
-        # acts on, so that is the tree whose gates and stamp are read. A
-        # config in the main checkout only would leave this segment unarmed
-        # and the "no gates configured" bypass, not the stamp gate, would
-        # decide it.
+        # appear. Commits are not stamp-gated (DECISIONS #25), so the segment
+        # is allowed. The proof it is no longer invisible is the ABSENCE of
+        # the branch string, not a stamp block.
         wt = self.add_worktree(".claude/worktrees/x", "task/x")
         self.configure_gates(wt)
         self.set_tasks({"task": "x", "type": "feature"})
         r = self.commit_guard("git -C .claude/worktrees/x commit -m y")
         self.assertNotIn(BRANCH_MSG, r.stderr)
-        # ... and the proof it is no longer invisible: the stamp gate fires.
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn(STAMP_MSG, r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_bare_commit_on_main_still_blocked(self):
         # The unchanged-behavior guard for FR-HP-11.

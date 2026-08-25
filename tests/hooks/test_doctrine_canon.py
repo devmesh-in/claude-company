@@ -279,6 +279,20 @@ class DoctrineClauses(unittest.TestCase):
                 self.fail("company/METHOD.md:{} claims a commit stales the "
                           "stamp: {!r}".format(num, line.strip()))
 
+    def test_decisions_25_stamp_gates_merge_not_commit(self):
+        """DECISIONS #25 / METHOD mechanism 4: the stamp is a merge lock."""
+        self.assertClauses("company/METHOD.md", "DECISIONS-25", [
+            "integration onto a protected branch",
+            "merge lock, not a commit lock",
+        ])
+        self.assertClauses("company/GATES.md", "DECISIONS-25", [
+            "blocks `git merge` onto",
+            "Commits are not stamp-gated",
+        ])
+        method = doc("company/METHOD.md")
+        self.assertNotIn(
+            "commits are hook-blocked while gates are red or stale", method)
+
     # -- company/GATES.md --------------------------------------------------
 
     def test_fr_hp_62_runner_contract(self):

@@ -96,14 +96,15 @@ stateDiagram-v2
     Red --> Green: fix the cause, rerun
     Green --> Stale: gated content changes
     Stale --> Green: stamp a run you already have, or rerun if the change can break a gate
-    Green --> [*]: git commit allowed
+    Green --> [*]: git merge onto main allowed
     note right of Red
-        commit hook blocks
+        merge onto main is blocked
         Red, Stale, Unstamped
+        commits are not stamp-gated
     end note
 ```
 
-The stamp is a lock on `git commit`, not a quality judgment. Run the commands in `company/gates.config` when the change can break what they test. If you already ran them, write the stamp from those results. Do not re-run because a prompt, notes file, or README moved.
+The stamp is a lock on `git merge` onto main/master, not a quality judgment and not a commit lock. Run the commands in `company/gates.config` when the change can break what they test. If you already ran them, write the stamp from those results. Do not re-run because a prompt, notes file, or README moved.
 
 The ladder runs cheap to expensive. Beyond your own tests and linter, claude-company ships mechanical rungs every project inherits:
 

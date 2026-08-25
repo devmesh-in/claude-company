@@ -25,8 +25,8 @@ CLAIMS = {
     "guard_frozen": (
         "unrecoverable artifacts (.env, evidence, ADRs) stay immutable", True),
     "guard_commit": (
-        "no protected-branch commit mid-task; green fresh stamp; "
-        "undeclared frozen drift", False),
+        "no protected-branch commit mid-task; green fresh stamp at "
+        "merge onto main; undeclared frozen drift", False),
     "guard_tests": (
         "builders do not edit the tests that judge them without a grant",
         False),

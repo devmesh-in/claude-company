@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """guard_commit judges the ACTING TREE's gate stamp, not the main checkout's.
 
-The rule: a hook judges the tree that contains the thing being acted on. The
-branch half of it shipped under FR-HP-11; the STAMP half did not, so
-`git -C .claude/worktrees/<slug> commit` read `company/state/gates.status`
-from the main checkout. A lane could be green-lit by a sibling lane's gate
-run, or blocked by a sibling lane's drift, and had no way to fix either from
-its own tree.
+The rule: a hook judges the tree that contains the thing being acted on.
+DECISIONS #25: the stamp gates `git merge` onto main/master, not `git commit`.
+A worktree commit no longer needs a stamp. A merge onto a protected branch
+still reads THAT tree's `company/state/gates.status` (CR-HP-2 / FR-ASR-05).
 
 Every fixture here uses a REAL `git worktree add`. A hand-made directory under
 .claude/worktrees has no .git entry, no index and no branch, so it proves
@@ -86,6 +84,17 @@ class Base(unittest.TestCase):
         self.addCleanup(lambda: git(self.root, "worktree", "prune"))
         return path
 
+    def add_worktree_of(self, rel, existing_branch):
+        """Worktree of an existing branch (not -b). Root must not have it
+        checked out.
+        """
+        path = os.path.join(self.root, rel)
+        r = git(self.root, "worktree", "add", path, existing_branch)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
+        self.addCleanup(lambda: git(self.root, "worktree", "prune"))
+        return path
+
     def write(self, tree, rel, content):
         path = os.path.join(tree, rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -153,6 +162,36 @@ class Base(unittest.TestCase):
 
 # --- the DoD: a worktree stands on its own stamp ---------------------------
 class TestWorktreeStandsOnItsOwnStamp(Base):
+    def test_worktree_commit_allowed_with_no_stamp(self):
+        # DECISIONS #25: a worktree commit does not need a stamp.
+        wt = self.add_worktree()
+        self.set_tasks({"task": "x", "type": "feature"})
+        self.configure_gates(wt)
+        self.configure_gates(self.root)
+        self.stamp(self.root)
+        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_worktree_commit_allowed_when_own_stamp_red_and_main_green(self):
+        wt = self.add_worktree()
+        self.set_tasks({"task": "x", "type": "feature"})
+        self.configure_gates(wt)
+        self.stamp(wt, ok=False)
+        self.configure_gates(self.root)
+        self.stamp(self.root)
+        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_worktree_commit_allowed_when_own_stamp_stale_and_main_green(self):
+        wt = self.add_worktree()
+        self.set_tasks({"task": "x", "type": "feature"})
+        self.configure_gates(wt)
+        self.stale_stamp(wt)
+        self.configure_gates(self.root)
+        self.stamp(self.root)
+        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
     def test_worktree_own_green_stamp_allows_with_untouched_main(self):
         # The DoD line. The main checkout gets NOTHING: no gates.config, no
         # gates.status. The worktree gates itself and commits.
@@ -168,7 +207,7 @@ class TestWorktreeStandsOnItsOwnStamp(Base):
         self.assertNotIn("no gates configured", self.adherence())
 
     def test_worktree_green_stamp_beats_a_red_main_stamp(self):
-        # BLOCK -> ALLOW. The main checkout is red; the acting tree is green.
+        # Commit still allows; merge onto main is the stamp question, below.
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_gates(wt)
@@ -178,55 +217,56 @@ class TestWorktreeStandsOnItsOwnStamp(Base):
         r = self.commit_guard("git -C {} commit -m y".format(wt))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_worktree_missing_stamp_blocks_though_main_is_green(self):
-        # ALLOW -> BLOCK. The worktree never ran its own ladder.
+    def test_merge_on_main_blocked_even_when_worktree_is_green(self):
+        # The acting tree for a merge on main is the main checkout.
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_gates(wt)
+        self.stamp(wt)
         self.configure_gates(self.root)
-        self.stamp(self.root)
-        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        r = self.commit_guard("git merge task/x")
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertIn("no gates.status stamp", r.stderr)
 
-    def test_worktree_stale_stamp_blocks_though_main_is_green(self):
-        # ALLOW -> BLOCK. The worktree drifted after its own green run.
+    def test_merge_on_main_stale_blocks_though_worktree_is_green(self):
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_gates(wt)
-        self.stale_stamp(wt)
+        self.stamp(wt)
         self.configure_gates(self.root)
-        self.stamp(self.root)
-        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        self.stale_stamp(self.root)
+        r = self.commit_guard("git merge task/x")
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertIn("stale", r.stderr)
 
-    def test_worktree_red_stamp_blocks_though_main_is_green(self):
-        # ALLOW -> BLOCK. The worktree's own ladder failed.
+    def test_merge_on_main_red_blocks_though_worktree_is_green(self):
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_gates(wt)
-        self.stamp(wt, ok=False)
+        self.stamp(wt)
         self.configure_gates(self.root)
-        self.stamp(self.root)
-        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        self.stamp(self.root, ok=False)
+        r = self.commit_guard("git merge task/x")
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertIn("red", r.stderr)
 
-    def test_cwd_in_worktree_without_dash_c_uses_the_worktree_stamp(self):
+    def test_merge_on_task_branch_in_worktree_allowed_without_stamp(self):
+        wt = self.add_worktree()
+        self.set_tasks({"task": "x", "type": "feature"})
+        self.configure_gates(wt)
+        r = self.commit_guard("git -C {} merge main".format(wt))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_cwd_in_worktree_without_dash_c_commit_needs_no_stamp(self):
         # The other way into a worktree: no -C, the session simply sits there.
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_gates(wt)
         self.configure_gates(self.root)
         self.stamp(self.root)
-        r = self.commit_guard("git commit -m y", cwd=wt)
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn(STAMP_MSG, r.stderr)
-        self.stamp(wt)
         r = self.commit_guard("git commit -m y", cwd=wt)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
@@ -235,50 +275,48 @@ class TestWorktreeStandsOnItsOwnStamp(Base):
 class TestMainCheckoutUnchanged(Base):
     """No worktree in sight: root IS the acting tree, as it always was."""
 
-    def test_green_stamp_allows(self):
+    def test_green_stamp_allows_commit(self):
         self.configure_gates(self.root)
         self.stamp(self.root)
         r = self.commit_guard("git commit -m y")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_stale_stamp_blocks(self):
+    def test_stale_stamp_allows_commit(self):
         self.configure_gates(self.root)
         self.stale_stamp(self.root)
         r = self.commit_guard("git commit -m y")
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn(STAMP_MSG, r.stderr)
-        self.assertIn("stale", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_red_stamp_blocks(self):
+    def test_red_stamp_allows_commit(self):
         self.configure_gates(self.root)
         self.stamp(self.root, ok=False)
         r = self.commit_guard("git commit -m y")
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn(STAMP_MSG, r.stderr)
-        self.assertIn("red", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_missing_stamp_blocks(self):
+    def test_missing_stamp_allows_commit(self):
         self.configure_gates(self.root)
         r = self.commit_guard("git commit -m y")
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn(STAMP_MSG, r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_merge_is_gated_by_the_root_stamp_too(self):
+    def test_merge_on_main_is_gated_by_the_root_stamp(self):
         self.configure_gates(self.root)
         self.stamp(self.root)
         r = self.commit_guard("git merge task/x")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
+    def test_merge_on_main_blocked_when_unstamped(self):
+        self.configure_gates(self.root)
+        r = self.commit_guard("git merge task/x")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn(STAMP_MSG, r.stderr)
+
 
 # --- the placeholder bypass, in the acting tree ----------------------------
 class TestPlaceholderGatesInTheActingTree(Base):
-    def test_worktree_placeholders_bypass_and_log(self):
-        # This is what keeps THIS repo working: the tracked gates.config holds
-        # CONFIGURE-ME placeholders on purpose, so a worktree inherits them and
-        # can never produce a green stamp. The commit is allowed and the bypass
-        # is visible in the log, exactly as a fresh install gets before
-        # onboarding. The main checkout is deliberately real-and-stale, so an
-        # allow here can only come from the worktree's own config.
+    def test_worktree_placeholders_allow_commit_without_a_bypass(self):
+        # Placeholders used to be the only way a worktree could commit, because
+        # the stamp check ran at commit. Commits are not stamp-gated now, so
+        # the commit is allowed and no placeholder bypass is owed.
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_placeholder_gates(wt)
@@ -286,21 +324,22 @@ class TestPlaceholderGatesInTheActingTree(Base):
         self.stale_stamp(self.root)
         r = self.commit_guard("git -C {} commit -m y".format(wt))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        log = self.adherence()
-        self.assertIn("BYPASS", log)
-        self.assertIn(PLACEHOLDER_REASON, log)
 
-    def test_worktree_without_any_gates_config_bypasses_and_logs(self):
-        # A worktree that inherits no gates.config at all (untracked in the
-        # main checkout, so the worktree never sees it) is "nothing to gate
-        # yet", not "blocked forever".
+    def test_worktree_without_any_gates_config_allows_commit(self):
         wt = self.add_worktree()
         self.set_tasks({"task": "x", "type": "feature"})
         self.configure_gates(self.root)
         self.stale_stamp(self.root)
         r = self.commit_guard("git -C {} commit -m y".format(wt))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("no gates configured", self.adherence())
+
+    def test_merge_on_main_placeholders_bypass_and_log(self):
+        self.configure_placeholder_gates(self.root)
+        r = self.commit_guard("git merge task/x")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        log = self.adherence()
+        self.assertIn("BYPASS", log)
+        self.assertIn(PLACEHOLDER_REASON, log)
 
 
 # --- the unresolved -C note ------------------------------------------------
@@ -372,19 +411,23 @@ class TestUnresolvedDashCNote(Base):
 
 # --- the stamp message is a runnable recipe --------------------------------
 class TestStampMessageNamesTheActingTree(Base):
-    def test_worktree_block_names_an_absolute_runner_path(self):
-        wt = self.add_worktree()
-        self.set_tasks({"task": "x", "type": "feature"})
+    def test_worktree_merge_block_names_an_absolute_runner_path(self):
+        # Fixture root sits on a task branch so we can put a worktree on main
+        # (git refuses two checkouts of the same branch). Merge in that
+        # worktree is integration onto a protected branch, judged by the
+        # worktree's own stamp, while CLAUDE_PROJECT_DIR is still the root.
+        git(self.root, "checkout", "-B", "task/root")
+        wt = self.add_worktree_of(".claude/worktrees/main-wt", "main")
         self.configure_gates(wt)
-        r = self.commit_guard("git -C {} commit -m y".format(wt))
+        r = self.commit_guard("git -C {} merge task/root".format(wt))
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertIn(JUDGED_LINE, r.stderr)
         self.assertIn("bash {}/company/run-gates.sh".format(wt), r.stderr)
 
-    def test_main_checkout_block_keeps_the_plain_recipe(self):
+    def test_main_checkout_merge_block_keeps_the_plain_recipe(self):
         self.configure_gates(self.root)
-        r = self.commit_guard("git commit -m y")
+        r = self.commit_guard("git merge task/x")
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertIn("bash company/run-gates.sh", r.stderr)
@@ -393,47 +436,39 @@ class TestStampMessageNamesTheActingTree(Base):
 
 # --- per-segment isolation survives the change -----------------------------
 class TestPerSegmentIsolation(Base):
-    def test_worktree_segment_does_not_decide_the_next_segments_stamp(self):
-        # Segment 1 acts on the worktree and passes on the worktree's own
-        # green stamp. Segment 2 has no -C, so it is judged by the root - which
-        # has real gates and no stamp - and blocks. A hoisted single
-        # resolution would have let segment 2 ride the worktree's stamp.
+    def test_worktree_commit_does_not_skip_a_later_merge_stamp(self):
+        # Segment 1 is a worktree commit (no stamp). Segment 2 is a merge on
+        # main with real gates and no stamp, and must still block.
         wt = self.add_worktree()
         self.configure_gates(wt)
-        self.stamp(wt)
         self.configure_gates(self.root)
         r = self.commit_guard(
-            "git -C {} commit -m y && git commit -m y".format(wt))
+            "git -C {} commit -m y && git merge task/x".format(wt))
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertNotIn(JUDGED_LINE, r.stderr)
 
-    def test_root_segment_does_not_decide_a_later_worktree_stamp(self):
-        # The other direction: the root is green, the worktree is not, and the
-        # later -C segment must still be judged by the worktree.
-        wt = self.add_worktree()
+    def test_green_root_merge_does_not_cover_a_later_worktree_on_main(self):
+        git(self.root, "checkout", "-B", "task/root")
+        wt = self.add_worktree_of(".claude/worktrees/main-wt", "main")
         self.configure_gates(wt)
         self.configure_gates(self.root)
         self.stamp(self.root)
         r = self.commit_guard(
-            "git commit -m y && git -C {} commit -m y".format(wt))
+            "git commit -m y && git -C {} merge task/root".format(wt))
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn(STAMP_MSG, r.stderr)
         self.assertIn("bash {}/company/run-gates.sh".format(wt), r.stderr)
 
-    def test_two_worktrees_are_judged_separately(self):
+    def test_two_worktrees_commits_are_not_stamp_gated(self):
         first = self.add_worktree(".claude/worktrees/a", "task/a")
         second = self.add_worktree(".claude/worktrees/b", "task/b")
         self.configure_gates(first)
-        self.stamp(first)
         self.configure_gates(second)
         r = self.commit_guard(
             "git -C {} commit -m y && git -C {} commit -m y".format(
                 first, second))
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn("bash {}/company/run-gates.sh".format(second), r.stderr)
-        self.assertNotIn("bash {}/company/run-gates.sh".format(first),
-                         r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
 # --- fail open -------------------------------------------------------------

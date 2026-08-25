@@ -11,9 +11,10 @@ identity). `dispatches` is that entry's PER-SLUG count; `self-authored` is the
 GLOBAL count, a property of the tree rather than of an entry.
 
 One further line, added when DECISIONS #20 deleted the Stop-time gate: a
-`gates:` advisory when the stamp cannot support a commit and gating work is in
-flight. Same fact the deleted hook blocked on, said once to the session that
-can act on it instead of shouted at a session trying to finish.
+    `gates:` advisory when the stamp cannot support a merge onto main and
+    gating work is in flight. Same fact the deleted hook blocked on, said
+    once to the session that can act on it instead of shouted at a session
+    trying to finish.
 
 ALWAYS exits 0, and has no block path. Nothing here may grow one.
 """
@@ -39,10 +40,12 @@ def gate_alert(root, tasks):
     """One advisory line, or None. NEVER a decision.
 
     Armed when the tree has a gating entry (anything not quick/hotfix) AND
-    check_stamp says the stamp cannot support a commit - missing, red, stale,
-    malformed, or hand-edited. That is the exact condition the deleted
-    Stop-time gate blocked on; it is worth SAYING to the session that can run
-    the ladder, and worth nothing refusing the turn of a session that cannot.
+    check_stamp says the stamp cannot support a merge onto main - missing,
+    red, stale, malformed, or hand-edited. Commit is allowed on a red tree
+    (DECISIONS #25); merge onto main/master is not. That is the exact
+    condition the deleted Stop-time gate blocked on, now said to the
+    session that can run the ladder, and worth nothing refusing the turn of
+    a session that cannot.
 
     Rendered near the top of the digest deliberately. RESUME.md can fill
     MAX_LINES, and a warning that scrolls off the end was not delivered.
@@ -61,8 +64,11 @@ def gate_alert(root, tasks):
         return None
     # Name every gating entry: this line is the only place a session learns
     # its own slug is implicated, so the default cap of 3 would hide one.
-    return "gates: {} - in flight: {}. Run /gates before you commit.".format(
-        reason, c.slug_list(gating, cap=max(len(gating), 1)))
+    return (
+        "gates: {} - in flight: {}. Commit is allowed; merge onto main "
+        "is not until green.".format(
+            reason, c.slug_list(gating, cap=max(len(gating), 1)))
+    )
 
 
 def head_lines(path, n):
