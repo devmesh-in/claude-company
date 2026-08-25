@@ -44,9 +44,13 @@ stays the fast door.
 
 ### Fixes
 
-- Confirm a green fresh stamp before re-running gates. (`Task: lean-prompts`)
 - Install/update no longer advertise `/onboard` as a separate door.
   (`Task: lean-prompts`)
+- The stamp is a commit lock, not a reason to re-run the project's
+  gates. Field prompts and docs say: run what covers the change; stamp a
+  run you already have. (`Task: cut-stamp-ceremony`)
+- Render tests read `/company`, not the deleted `/gates` skill, so the
+  harness suite can finish. (`Task: republish-041`)
 
 ## Known limits
 

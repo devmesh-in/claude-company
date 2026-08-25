@@ -102,9 +102,9 @@ process.stdout.write("\ngenerated agents (FR-HA-02, FR-HA-15)\n")
 
 {
   const src = fs.readFileSync(
-    path.join(REPO, ".claude", "skills", "gates", "SKILL.md"), "utf8")
-  const text = renderer.renderCommand("gates", src)
-  is("a command points at the skill", text.includes("`gates` skill"))
+    path.join(REPO, ".claude", "skills", "company", "SKILL.md"), "utf8")
+  const text = renderer.renderCommand("company", src)
+  is("a command points at the skill", text.includes("`company` skill"))
   is("a command takes arguments", text.includes("$ARGUMENTS"))
   // opencode reads .claude/skills natively, so duplicating the body here
   // would give every instruction two copies that can disagree. Compared
