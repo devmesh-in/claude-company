@@ -69,7 +69,7 @@ git worktree add .claude/worktrees/<task-slug> -b task/<task-slug>
 ## Integration (CEO only)
 
 Integrate only after verification (gates rerun on the integrated result,
-ownership diff checked, evidence judged - see `ORCHESTRATOR.md`). The
+ownership diff checked, evidence judged - see `COMPANY.md`). The
 mechanics depend on whether the project has a remote:
 
 **PR mode - when `origin` exists and `gh` is available (the default for any

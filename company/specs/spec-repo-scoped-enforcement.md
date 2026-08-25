@@ -15,12 +15,12 @@ install AFTER the spec was written, its central premise did not hold:
 - Git does not recurse into nested repositories. All seven sub-repos carry their
   own `.git`, so the umbrella `git status` never saw one line of their source.
 - All 71 paths blocking that install were UMBRELLA-LEVEL files: 66 under
-  `.playwright-mcp/` (screenshots and console logs), one `ORCHESTRATOR.md.new`
+  `.playwright-mcp/` (screenshots and console logs), one `COMPANY.md.new`
   that `claude-company update` creates itself, a stray png, two fonts, one html.
 - The company had authored 8 files, all clean. The intersection of "dirty" and
   "self-authored" was ZERO.
 
-So repo scoping would not have unblocked that install - the orchestrator session
+So repo scoping would not have unblocked that install - the company session
 runs at the umbrella root and would have resolved to the umbrella anyway.
 
 The cheaper and more principled fix, identified but NOT built: Mode C and Mode D
@@ -533,7 +533,7 @@ narrowing is the direction that silently disarms gates (BR-RSE-03).
   `company/state/` are global to the company. Wording stays generic and must
   read correctly in a plain single-repo install, where the working tree and the
   project root are the same directory (the dual-nature rule). `company/GIT.md`
-  and `ORCHESTRATOR.md` gain the new lead obligation from FR-RSE-24: run the
+  and `COMPANY.md` gain the new lead obligation from FR-RSE-24: run the
   gate suite from the worktree you are committing in. `docs/glossary.md` gains
   `working tree` and `tree key`. `company/gates.config` is NOT touched and
   keeps its CONFIGURE-ME placeholders.
@@ -808,7 +808,7 @@ runner's banner.
   - `.claude/hooks/gate_stamp.py` - `trees` map, discovery, `--tree`
   - `company/run-gates.sh` - `RUN_DIR`
   - Doctrine: `company/GATES.md`, `company/METHOD.md`, `company/GIT.md`,
-    `ORCHESTRATOR.md`, `docs/glossary.md`
+    `COMPANY.md`, `docs/glossary.md`
   - State: `company/state/WORRIES.md`; `company/witnesses.json` ONLY via
     `witness_check.py --add`
   - Tests: `tests/hooks/test_working_tree.py`,
@@ -946,7 +946,7 @@ runner's banner.
     _Why accepted:_ today they are gating the wrong tree, which is a false
     green; blocking is the correct new behavior.
     _Mitigation:_ FR-RSE-28 puts the obligation in `company/GIT.md` and
-    `ORCHESTRATOR.md`; FR-RSE-27 makes the block message the recipe.
+    `COMPANY.md`; FR-RSE-27 makes the block message the recipe.
 
   - **RISK-RSE-05 - `stop_gate` stays root-scoped.** A red or unfingerprinted
     sibling tree does not block Stop through `stop_gate` (FR-RSE-25).

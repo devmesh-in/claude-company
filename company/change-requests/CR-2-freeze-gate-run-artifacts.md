@@ -160,7 +160,7 @@ already installed.
 
 Two remarks recorded rather than actioned here:
 
-1. **Application reconciled deliberately.** ORCHESTRATOR step 7 says the CEO
+1. **Application reconciled deliberately.** COMPANY step 7 says the CEO
    applies approved CRs to frozen surfaces itself, in a dedicated PR. This lane
    applied it in-branch because ITS BRIEF granted it
    `company/frozen-surfaces.json` outright. That was my briefing choice and the
@@ -168,7 +168,7 @@ Two remarks recorded rather than actioned here:
    defect is mine: a brief should not hand a lane a frozen surface and then
    rely on doctrine to say the CEO owns changes to it. Folded to L6 as a
    doctrine reconciliation - either briefs stop granting frozen files, or the
-   ORCHESTRATOR rule gains an explicit brief-grant exception. Do not treat this
+   COMPANY rule gains an explicit brief-grant exception. Do not treat this
    remark as precedent until L6 lands.
 
 2. **CR-UPD-1 is half-landed and this CR proves it.** Verified at base commit

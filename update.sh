@@ -29,14 +29,18 @@ warn()  { printf '%s\n' "${C_YELLOW}warning:${C_RESET} $*" >&2; }
 
 usage() {
   cat >&2 <<USAGE
-Usage: bash update.sh TARGET [--check] [--force]
+Usage: bash update.sh TARGET [--check] [--force] [--override]
 
 Refreshes the claude-company payload in an installed project without ever
 overwriting a file the user customized. The target directory must exist and
 must already contain a claude-company install.
 
-  --check   dry run - print the full per-file plan, write nothing
-  --force   proceed even if the installed version is newer than this package
+  --check      dry run - print the full per-file plan, write nothing
+  --force      proceed even if the installed version is newer than this package
+  --override   replace every shipped file with the packaged bytes and delete
+               retired payload (old skills, ORCHESTRATOR.md). No backups, no
+               .new siblings. Still never touches gates.config, specs, briefs,
+               or company/state.
 USAGE
   exit 2
 }
@@ -66,11 +70,13 @@ SRC="$SCRIPT_DIR"
 TARGET_ARG=""
 CHECK=0
 FORCE=0
+OVERRIDE=0
 for arg in "$@"; do
   case "$arg" in
-    --check) CHECK=1 ;;
-    --force) FORCE=1 ;;
-    --*)     usage ;;              # unknown flag
+    --check)    CHECK=1 ;;
+    --force)    FORCE=1 ;;
+    --override) OVERRIDE=1 ;;
+    --*)        usage ;;              # unknown flag
     *)
       if [ -z "$TARGET_ARG" ]; then
         TARGET_ARG="$arg"
@@ -132,6 +138,7 @@ n_updated=0
 n_preserved=0
 n_restored=0
 n_unchanged=0
+n_retired=0
 merged_changed=0
 preserved_list=""
 provenance_notice=0  # issue-64: set when provenance.json is absent at target
@@ -146,6 +153,8 @@ plan() {
 # --- header ---------------------------------------------------------------
 if [ "$CHECK" = "1" ]; then
   info "claude-company update [dry run - nothing written]"
+elif [ "$OVERRIDE" = "1" ]; then
+  info "claude-company update [--override: packaged bytes win, no backups]"
 else
   info "claude-company update"
 fi
@@ -183,21 +192,32 @@ fi
 # --- disposition matrix (BR-UPD-01..08 / FR-UPD-03..07 / FR-UPD-12) --------
 # For every file in the overwrite set, decide RESTORED / UNCHANGED / UPDATED /
 # PRESERVED from three hashes: pkg (packaged), tgt (target now), base (the
-# hash the manifest recorded at install time). Process substitution keeps the
-# loop in this shell so the counters below persist (a pipe would subshell it).
+# hash the manifest recorded at install time). The relpath list is a file, not
+# a pipe, so the loop stays in this shell and the counters persist.
+#
+# Hashes are batched: two hashtree walks + one filemap, not three python3
+# starts per overwrite-set file (macOS python startup dominated the update
+# suite at ~3x N files x ~25 installs).
+HASH_CACHE="$(mktemp -d -t cc-upd-hash.XXXXXX)"
+trap 'rm -rf "$HASH_CACHE"' EXIT
+cc_overwrite_relpaths "$SRC" "$TARGET_HARNESSES" > "$HASH_CACHE/relpaths"
+python3 "$MANIFEST_HELPER" hashtree --root "$SRC" < "$HASH_CACHE/relpaths" \
+  > "$HASH_CACHE/pkg"
+python3 "$MANIFEST_HELPER" hashtree --root "$TARGET" < "$HASH_CACHE/relpaths" \
+  > "$HASH_CACHE/tgt"
+python3 "$MANIFEST_HELPER" filemap "$MANIFEST" > "$HASH_CACHE/base"
+_hash_at() { # <tsv> <rel> -> digest (empty if missing)
+  awk -F '\t' -v r="$2" '$1==r {print $2; exit}' "$1"
+}
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
-  pkg="$(python3 "$MANIFEST_HELPER" hash "$SRC/$rel" 2>/dev/null || true)"
+  pkg="$(_hash_at "$HASH_CACHE/pkg" "$rel")"
   if [ -z "$pkg" ]; then
     warn "source unreadable, skipped: $rel"
     continue
   fi
-  if [ -f "$TARGET/$rel" ]; then
-    tgt="$(python3 "$MANIFEST_HELPER" hash "$TARGET/$rel" 2>/dev/null || true)"
-  else
-    tgt=""
-  fi
-  base="$(python3 "$MANIFEST_HELPER" get "$MANIFEST" "$rel" 2>/dev/null || true)"
+  tgt="$(_hash_at "$HASH_CACHE/tgt" "$rel")"
+  base="$(_hash_at "$HASH_CACHE/base" "$rel")"
 
   if [ -z "$tgt" ]; then
     # Target file absent - restore it from the package.
@@ -211,6 +231,13 @@ while IFS= read -r rel; do
     # Already exactly the packaged bytes - nothing to do.
     plan UNCHANGED "$rel"
     n_unchanged=$((n_unchanged + 1))
+  elif [ "$OVERRIDE" = "1" ]; then
+    # --override: packaged bytes win. No backup, no .new.
+    plan OVERRIDE "$rel"
+    n_updated=$((n_updated + 1))
+    if [ "$CHECK" != "1" ]; then
+      safe_cp "$SRC/$rel" "$TARGET/$rel"
+    fi
   elif [ -n "$base" ] && [ "$tgt" = "$base" ]; then
     # Pristine since install (matches the recorded baseline) - safe to update.
     plan UPDATED "$rel"
@@ -234,7 +261,29 @@ while IFS= read -r rel; do
       safe_cp "$SRC/$rel" "$TARGET/$rel.new"
     fi
   fi
-done < <(cc_overwrite_relpaths "$SRC" "$TARGET_HARNESSES")
+done < "$HASH_CACHE/relpaths"
+
+# Drop payload this package no longer ships (old /orchestrator, /release, ...).
+# Default: back up then delete. --override: delete with no backup.
+while IFS= read -r rel; do
+  [ -n "$rel" ] || continue
+  [ -f "$TARGET/$rel" ] || continue
+  plan RETIRED "$rel"
+  n_retired=$((n_retired + 1))
+  if [ "$CHECK" = "1" ]; then
+    continue
+  fi
+  if [ "$OVERRIDE" != "1" ]; then
+    backup_file "$rel"
+  fi
+  rm -f "$TARGET/$rel" || die3 "could not remove retired file: $rel"
+  # Empty skill/command dirs left behind are noise, not payload.
+  parent="$(dirname "$TARGET/$rel")"
+  while [ "$parent" != "$TARGET" ] && [ "$parent" != "/" ]; do
+    rmdir "$parent" 2>/dev/null || break
+    parent="$(dirname "$parent")"
+  done
+done < <(cc_retired_relpaths)
 
 # --- copy_if_absent config (FR-UPD-07) ------------------------------------
 # gates.config, frozen-surfaces.json, models.json: restore only if the target
@@ -479,14 +528,14 @@ read -r -d '' CC_BLOCK <<'BLOCK' || true
 
 This project runs **claude-company**, a hierarchical SDLC system for Claude Code.
 
-- Main sessions act as CEO: drive the project through `/orchestrator` and `ORCHESTRATOR.md`.
+- Main sessions act as CEO: drive the project through `/company` and `COMPANY.md`.
 - Subagents obey their brief plus `company/METHOD.md` - the brief is the contract.
 - Gates are the definition of done and are hook-enforced. Red stays red until proven green.
 - Run gates with `company/run-gates.sh`; configure them in `company/gates.config`.
 - Frozen surfaces (`company/frozen-surfaces.json`) change only via a change request in `company/change-requests/`.
 - Project state lives in `company/state/` (STATUS, RESUME, WORRIES, DECISIONS).
 
-New to this project? Run `/company-init`. Adopting an existing codebase? Run `/onboard`. Then `/orchestrator`.
+New to this project, or adopting an existing codebase? Run `/company-init`. Then `/company`.
 <!-- claude-company:end -->
 BLOCK
 
@@ -580,7 +629,7 @@ if [ "$CHECK" != "1" ]; then
 fi
 
 # --- report (FR-UPD-14) ---------------------------------------------------
-total_drift=$((n_restored + n_updated + n_preserved + merged_changed))
+total_drift=$((n_restored + n_updated + n_preserved + merged_changed + n_retired))
 echo
 # issue-64: one notice line when the delegation enforcer is installed but the
 # target has no provenance.json - update never arms it, it only informs.
@@ -593,6 +642,7 @@ else
   echo "  updated:   $n_updated"
   echo "  preserved: $n_preserved"
   echo "  restored:  $n_restored"
+  echo "  retired:   $n_retired"
   echo "  unchanged: $n_unchanged"
   echo "  merged:    $merged_changed"
   if [ "$n_preserved" -gt 0 ]; then

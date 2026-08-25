@@ -53,7 +53,7 @@ Two open rows in `company/state/WORRIES.md`:
 - **P0**: DECISIONS #19's compensating control was never mechanized.
   `risk_score.py` has zero callers and is wired to no hook event; the
   risk-scaled audit band exists only as a runbook instruction in
-  `ORCHESTRATOR.md`. OWNER RULING 2026-08-23: the fix is in flight on a
+  `COMPANY.md`. OWNER RULING 2026-08-23: the fix is in flight on a
   separate branch and does not gate this release.
 - **P1**: `guard_provenance.dirty_source_paths` is umbrella-scoped rather than
   repo-scoped, so in a polyrepo install dirty source anywhere under the

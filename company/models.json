@@ -4,7 +4,7 @@
   "roles": {
     "product-manager": "opus", "architect": "opus", "tech-lead": "opus",
     "developer": "opus", "qa-engineer": "opus", "auditor": "opus",
-    "docs-librarian": "opus"
+    "docs-librarian": "opus", "ideation-strategist": "opus"
   },
   "builtins": {
     "$comment": "Built-in agent types (Explore, general-purpose, Plan, claude) have no .claude/agents frontmatter pin, so a bare spawn silently inherits the SESSION model - guard_models therefore requires an explicit matching model override for these. The Workflow tool is hook-invisible (its agent() spawns fire no PreToolUse events) and is forbidden by default - see company/METHOD.md.",

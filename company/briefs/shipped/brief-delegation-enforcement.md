@@ -51,8 +51,8 @@ the smoke drill in the DoD passes end to end.
 - `company/frozen-surfaces.json` (add one `always` entry)
 - `.claude/settings.json` (wiring additions only - do not reorder existing
   hooks)
-- `ORCHESTRATOR.md`, `company/METHOD.md`,
-  `.claude/skills/orchestrator/SKILL.md` (the doctrine passes specified below)
+- `COMPANY.md`, `company/METHOD.md`,
+  `.claude/skills/company/SKILL.md` (the doctrine passes specified below)
 
 Nothing else. Anything not listed is read-only to you. If the fix you need
 lives outside these paths, report it; do not make it.
@@ -199,7 +199,7 @@ lives outside these paths, report it; do not make it.
    `execution`, `execution_why`, `reclassified_why` are documented in the
    doctrine pass (METHOD.md state table row).
 8. **FR-DE-13 doctrine pass** (exact replacement prose in the appendix):
-   ORCHESTRATOR.md "Your role" first bullet swap + new operating-loop step
+   COMPANY.md "Your role" first bullet swap + new operating-loop step
    between Brief and Dispatch + "Quality bar" extension + step-6/7 audit
    order note; SKILL.md classify-sentence rewrite; METHOD.md mechanism 5
    enforcement paragraph + provenance-ledger.json state-table row +
@@ -411,7 +411,7 @@ set "type": "hotfix" (logged, never silent).
 
 ## Appendix B - exact doctrine prose
 
-ORCHESTRATOR.md - replace the first "Your role" bullet (the one beginning
+COMPANY.md - replace the first "Your role" bullet (the one beginning
 "**You code, with judgment about what is yours vs. theirs.**") with:
 
 ```
@@ -431,7 +431,7 @@ ORCHESTRATOR.md - replace the first "Your role" bullet (the one beginning
   module's MODULE.md changelog.
 ```
 
-ORCHESTRATOR.md - insert a new operating-loop step between step 4 (Brief) and
+COMPANY.md - insert a new operating-loop step between step 4 (Brief) and
 step 5 (Dispatch), renumbering the rest or labeling it 4b:
 
 ```
@@ -447,7 +447,7 @@ step 5 (Dispatch), renumbering the rest or labeling it 4b:
     decision, the dispatch count, and the idle flag.
 ```
 
-ORCHESTRATOR.md "Quality bar": extend the line "auditor double-checks the big
+COMPANY.md "Quality bar": extend the line "auditor double-checks the big
 ones" to "auditor double-checks the big ones, and every self-authored
 commit - the provenance hook enforces that last one mechanically." In step 7
 (Integrate), add one sentence: "Order for self-authored work: gates green
@@ -455,7 +455,7 @@ first, then the auditor pass, then ONE commit of the audited work - a commit
 moves HEAD, which stales both the stamp and the audit, so splitting means
 rerunning both, which is correct."
 
-.claude/skills/orchestrator/SKILL.md - in "The engagement", extend the
+.claude/skills/company/SKILL.md - in "The engagement", extend the
 "Work given" bullet's classify sentence so the default path is explicit:
 
 ```

@@ -127,8 +127,9 @@ guards only log their bypass. There is no waiver; scrub the secret and recommit.
 - Tech leads re-run the gates on the integrated workstream, never trusting a
   developer's numbers from an isolated worktree (stale worktree artifacts mask
   contract drift).
-- The CEO re-runs the gates on main after merge. Trust integrated-main gates
-  over any worktree self-report.
+- The CEO confirms the stamp on integrated main (`gate_stamp.py --check`)
+  and runs the ladder only if it is missing, red, or stale. Trust
+  integrated-main gates over any worktree self-report.
 
 ## UI work has a seventh gate: eyes
 

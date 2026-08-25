@@ -118,7 +118,7 @@ the end.
 5. **FR-HP-06 - `HASH_EXCLUDES` is exactly `("company/state",)`.** The fork also
    excludes `*.md` and `*.txt` on the grounds that prose decides no gate
    outcome. That is TRUE for a product app and FALSE here: markdown IS this
-   product - agent definitions, skills, ORCHESTRATOR.md, doctrine - and
+   product - agent definitions, skills, COMPANY.md, doctrine - and
    `no_slop`, `trace_check` and `guard_models` all gate it. Implement the
    exclusion tuple so the difference is a one-line change, and leave a comment
    recording WHY prose stays in, so a future reader does not "fix" it.

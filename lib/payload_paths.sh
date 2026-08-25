@@ -63,7 +63,7 @@ cc_overwrite_relpaths() {
 
     # Overwritten singletons - mirror copy_overwrite, only if they exist.
     for f in \
-      "$src_root/ORCHESTRATOR.md" \
+      "$src_root/COMPANY.md" \
       "$src_root/company/METHOD.md" \
       "$src_root/company/GATES.md" \
       "$src_root/company/EXTENDING.md" \
@@ -78,6 +78,32 @@ cc_overwrite_relpaths() {
   } | while IFS= read -r p; do
     printf '%s\n' "${p#$src_root/}"
   done | LC_ALL=C sort
+}
+
+# cc_retired_relpaths
+#   Paths the current package no longer ships. update deletes them so a field
+#   install does not keep two CEO runbooks or the old slash-command set.
+#   Printed newline-delimited, LC_ALL=C sorted. Independent of SRC: these
+#   names are historical and will not exist in a current package tree.
+cc_retired_relpaths() {
+  {
+    printf '%s\n' \
+      "ORCHESTRATOR.md" \
+      ".claude/skills/orchestrator/SKILL.md" \
+      ".claude/skills/feature/SKILL.md" \
+      ".claude/skills/onboard/SKILL.md" \
+      ".claude/skills/gates/SKILL.md" \
+      ".claude/skills/cr/SKILL.md" \
+      ".claude/skills/release/SKILL.md" \
+      ".claude/skills/autopilot/SKILL.md" \
+      ".opencode/command/orchestrator.md" \
+      ".opencode/command/feature.md" \
+      ".opencode/command/onboard.md" \
+      ".opencode/command/gates.md" \
+      ".opencode/command/cr.md" \
+      ".opencode/command/release.md" \
+      ".opencode/command/autopilot.md"
+  } | LC_ALL=C sort
 }
 
 # wire_background_subagents_env ENABLE_RC

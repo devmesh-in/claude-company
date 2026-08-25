@@ -49,4 +49,4 @@ Suspicions, near-misses, false-green risks - anything that belongs in
 Acceptance: pending owner
 (Delivery is not done until the owner's acceptance is recorded in
 `company/state/DECISIONS.md`. Silence is not acceptance - see
-`ORCHESTRATOR.md` step 8.)
+`COMPANY.md` step 8.)

@@ -182,9 +182,23 @@ if harness_selected opencode; then
 wire_background_subagents_env "$BG_ENV"
 fi
 
-# --- 2. canon docs and orchestrator (ours - update in place) --------------
+# --- 2. canon docs and company (ours - update in place) --------------
 info "Installing canon docs"
-copy_overwrite "$SRC/ORCHESTRATOR.md"          "$TARGET/ORCHESTRATOR.md"
+copy_overwrite "$SRC/COMPANY.md"          "$TARGET/COMPANY.md"
+# Drop payload this package no longer ships so a re-install does not leave
+# two CEO runbooks or the old slash-command set.
+if type cc_retired_relpaths >/dev/null 2>&1; then
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    [ -f "$TARGET/$rel" ] || continue
+    rm -f "$TARGET/$rel"
+    parent="$(dirname "$TARGET/$rel")"
+    while [ "$parent" != "$TARGET" ] && [ "$parent" != "/" ]; do
+      rmdir "$parent" 2>/dev/null || break
+      parent="$(dirname "$parent")"
+    done
+  done < <(cc_retired_relpaths)
+fi
 copy_overwrite "$SRC/company/METHOD.md"        "$TARGET/company/METHOD.md"
 copy_overwrite "$SRC/company/GATES.md"         "$TARGET/company/GATES.md"
 copy_overwrite "$SRC/company/EXTENDING.md"     "$TARGET/company/EXTENDING.md"
@@ -260,11 +274,11 @@ scaffold_stub() {
   ok "${dst#$TARGET/}"
 }
 scaffold_stub "$TARGET/company/state/RESUME.md" \
-  "# RESUME - maintained by the orchestrator. Where we are and what happens next."
+  "# RESUME - maintained by the company. Where we are and what happens next."
 scaffold_stub "$TARGET/company/state/WORRIES.md" \
-  "# WORRIES - maintained by the orchestrator. Open risks and unknowns, worst first."
+  "# WORRIES - maintained by the company. Open risks and unknowns, worst first."
 scaffold_stub "$TARGET/company/state/DECISIONS.md" \
-  "# DECISIONS - maintained by the orchestrator. Durable choices and their rationale."
+  "# DECISIONS - maintained by the company. Durable choices and their rationale."
 if [ ! -e "$TARGET/company/state/adherence.log" ]; then
   touch "$TARGET/company/state/adherence.log"
   ok "company/state/adherence.log"
@@ -421,14 +435,14 @@ read -r -d '' CC_BLOCK <<'BLOCK' || true
 
 This project runs **claude-company**, a hierarchical SDLC system for Claude Code.
 
-- Main sessions act as CEO: drive the project through `/orchestrator` and `ORCHESTRATOR.md`.
+- Main sessions act as CEO: drive the project through `/company` and `COMPANY.md`.
 - Subagents obey their brief plus `company/METHOD.md` - the brief is the contract.
 - Gates are the definition of done and are hook-enforced. Red stays red until proven green.
 - Run gates with `company/run-gates.sh`; configure them in `company/gates.config`.
 - Frozen surfaces (`company/frozen-surfaces.json`) change only via a change request in `company/change-requests/`.
 - Project state lives in `company/state/` (STATUS, RESUME, WORRIES, DECISIONS).
 
-New to this project? Run `/company-init`. Adopting an existing codebase? Run `/onboard`. Then `/orchestrator`.
+New to this project, or adopting an existing codebase? Run `/company-init`. Then `/company`.
 <!-- claude-company:end -->
 BLOCK
 
@@ -489,11 +503,10 @@ cat <<EPILOGUE
 Next steps:
   1. cd "$TARGET"
   2. claude
-  3. In Claude Code, run one of:
-       /company-init   (new project - scaffold specs and gates)
-       /onboard        (existing codebase - map what is already there)
+  3. In Claude Code, run:
+       /company-init   (found a new project or adopt an existing one)
   4. Then start driving the work:
-       /orchestrator   (the full company)
+       /company   (the full company)
        /lean-company   (one small piece of work - less ceremony, same gates)
 
 Configure your gates in company/gates.config, then verify with:

@@ -13,7 +13,7 @@ lane holds `is_source` in the same file, and the rest is unassigned.
 
 Brief `brief-hp-doctrine.md` scope item 7, authorized by DECISIONS #19 (a):
 "`quick` entries need no brief", to land in METHOD's ceremony table and
-ORCHESTRATOR's classify step. Both are now written.
+COMPANY's classify step. Both are now written.
 
 The hook says otherwise, and it is not a near miss:
 
@@ -101,7 +101,7 @@ entries, feat-a with a good brief and quick-b with none, one edit to
 src/app.py: exit 2, blocked, naming quick-b).
 
 Ruling: THE DOCTRINE COMES OUT, the code change does NOT go in here. The
-quick-needs-no-brief clause is removed from METHOD.md and ORCHESTRATOR.md
+quick-needs-no-brief clause is removed from METHOD.md and COMPANY.md
 (commit 0bc4e20). The guard_spec exemption moves to L4, which owns that
 file in wave 2, and the doctrine clause returns once the code is true.
 spec-lite is unaffected and stays: it governs whether a PM spec is

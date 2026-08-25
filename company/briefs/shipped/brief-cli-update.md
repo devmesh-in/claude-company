@@ -85,7 +85,7 @@ lives outside these paths, report it; do not make it.
 2. `install.sh`: after the copy phase, write
    `company/state/install-manifest.json` covering exactly the overwrite set
    (the copy_overwrite / copy_tree_overwrite paths: `.claude/agents`,
-   `.claude/hooks` `*.py`, `.claude/skills`, `ORCHESTRATOR.md`, the
+   `.claude/hooks` `*.py`, `.claude/skills`, `COMPANY.md`, the
    `company/*.md` canon docs, `company/run-gates.sh`, `company/templates`).
    Parity test stays green with no new exclusion. (FR-UPD-02)
 3. `update.sh`: the engine. Reuses install.sh's helper shape. Per payload file
@@ -137,7 +137,7 @@ lives outside these paths, report it; do not make it.
   `update.sh` guarantees the file dispositions. Keep the split clean so the
   engine is testable without the CLI.
 - You may assume the packaged tree layout matches this repo (`.claude/`,
-  `company/`, `ORCHESTRATOR.md` at package root) - install.sh already relies
+  `company/`, `COMPANY.md` at package root) - install.sh already relies
   on it. update.sh runs from the package like install.sh (it is packed, not
   copied into targets).
 

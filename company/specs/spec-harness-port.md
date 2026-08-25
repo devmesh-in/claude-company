@@ -114,7 +114,7 @@ Full divergence, 14 directions:
 | 8 | Scale lens: land the concurrency layer alone in 0.2.7, everything else in 0.2.8 | Mandatory before recommending parallel sessions; self-contained | Two releases of churn through the same files; the verdict parser keeps costing dispatches for another cycle | Safe and slow |
 | 9 | Zero-new-mechanism constraint: only modify existing functions, add no new file, no new gate | Minimal review surface, no install-path changes | Forfeits the wiring assertion, which is the one change that prevents the drift class DevMesh actually hit | Cheap, and forecloses the best idea |
 | 10 | Reversibility constraint: every change behind a manifest flag | Field installs can turn any of it off | Flags are waivers with a nicer name; DECISIONS #5 rejected exactly this shape of knob twice | Adds a permanent surface to maintain |
-| 11 | Assumption challenge: the fork's `HASH_EXCLUDES` (drop `*.md`, `*.txt`) is a saving here too | It is a large part of the fork's measured win | FALSE here: markdown IS this product. Agent definitions, skills, ORCHESTRATOR.md and doctrine are gated by no_slop, trace_check and guard_models. Excluding prose would let a doctrine rewrite stale nothing | Would import a false-green |
+| 11 | Assumption challenge: the fork's `HASH_EXCLUDES` (drop `*.md`, `*.txt`) is a saving here too | It is a large part of the fork's measured win | FALSE here: markdown IS this product. Agent definitions, skills, COMPANY.md and doctrine are gated by no_slop, trace_check and guard_models. Excluding prose would let a doctrine rewrite stale nothing | Would import a false-green |
 | 12 | Assumption challenge: keep `stop_gate` as-is and delete it instead (the fork's answer) | Removes the multi-session block entirely | Deletion removes the only check on three paths `guard_commit` cannot see: a session that edits and never commits, a session that commits green then edits more, and closing an entry with red gates | Cures the symptom by removing the organ |
 | 13 | Inversion: design for "how would we ship a false green or a silent bypass", read as a checklist | Surfaces the traps in the source material rather than trusting it | Not a plan on its own | Becomes the review discipline layered on whichever plan wins |
 | 14 | Six workstreams, two waves, each item adapted on its merits against upstream's single-repo product posture | Keeps the proven wins, rejects the polyrepo-shaped ones item by item; wave 1 is file-disjoint and wave 2 depends only on wave 1's kernel | Largest coordination surface of the candidates; two lanes convert BLOCKs into ALLOWs and need independent reads | Highest value, highest process cost |
@@ -259,10 +259,10 @@ as one by the owner - four items, four FRs:
     not raise.
 - **FR-HP-06:** `HASH_EXCLUDES` is exactly `("company/state",)`. Prose is NOT
   excluded. The constant carries a comment stating why: markdown is the product
-  in this repo (agent definitions, skills, ORCHESTRATOR.md, doctrine) and
+  in this repo (agent definitions, skills, COMPANY.md, doctrine) and
   `no_slop`, `trace_check` and `guard_models` all gate it, so excluding it
   would let a doctrine rewrite stale nothing.
-  - AC: editing `ORCHESTRATOR.md` changes `work_hash`.
+  - AC: editing `COMPANY.md` changes `work_hash`.
   - AC: editing `.claude/agents/auditor.md` changes `work_hash`.
   - AC: writing `company/state/adherence.log` does NOT change `work_hash`.
 - **FR-HP-07:** A `work_hash` call slower than `SLOW_HASH_SECONDS` (1.5) writes
@@ -627,7 +627,7 @@ as one by the owner - four items, four FRs:
   - AC: the file exists, its status line reads `Status: accepted`, it cites
     FR-HP-44 through FR-HP-46, and it links the parked spec.
 
-#### L6 - stop_gate and doctrine (`stop_gate.py`, `ORCHESTRATOR.md`, `company/METHOD.md`, `company/GATES.md`, `company/templates/BRIEF-TEMPLATE.md`, `.claude/agents/{auditor,docs-librarian,qa-engineer,tech-lead}.md`)
+#### L6 - stop_gate and doctrine (`stop_gate.py`, `COMPANY.md`, `company/METHOD.md`, `company/GATES.md`, `company/templates/BRIEF-TEMPLATE.md`, `.claude/agents/{auditor,docs-librarian,qa-engineer,tech-lead}.md`)
 
 - **FR-HP-50:** `stop_gate` scopes its block. DECIDED by the owner
   (DECISIONS #18): `stop_gate` gets SCOPED, not unwired and not deleted - this
@@ -678,14 +678,14 @@ as one by the owner - four items, four FRs:
     `DO-NOT-SHIP` outside a single line that explicitly forbids emitting it.
   - AC: a test feeds the file's own Verdict section text to `audit_verdict` and
     asserts the result is not `do-not-ship`.
-- **FR-HP-55:** `ORCHESTRATOR.md` gains a "Parallel discipline" section with
+- **FR-HP-55:** `COMPANY.md` gains a "Parallel discipline" section with
   four rules: dispatch a wave in ONE message; never idle while lanes build
   (draft next briefs, pre-read verification targets, decide CRs); integrate
   per-lane as each goes green rather than barrier-waiting; CRs are
   interrupt-priority.
   - AC: the section exists and each of the four rules is present as its own
     bullet.
-- **FR-HP-56:** `ORCHESTRATOR.md` gains a "Don't fight the harness" section:
+- **FR-HP-56:** `COMPANY.md` gains a "Don't fight the harness" section:
   the block message is the recipe and is followed before reading hook source;
   work happens on task branches; a content edit between audit and commit stales
   the audit and fixes are batched so the audit runs once; a gate blocking twice
@@ -694,7 +694,7 @@ as one by the owner - four items, four FRs:
   - AC: the section exists and each of the five rules is present.
 - **FR-HP-57:** Right-sized paperwork, doctrine only: `company/METHOD.md`
   records that `RESUME.md` and `DECISIONS.md` stay around 300 lines with
-  overflow archived VERBATIM to `company/state/archive/`, and ORCHESTRATOR's
+  overflow archived VERBATIM to `company/state/archive/`, and COMPANY's
   operating loop names the archive step. No hook and no gate enforces the
   number (BR-HP-05 rationale: a line count is a magic number, and DECISIONS #5
   rejected numeric fences as an enforcement shape).
@@ -709,7 +709,7 @@ as one by the owner - four items, four FRs:
     full-sweep exception.
 - **FR-HP-59:** docs-librarian is dispatched BATCHED - one dispatch per
   delivery covering everything merged since the last sync. The rule lands in
-  `ORCHESTRATOR.md` AND in the `description` frontmatter of
+  `COMPANY.md` AND in the `description` frontmatter of
   `.claude/agents/docs-librarian.md`, whose current text still says "use after
   any merge" (the fork changed the doctrine and left the agent definition
   contradicting it).
@@ -741,7 +741,7 @@ as one by the owner - four items, four FRs:
   hashing.
   - AC: both rows present; no sentence in METHOD.md claims a commit stales a
     green stamp.
-- **FR-HP-64:** `ORCHESTRATOR.md` gains a short repair procedure for lost
+- **FR-HP-64:** `COMPANY.md` gains a short repair procedure for lost
   dispatch credits: re-credit through `guard_provenance`'s own functions,
   UNDER `state_lock`, and write an `adherence.log` REPAIR line naming what was
   repaired. Never hand-edit `company/state/provenance-ledger.json` - a hand
@@ -750,7 +750,7 @@ as one by the owner - four items, four FRs:
   - AC: the section exists, names the three elements (own functions, under the
     lock, REPAIR line), and states the checksum-reset reason for the
     prohibition.
-- **FR-HP-65:** `ORCHESTRATOR.md` and `company/METHOD.md` carry the standing
+- **FR-HP-65:** `COMPANY.md` and `company/METHOD.md` carry the standing
   advisory: concurrent BUILDING sessions in one checkout are fine and are what
   the lock layer exists for; concurrent INTEGRATING sessions are not - one
   integrating session per repository at a time. Git's own `index.lock` makes
@@ -821,7 +821,7 @@ refused here:
 
 1. **`HASH_EXCLUDES` must NOT gain `*.md` or `*.txt`.** The fork excludes prose
    on the grounds that it decides no gate outcome. That is FALSE in this repo:
-   markdown IS the product (agent definitions, skills, ORCHESTRATOR.md,
+   markdown IS the product (agent definitions, skills, COMPANY.md,
    doctrine, templates), and `no_slop`, `trace_check` and `guard_models` all
    gate it. Excluding it would let a doctrine rewrite stale nothing - a
    false-green generator. Do not "fix" this later without superseding
@@ -941,7 +941,7 @@ at integration.
 | L3 runner | `company/run-gates.sh`, `.claude/hooks/gate_stamp.py`, `.claude/hooks/guard_models.py`, `.claude/hooks/guard_frozen.py`, `company/frozen-surfaces.json`, `.gitignore`, `company/change-requests/CR-2-*.md` | `tests/hooks/test_gate_runner.py` (new) |
 | L4 state writers | `.claude/hooks/witness_check.py`, `.claude/hooks/cost_capture.py`, `.claude/hooks/guard_spec.py` (torn-read path only) | `tests/hooks/test_state_writers.py` (new) |
 | L5 provenance | `.claude/hooks/guard_provenance.py`, `company/adr/ADR-0003-self-authored-audit-scope.md` | extends `tests/hooks/test_guard_provenance.py` |
-| L6 doctrine | `.claude/hooks/stop_gate.py`, `ORCHESTRATOR.md`, `company/METHOD.md`, `company/GATES.md`, `company/templates/BRIEF-TEMPLATE.md`, `.claude/agents/{auditor,docs-librarian,qa-engineer,tech-lead}.md` | `tests/hooks/test_stop_gate_scope.py` (new) plus doctrine assertions there |
+| L6 doctrine | `.claude/hooks/stop_gate.py`, `COMPANY.md`, `company/METHOD.md`, `company/GATES.md`, `company/templates/BRIEF-TEMPLATE.md`, `.claude/agents/{auditor,docs-librarian,qa-engineer,tech-lead}.md` | `tests/hooks/test_stop_gate_scope.py` (new) plus doctrine assertions there |
 
 Read-only to every lane: `tests/hooks/test_hooks.py` and the other existing
 suites are extended only where the owning lane's table row says so. Nobody
@@ -1125,7 +1125,7 @@ How each FR is proven:
 | FR-HP-02 | Concurrent reader loop over 200 writes; forced `json.dump` failure leaves destination and directory clean |
 | FR-HP-03, FR-HP-04 | Fixture task files: valid, absent, unparseable-then-valid, permanently unparseable |
 | FR-HP-05 | Temp git repo: hash invariance under `git add` and under commit; hash change under a source edit; `.git/index` untouched; git-absent fallback |
-| FR-HP-06 | Hash changes for `ORCHESTRATOR.md` and an agent file; does not change for `company/state/adherence.log` |
+| FR-HP-06 | Hash changes for `COMPANY.md` and an agent file; does not change for `company/state/adherence.log` |
 | FR-HP-07 | Stubbed slow implementation asserts exactly one TIMING line; fast path asserts zero |
 | FR-HP-08, FR-HP-47 | Test asserts the ADR files exist, are `Status: accepted`, and cite their FRs |
 | FR-HP-10 | Parse table over 8 command forms including the `commit -C HEAD~1` trap |

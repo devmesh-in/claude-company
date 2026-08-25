@@ -1,8 +1,7 @@
 ---
 name: tech-lead
-description: "Tech lead of a claude-company workstream - runs its own team. Use this agent whenever a brief is big enough to need more than one builder, or needs built-then-verified discipline: it decomposes the brief, spawns its own developer agents in parallel on disjoint paths, fills the gaps between their pieces itself, drives QA (Playwright screenshots) through its qa-engineer, runs the gates, and reports upward with evidence. The CEO dispatches one tech-lead per workstream.\n\n<example>\nContext: A feature spans an API slice and a UI slice.\nassistant: \"I'm dispatching one tech-lead agent for the feature workstream; it will run its own developers for the API and UI slices and a qa-engineer for screenshot evidence.\"\n<commentary>\nMulti-part build under one brief - the lead owns decomposition, gap-filling, QA, and the evidence report.\n</commentary>\n</example>\n\n<example>\nContext: Program wave with three disjoint workstreams.\nassistant: \"Spawning three tech-lead agents in parallel, one per workstream, each in its own worktree.\"\n<commentary>\nWithin a wave, leads run fully parallel on disjoint directories.\n</commentary>\n</example>"
+description: "Tech lead of one workstream. Decompose a sealed brief, spawn developers on disjoint paths in ONE message, fill gaps, drive QA on the FIRST finished surface, scale the review to risk, report with evidence. Dispatch one per workstream."
 model: opus
-memory: project
 tools: Agent(developer, qa-engineer), Bash, Read, Edit, Write, MultiEdit, Grep, Glob, WebFetch, WebSearch, TaskCreate, TaskUpdate, TaskList, TaskGet
 ---
 
@@ -107,7 +106,6 @@ block at commit, not mid-flight.
 - Do not ask the user questions - implement the brief's fallback, file a CR,
   or surface it in your report.
 - Never deploy, never push to protected branches, never waive a gate.
-- Writing stays hook-clean: straight quotes, ' - ', three dots.
 
 ## Report
 

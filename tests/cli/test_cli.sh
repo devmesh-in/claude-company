@@ -128,10 +128,11 @@ want_present ".claude/hooks/guard_commit.py"
 want_present ".claude/settings.json"
 want_present ".mcp.json"
 want_present "company/EXTENDING.md"
-want_absent "^company/IDEATION.md"
-want_absent "ideation-strategist"
+want_present "COMPANY.md"
+want_present "company/IDEATION.md"
+want_present ".claude/agents/ideation-strategist.md"
+want_present ".claude/skills/brainstorm/SKILL.md"
 want_absent "skills/standup"
-want_absent "skills/brainstorm"
 want_absent "devops-engineer.md"
 want_absent "security-reviewer.md"
 want_present "install"
@@ -189,6 +190,7 @@ node "$BIN" update --help >"$WORK/uh.out" 2>/dev/null; RC=$?
 grep -qi 'never overwrites' "$WORK/uh.out" && pass "update --help states the preserve guarantee" \
   || fail "update --help states the preserve guarantee"
 grep -q -- '--check' "$WORK/uh.out" && pass "update --help documents --check" || fail "update --help documents --check"
+grep -q -- '--override' "$WORK/uh.out" && pass "update --help documents --override" || fail "update --help documents --override"
 
 node "$BIN" update >"$WORK/nt.out" 2>&1; RC=$?
 [ "$RC" -eq 1 ] && pass "update with no target exits 1 (usage)" || fail "update no target exits 1 (rc=$RC)"

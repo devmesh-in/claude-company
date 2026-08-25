@@ -700,7 +700,7 @@ class TestGuardModelsBuiltins(Base):
         # FR-MRA-01: the shipped models.json template pins the four built-in
         # types. FR-MRA-11 / FR-MRA-12: the Workflow-tool doctrine (outside
         # hook enforcement, forbidden by default) is present in METHOD.md and
-        # ORCHESTRATOR.md - both ship in the overwrite payload, so dropping
+        # COMPANY.md - both ship in the overwrite payload, so dropping
         # either regresses every install on its next update.
         repo_root = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -711,7 +711,7 @@ class TestGuardModelsBuiltins(Base):
             self.assertIn(builtin_type, builtins)
             self.assertEqual(builtins[builtin_type], "opus")
         method = open(os.path.join(repo_root, "company", "METHOD.md")).read()
-        orch = open(os.path.join(repo_root, "ORCHESTRATOR.md")).read()
+        orch = open(os.path.join(repo_root, "COMPANY.md")).read()
         for text in (method, orch):
             self.assertIn("Workflow tool", text)
             self.assertIn("FORBIDDEN by default", text)

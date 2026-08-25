@@ -157,12 +157,11 @@ does not ration them with a risk score. The auditor never writes code.
 
 ## Preparing a release
 
-Shipping is split in two: the company prepares, the owner ships. When `main`
-is green, `/release` proves the readiness list, assembles a changelog, bumps
-`package.json`, and writes the notes. Then it stops. You ship by publishing a
-GitHub release tagged `vX.Y.Z` matching that version; `.github/workflows/release.yml`
-re-runs the suites and publishes to npm via OIDC trusted publishing. No npm
-token lives in the repo.
+Shipping is split in two: the company prepares notes if asked, the owner ships.
+You ship by publishing a GitHub release tagged `vX.Y.Z` matching `package.json`;
+`.github/workflows/release.yml` re-runs the suites and publishes to npm via
+OIDC trusted publishing. No npm token lives in the repo. There is no local
+`/release` checklist.
 
 The same discipline closes a delivery. A delivery is not done when the code merges - it is done when your acceptance is recorded. Silence is never a yes.
 

@@ -103,7 +103,7 @@ Nothing else. No code, no hooks, no company/ canon edits, no templates.
 
 ## Out of scope
 
-- Any code/hook/test/canon change; ORCHESTRATOR.md; templates
+- Any code/hook/test/canon change; COMPANY.md; templates
 - Issue #31 (parallel task)
 - Marketing rewrites of existing prose
 

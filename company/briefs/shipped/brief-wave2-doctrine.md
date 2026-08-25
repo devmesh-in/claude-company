@@ -23,7 +23,7 @@ enforces this on everyone else.
 
 1. `CLAUDE.md`
 2. `company/METHOD.md` (you edit it - study its voice and structure first)
-3. `ORCHESTRATOR.md` (same)
+3. `COMPANY.md` (same)
 4. `company/GATES.md` (same)
 5. `company/templates/SPEC-TEMPLATE.md`, `BRIEF-TEMPLATE.md`,
    `REPORT-TEMPLATE.md`, `CR-TEMPLATE.md` (the template voice)
@@ -33,7 +33,7 @@ enforces this on everyone else.
 
 ## You own
 
-- `company/METHOD.md`, `company/GATES.md`, `ORCHESTRATOR.md`,
+- `company/METHOD.md`, `company/GATES.md`, `COMPANY.md`,
   `company/LOOPS.md`
 - `company/adr/` (new directory: README.md index + ADR-0001)
 - `company/templates/` (new: ADR-TEMPLATE.md; edit: REPORT-TEMPLATE.md)
@@ -73,11 +73,11 @@ witnesses.json, gates_detect (parallel workstream) - do NOT touch, even to
    example (Status: accepted): the decision to adopt ADRs, its scope
    (company/adr/), consequence (immutability enforcement).
 2. **Precedence rule** (#20): in METHOD.md (with the other core
-   mechanisms) and ORCHESTRATOR.md (briefing step): "ADR wins on
+   mechanisms) and COMPANY.md (briefing step): "ADR wins on
    architecture (how), SPEC wins on scope (what). A brief that contradicts
    an accepted ADR is a briefing error; a builder that notices the
    conflict files a CR - it never picks a winner." Add ADR proposal to the
-   architect's Phase-0/program duties in ORCHESTRATOR.md step 2.
+   architect's Phase-0/program duties in COMPANY.md step 2.
 3. **GATES.md updates**: add ladder rows/sections for the new mechanical
    gates, using EXACTLY these contract points (built by the parallel
    workstream): gate `witnesses` - `python3
@@ -90,7 +90,7 @@ witnesses.json, gates_detect (parallel workstream) - do NOT touch, even to
    `python3 .claude/hooks/guard_models.py --check` (wave 1). Plus a short
    "Secrets never commit" note: guard_secrets blocks at commit time and
    hotfix does NOT bypass it.
-4. **ORCHESTRATOR.md verify step (step 6)**: add - run `python3
+4. **COMPANY.md verify step (step 6)**: add - run `python3
    .claude/hooks/risk_score.py --base <integration-base>` on every
    completed task branch; band `high` makes the auditor dispatch
    MANDATORY (not judgment), `medium` means extra spot-reads; the score

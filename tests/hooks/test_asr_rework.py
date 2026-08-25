@@ -56,15 +56,18 @@ class TestCanonAndDeletions(unittest.TestCase):
         self.assertIn("FR-ASR-04", text)
         self.assertIn("Nothing unique", text)
 
-    def test_fr_asr_19_status_and_ideation_are_gone(self):
-        """FR-ASR-19: payload cuts."""
+    def test_fr_asr_19_status_is_gone_ideation_is_kept(self):
+        """FR-ASR-19: STATUS/standup stay cut; ideation (brainstorm) ships."""
         self.assertFalse(os.path.exists(
             os.path.join(REPO_ROOT, "company", "state", "STATUS.md")))
-        self.assertFalse(os.path.exists(
+        self.assertTrue(os.path.exists(
             os.path.join(REPO_ROOT, "company", "IDEATION.md")))
-        self.assertFalse(os.path.exists(
+        self.assertTrue(os.path.exists(
             os.path.join(REPO_ROOT, ".claude", "agents",
                          "ideation-strategist.md")))
+        self.assertTrue(os.path.exists(
+            os.path.join(REPO_ROOT, ".claude", "skills", "brainstorm",
+                         "SKILL.md")))
         self.assertFalse(os.path.exists(
             os.path.join(REPO_ROOT, ".claude", "skills", "standup",
                          "SKILL.md")))

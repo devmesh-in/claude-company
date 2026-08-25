@@ -10,7 +10,7 @@ and tested, but the covering tests do not cite the FR/BR IDs, and doctrine FRs
 (FR-MRA-11/12) plus the template shape (FR-MRA-01) have no covering test at
 all. Add the citations at the exact covering tests, add one real regression
 test asserting the shipped models.json template shape and the Workflow
-doctrine presence in METHOD.md/ORCHESTRATOR.md, and cite the update-suite IDs
+doctrine presence in METHOD.md/COMPANY.md, and cite the update-suite IDs
 in its section 12 header. Then: archive paperwork, record decisions, bump
 version 0.2.1 -> 0.2.2, and land it all in one release PR.
 

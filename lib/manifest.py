@@ -58,6 +58,45 @@ def cmd_hash(argv):
     return 0
 
 
+def cmd_hashtree(argv):
+    # hashtree --root DIR ; relpaths on STDIN, newline-delimited.
+    # Prints REL<TAB>DIGEST per line. DIGEST is empty when the path is
+    # missing or unreadable (callers treat empty as "no hash", same as
+    # `hash FILE` failing). One process instead of one python3 per file.
+    root = None
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--root" and i + 1 < len(argv):
+            root = argv[i + 1]
+            i += 2
+        else:
+            return _usage()
+    if root is None:
+        return _usage()
+    for line in sys.stdin:
+        rel = line.rstrip("\n")
+        if rel == "":
+            continue
+        digest = _sha256_of_file(_join(root, rel)) or ""
+        sys.stdout.write(rel + "\t" + digest + "\n")
+    return 0
+
+
+def cmd_filemap(argv):
+    # filemap FILE -> REL<TAB>SHA per line from the manifest files map.
+    # Silent empty stdout on any failure (same posture as `get`).
+    if len(argv) != 1:
+        return _usage()
+    obj = _load_json(argv[0])
+    if isinstance(obj, dict):
+        files = obj.get("files")
+        if isinstance(files, dict):
+            for rel, sha in files.items():
+                if isinstance(rel, str) and isinstance(sha, str):
+                    sys.stdout.write(rel + "\t" + sha + "\n")
+    return 0
+
+
 def cmd_build(argv):
     # build --version V --root DIR ; relpaths come from STDIN, newline-delimited.
     version = None
@@ -175,7 +214,8 @@ def _join(root, rel):
 def _usage():
     sys.stderr.write(
         "usage: manifest.py "
-        "{hash FILE | build --version V --root DIR | version FILE | "
+        "{hash FILE | hashtree --root DIR | filemap FILE | "
+        "build --version V --root DIR | version FILE | "
         "get FILE RELPATH | vercmp A B | pkgversion FILE}\n"
     )
     return 2
@@ -183,6 +223,8 @@ def _usage():
 
 _COMMANDS = {
     "hash": cmd_hash,
+    "hashtree": cmd_hashtree,
+    "filemap": cmd_filemap,
     "build": cmd_build,
     "version": cmd_version,
     "get": cmd_get,

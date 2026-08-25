@@ -28,7 +28,7 @@
 You describe what you want built. A CEO agent plans the work, staffs a team of AI product managers, architects, tech leads, developers, and QA engineers, builds it, tests it in a real browser with screenshots, and reports back with proof.
 
 ```text
-You>  /orchestrator build me a waitlist page with an admin view
+You>  /company build me a waitlist page with an admin view
 
 CEO   sized the request: feature
 CEO   product-manager wrote the spec (3 options considered, picked #2)
@@ -65,7 +65,7 @@ git clone https://github.com/devmesh-in/claude-company
 1. Open your project in Claude Code and start the company:
 
 ```text
-/orchestrator build me <what you want>
+/company build me <what you want>
 ```
 
 There is no setup step. On first contact the company onboards itself: it studies your codebase (or treats your request as the founding brief of a new one), finds your real test and lint commands, and wires them in as gates. The installer merges with your existing settings and never overwrites them; running it twice changes nothing.
@@ -167,13 +167,10 @@ Every block and every hotfix bypass is one line in `company/state/adherence.log`
 
 | Command                     | What it does |
 | --------------------------- | ----------------------------------------------------------------------- |
-| `/orchestrator`             | Start or resume the company. The only command you need day to day. With no work given, it reports in-flight status |
+| `/company`                  | Start or resume the company. The only command you need day to day. With no work given, it reports in-flight status |
 | `/lean-company`             | The fast door for one small piece of work: less hierarchy and paperwork, the same gates |
-| `/feature`                  | Run one feature through the full pipeline                               |
-| `/gates`                    | Run the test gates and stamp the result                                 |
-| `/release`                  | Prepare a release: prove readiness, write notes, bump the version. You ship by publishing a GitHub release |
-| `/company-init`, `/onboard` | Found the company explicitly (new project or existing codebase)         |
-| `/cr`                       | File or decide a change request against a protected file                |
+| `/company-init`             | Found the company in a new repo, or adopt an existing codebase          |
+| `/brainstorm`               | Parallel ideation before a build. Options memo, not code                |
 
 
 
@@ -228,7 +225,7 @@ No agent, including the CEO, ever decides: production deploys, database migratio
 <summary><b>How do I remove it from a project?</b></summary>
 <br>
 
-Everything lives in plain files: delete `company/`, `ORCHESTRATOR.md`, the claude-company agents/skills/hooks under `.claude/`, and the marked block in `CLAUDE.md` (between the `claude-company:begin/end` comments). Remove the claude-company hook entries from `.claude/settings.json` if you had your own settings merged. Your code, git history, and own configuration are untouched - the installer never modifies them.
+Everything lives in plain files: delete `company/`, `COMPANY.md`, the claude-company agents/skills/hooks under `.claude/`, and the marked block in `CLAUDE.md` (between the `claude-company:begin/end` comments). Remove the claude-company hook entries from `.claude/settings.json` if you had your own settings merged. Your code, git history, and own configuration are untouched - the installer never modifies them.
 
 </details>
 
@@ -243,7 +240,7 @@ Everything lives in plain files: delete `company/`, `ORCHESTRATOR.md`, the claud
 | [Glossary](docs/glossary.md)               | Every term the company uses, defined in one place          |
 | `company/METHOD.md`                        | The canon the agents themselves follow                     |
 | `company/GIT.md`                           | Worktrees, branches, commit rules, merge and cleanup       |
-| `ORCHESTRATOR.md`                          | The CEO's private runbook                                  |
+| `COMPANY.md`                          | The CEO's private runbook                                  |
 
 
 

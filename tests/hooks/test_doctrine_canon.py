@@ -24,7 +24,7 @@ hook is the obvious thing to delete and these have nothing to do with it.
 Three families live here:
 
   * CeremonyDoctrineMatchesTheGuard - runs guard_spec for real and compares its
-    behavior against what METHOD.md and ORCHESTRATOR.md claim.
+    behavior against what METHOD.md and COMPANY.md claim.
   * EveryHookIsLoadable - every hook parses on the documented Python floor.
   * DoctrineClauses - FR-HP-51 to FR-HP-65, the items authorized by
     DECISIONS #19, and the wiring table, one required clause at a time.
@@ -82,7 +82,7 @@ class CeremonyDoctrineMatchesTheGuard(Base):
         r = run_hook("guard_spec.py",
                      self.edit_payload("Edit", "src/app.py", "x"), self.root)
         guard_requires_a_brief = r.returncode == 2
-        prose = doc("company/METHOD.md") + doc("ORCHESTRATOR.md")
+        prose = doc("company/METHOD.md") + doc("COMPANY.md")
         doctrine_says_no_brief_needed = "need no brief" in prose \
             or "needs no brief" in prose
         self.assertEqual(
@@ -91,7 +91,7 @@ class CeremonyDoctrineMatchesTheGuard(Base):
             "quick entry needs a brief. guard_spec blocks the edit: {}. The "
             "doctrine says no brief is needed: {}. Make them agree - if the "
             "guard now exempts quick, restore the clause to METHOD.md's "
-            "ceremony table and ORCHESTRATOR's classify step; if it does not, "
+            "ceremony table and COMPANY's classify step; if it does not, "
             "the clause stays out.".format(
                 guard_requires_a_brief, doctrine_says_no_brief_needed))
 
@@ -140,14 +140,14 @@ class DoctrineClauses(unittest.TestCase):
                 "{}: {} lost its required clause: {!r}".format(rel, fr,
                                                                clause))
 
-    # -- ORCHESTRATOR.md ---------------------------------------------------
+    # -- COMPANY.md ---------------------------------------------------
 
     def test_fr_hp_55_parallel_discipline(self):
         """FR-HP-55: a wave dispatched one lane per turn serializes the wave.
         The four habits are the difference between structural parallelism and
         realized parallelism.
         """
-        self.assertClauses("ORCHESTRATOR.md", "FR-HP-55", [
+        self.assertClauses("COMPANY.md", "FR-HP-55", [
             "## Parallel discipline",
             "in ONE message",
             "never idle while lanes build",
@@ -159,7 +159,7 @@ class DoctrineClauses(unittest.TestCase):
         """FR-HP-56: every rule here was paid for by a session that decoded a
         guard instead of following its recipe.
         """
-        self.assertClauses("ORCHESTRATOR.md", "FR-HP-56", [
+        self.assertClauses("COMPANY.md", "FR-HP-56", [
             "## Don't fight the harness",
             "the block message is the recipe",
             "stales the audit",
@@ -172,7 +172,7 @@ class DoctrineClauses(unittest.TestCase):
         just risk a wrong record - it wipes the audit history. The procedure
         has to name the lock and the REPAIR line or it is not reproducible.
         """
-        self.assertClauses("ORCHESTRATOR.md", "FR-HP-64", [
+        self.assertClauses("COMPANY.md", "FR-HP-64", [
             "state_lock",
             "REPAIR line",
             "resets the checksum",
@@ -183,7 +183,7 @@ class DoctrineClauses(unittest.TestCase):
         Collapsing the two would either ban concurrency the lock layer exists
         to support, or permit the one collision it cannot make safe.
         """
-        for rel in ("ORCHESTRATOR.md", "company/METHOD.md"):
+        for rel in ("COMPANY.md", "company/METHOD.md"):
             self.assertClauses(rel, "FR-HP-65", [
                 "one integrating session per repository",
                 "index.lock",
@@ -199,7 +199,7 @@ class DoctrineClauses(unittest.TestCase):
         attached. Archiving VERBATIM is the load-bearing half - a summarized
         archive is a lossy edit of the record.
         """
-        self.assertClauses("ORCHESTRATOR.md", "FR-HP-57", [
+        self.assertClauses("COMPANY.md", "FR-HP-57", [
             "company/state/archive/",
             "VERBATIM",
         ])
@@ -233,7 +233,7 @@ class DoctrineClauses(unittest.TestCase):
         ride a lite spec back down after touching a frozen surface, which is
         exactly the case a full spec exists for.
         """
-        self.assertClauses("ORCHESTRATOR.md", "DECISIONS-19", [
+        self.assertClauses("COMPANY.md", "DECISIONS-19", [
             "spec-lite",
             "ONE-WAY",
             '"spec": "lite:',
@@ -244,12 +244,12 @@ class DoctrineClauses(unittest.TestCase):
         ])
 
     def test_brief_grant_exception_is_resolved_one_way(self):
-        """Brief scope item 9: ORCHESTRATOR said the CEO applies frozen-surface
+        """Brief scope item 9: COMPANY said the CEO applies frozen-surface
         changes itself while a sealed brief had granted a frozen file to a lane
         outright. The doctrine now names the exception instead of leaving two
         rules that contradict each other.
         """
-        self.assertClauses("ORCHESTRATOR.md", "CR-2-reconciliation", [
+        self.assertClauses("COMPANY.md", "CR-2-reconciliation", [
             "brief-grant exception",
             "exactly one lane",
         ])
@@ -258,7 +258,7 @@ class DoctrineClauses(unittest.TestCase):
         """FR-ASR-02 / FR-ASR-14: the runbook dispatches the auditor on every
         merge. risk_score.py is gone; a band is not a dispatch trigger.
         """
-        text = doc("ORCHESTRATOR.md")
+        text = doc("COMPANY.md")
         self.assertNotIn("risk_score.py", text)
         self.assertIn("auditor", text.lower())
 

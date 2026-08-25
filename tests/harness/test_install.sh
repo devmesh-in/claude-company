@@ -70,7 +70,7 @@ refute "a claude-only set names no .opencode path" grep -q opencode "$CLAUDE_SET
 check "selecting opencode adds the adapter" grep -q '\.opencode/plugin/company-harness\.js' "$BOTH_SET"
 check "selecting opencode adds the pure logic" grep -q '\.opencode/lib/harness-core\.js' "$BOTH_SET"
 check "selecting opencode adds generated agents" grep -q '\.opencode/agent/developer\.md' "$BOTH_SET"
-check "selecting opencode adds generated commands" grep -q '\.opencode/command/gates\.md' "$BOTH_SET"
+check "selecting opencode adds generated commands" grep -q '\.opencode/command/company\.md' "$BOTH_SET"
 # MODULE.md is repo wayfinding, not payload; shipping it would point users at
 # a lib/ directory they do not have.
 refute "the opencode MODULE.md is not payload" grep -q '\.opencode/MODULE\.md' "$BOTH_SET"

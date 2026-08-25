@@ -138,7 +138,7 @@ the grant in MY tree is the grant that counts.
 
 US-ASR-3: As a CEO, I can merge only after a falsification audit, so that a
 clean delegated build cannot skip independent read.
-  - AC: orchestrator and auditor doctrine dispatch the auditor on every merge;
+  - AC: company and auditor doctrine dispatch the auditor on every merge;
     no risk-band or arming language remains in live runbooks.
 
 ### Functional requirements
@@ -151,7 +151,7 @@ clean delegated build cannot skip independent read.
   - AC: the four laws are present as numbered prose; no sentence claims a
     script judges situational intent.
 - **FR-ASR-02:** Delete `.claude/hooks/risk_score.py` and every live
-  reference (ORCHESTRATOR.md step 6, doctrine tests that pin the invocation,
+  reference (COMPANY.md step 6, doctrine tests that pin the invocation,
   models/docs that treat the band as a dispatch trigger). Audit-by-default
   replaces the band (closes WORRIES P0 and the substance of DECISIONS #19).
   - AC: `rg risk_score` over hooks, settings, live skills, live agents, and
@@ -230,7 +230,7 @@ clean delegated build cannot skip independent read.
   readiness rung and mentioned in `.claude/skills/gates/SKILL.md`.
   - AC: `python3 .claude/hooks/rent_report.py` exits 0 on this repo's log
     and names `guard_commit`.
-- **FR-ASR-13:** Seam review: `.claude/skills/orchestrator/SKILL.md` gains a
+- **FR-ASR-13:** Seam review: `.claude/skills/company/SKILL.md` gains a
   pre-spawn step (fresh-context read of the decomposition: lanes disjoint,
   briefs cover the requirement graph). Mechanical disjointness of brief
   "You own" globs is `.claude/hooks/seam_check.py` (stdlib). Overlap exits 1.
@@ -239,12 +239,12 @@ clean delegated build cannot skip independent read.
 - **FR-ASR-14:** Rewrite `.claude/agents/auditor.md`: the brief is the
   NEGATION of the builder's ("prove this broken"), with an attempt budget
   (OQ-ASR-08). Dispatched by default on every merge. Remove arming /
-  risk-band / "large or risky" language from live runbooks (ORCHESTRATOR.md,
-  orchestrator skill, METHOD.md provenance paragraph, RELEASE.md R6 still
+  risk-band / "large or risky" language from live runbooks (COMPANY.md,
+  company skill, METHOD.md provenance paragraph, RELEASE.md R6 still
   names an opt-in security pass via EXTENDING.md, not a missing agent file).
   - AC: auditor.md does not mention risk band, provenance ledger recording,
     or `DO-NOT-SHIP` as a token the reader must avoid for a deleted parser.
-- **FR-ASR-15:** Orchestrator skill and `tech-lead.md` carry the three-part
+- **FR-ASR-15:** Company skill and `tech-lead.md` carry the three-part
   subtask test: (1) self-contained in two sentences, (2) names its
   mechanical oracle, (3) fits one context window with room. Single-agent-first
   escalation only on named failure modes (context pressure, genuine parallel
@@ -258,7 +258,7 @@ clean delegated build cannot skip independent read.
   describes the merge-time drift model (undeclared `surfaces[]` change
   blocks at commit), not mid-flight CR-or-stop.
 - **FR-ASR-18:** Dedup sweep across `.claude/agents/*.md` and the
-  orchestrator skill: remove lines that restate what hooks enforce, and all
+  company skill: remove lines that restate what hooks enforce, and all
   live references to STATUS.md, ideation, standup, risk_score,
   guard_provenance, stop_gate.
 - **FR-ASR-19:** Payload cuts: delete `company/IDEATION.md`,

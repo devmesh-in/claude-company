@@ -69,7 +69,7 @@ Nothing else. `.opencode/` is regenerated only via `node lib/render-opencode.js`
    BR-ASR-06 table covers skip vs RUN.
 4. rent_report.py and seam_check.py (FR-ASR-12, FR-ASR-13). Oracle: CLI tests
    plus RELEASE.md / gates skill mention rent_report.
-5. Auditor rewrite, prompt alignment, METHOD/ORCHESTRATOR, templates
+5. Auditor rewrite, prompt alignment, METHOD/COMPANY, templates
    (FR-ASR-14..18). Oracle: rg over live agents/skills for STATUS.md, ideation,
    standup, risk_score, stop_gate as live runbook refs returns none.
 6. Payload cuts (FR-ASR-19): delete IDEATION, ideation-strategist, brainstorm,
