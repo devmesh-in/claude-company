@@ -298,7 +298,25 @@
       "regex": false,
       "why": "active-task.json holds N entries; a session must add and remove only its OWN entry with a targeted Edit, or it silently drops a concurrent session's task",
       "added_at": "2026-08-24T23:20:40Z"
+    },
+    {
+      "id": "W-043",
+      "task": "merge-gate-stamp",
+      "file": ".claude/hooks/guard_commit.py",
+      "must_contain": "if branch not in PROTECTED:",
+      "regex": false,
+      "why": "Merge stamp only when the current branch is main or master. Revert this and a merge of main into a task branch is stamp-gated, which re-deadlocks parallel lanes on the update path.",
+      "added_at": "2026-08-25T11:53:47Z"
+    },
+    {
+      "id": "W-044",
+      "task": "merge-gate-stamp",
+      "file": ".claude/hooks/guard_commit.py",
+      "must_contain": "DECISIONS #25: the stamp is not a commit lock.",
+      "regex": false,
+      "why": "Commit returns after frozen-drift without reading the stamp. Revert this continue and git commit is stamp-gated again, which parallel ownership cannot satisfy.",
+      "added_at": "2026-08-25T11:53:47Z"
     }
   ],
-  "checksum": "e527b14f86cd1acc1d0d3e1ff5ce276db94a88fba8aceb2d50085c526b351fa6"
+  "checksum": "498baf0d21cd4c7ca4dcacec423a98c35ab1feef7f8701bd9d8e5bdcb117d742"
 }

@@ -172,8 +172,10 @@ clean delegated build cannot skip independent read.
   - AC: a comment at each deletion site names FR-ASR-04, or the sweep finds
     nothing unique and a test says so.
 - **FR-ASR-05:** `guard_commit.py` judges the ACTING tree (the tree the
-  commit happens in via `c.acting_tree`), never the main checkout, for
-  branch, stamp, and gates.config. Adds commit-time frozen-surface drift:
+  command happens in via `c.acting_tree`), never the main checkout, for
+  branch, stamp, and gates.config. The stamp is required only on `git merge`
+  onto a protected branch (DECISIONS #25); commits are not stamp-gated.
+  Adds commit-time frozen-surface drift:
   BLOCK only an UNDECLARED change to a path matching
   `company/frozen-surfaces.json` `surfaces[]` (path matches AND no file in
   `company/change-requests/` contains that path as a substring). The
@@ -303,9 +305,11 @@ clean delegated build cannot skip independent read.
   `git commit` (FR-ASR-05); a CR whose body contains the path ALLOWs the
   commit.
 - **BR-ASR-03:** Acting-tree stamp/branch judgment (FR-ASR-05) does not ship
-  without a decision-table: commit in a worktree with a green acting-tree
-  stamp ALLOWs even when main's stamp is stale; commit in a worktree with a
-  stale acting-tree stamp BLOCKs even when main is green; unresolved `-C`
+  without a decision-table: commit in a worktree ALLOWs regardless of either
+  tree's stamp; merge onto a protected branch with a green acting-tree stamp
+  ALLOWs even when another checkout's stamp is stale; merge onto a protected
+  branch with a stale acting-tree stamp BLOCKs even when another checkout is
+  green; merge on a task branch does not require a stamp; unresolved `-C`
   falls through and does not invent a skip.
 - **BR-ASR-04:** Worktree `test_scope` plus non-source exemption (FR-ASR-06)
   does not ship without a decision-table: worktree grant / main deny ->

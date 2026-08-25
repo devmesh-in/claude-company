@@ -83,7 +83,8 @@ class TestGateAlertLine(SessionDigestBase):
         out = self.digest()
         self.assertIn("gates: no gates.status stamp", out)
         self.assertIn("feat-x", out)
-        self.assertIn("/gates", out)
+        self.assertIn("Commit is allowed", out)
+        self.assertIn("merge onto main", out)
 
     def test_a_stale_stamp_says_stale_and_names_every_gating_entry(self):
         """Named, not counted: this line is the only place a session learns

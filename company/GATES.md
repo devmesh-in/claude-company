@@ -2,8 +2,10 @@
 
 Every gate here is BLOCKING. A red gate means the work is not done, ever - no
 "works locally", no waivers, no averaging. `company/run-gates.sh` must be fully
-green before any merge, and the `guard_commit` hook blocks `git commit` while
-the stamp in `company/state/gates.status` is red, stale, or missing.
+green before any merge, and the `guard_commit` hook blocks `git merge` onto
+main/master while the stamp in `company/state/gates.status` is red, stale, or
+missing. Commits are not stamp-gated: parallel lanes share one suite and
+cannot make it green without touching each other's files (DECISIONS #25).
 
 ## How gates work mechanically
 

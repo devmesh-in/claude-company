@@ -220,14 +220,26 @@ class GuardCommitMultiEntry(MultiBase):
         r = run_hook("guard_commit.py", self.commit_payload(), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_gate_stamp_check_is_still_a_tree_fact(self):
-        """A second entry must not disarm the stamp requirement either."""
+    def test_gate_stamp_check_does_not_arm_on_commit(self):
+        """A second entry must not re-arm a commit stamp lock."""
         self.set_branch("task/feat-a")
         self.set_tasks(
             {"task": "feat-a", "type": "feature"},
             {"task": "feat-b", "type": "feature"},
         )
         r = run_hook("guard_commit.py", self.commit_payload(), self.root)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_gate_stamp_check_still_arms_on_merge_onto_main(self):
+        """A second entry must not disarm the merge stamp requirement."""
+        self.set_branch("main")
+        self.configure_gates()
+        self.set_tasks(
+            {"task": "feat-a", "type": "feature"},
+            {"task": "feat-b", "type": "feature"},
+        )
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/feat-a"), self.root)
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertIn("green, fresh gates", r.stderr)
 

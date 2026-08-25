@@ -337,12 +337,11 @@ class TestEmptyStateIndistinguishable(ParityBase):
         first = self.run_all("guard_commit.py",
                              self.bash_payload("git commit -m x"))
         # The founding-commit exemption covers the PROTECTED-BRANCH rule only.
-        # The gate-stamp check below it is a TREE fact and still applies with
-        # no task active, so this commit is refused for want of a green stamp
-        # - not for being on main. Assert the exemption by its message.
+        # The stamp is not a commit lock (DECISIONS #25), so this commit is
+        # allowed. Assert the exemption by its message: not the branch recipe.
         self.assertNotIn("work belongs on a task branch", first["stderr"])
         self.assertNotIn("commit on protected branch", first["adherence"])
-        self.assertIn("requires green, fresh gates", first["stderr"])
+        self.assertEqual(first["rc"], 0)
 
     
     def test_context_pin_silent_in_every_empty_state(self):

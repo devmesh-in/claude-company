@@ -214,7 +214,7 @@ class TestBrAsr03ActingTree(unittest.TestCase):
     def tearDown(self):
         self._inner.tearDown()
 
-    def test_br_asr_03_worktree_green_allows_when_main_stale(self):
+    def test_br_asr_03_worktree_commit_allows_when_main_stale(self):
         inner = self._inner
         wt = inner.add_worktree()
         inner.set_tasks({"task": "x", "type": "feature"})
@@ -225,7 +225,7 @@ class TestBrAsr03ActingTree(unittest.TestCase):
         r = inner.commit_guard("git -C {} commit -m y".format(wt))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_br_asr_03_worktree_stale_blocks_when_main_green(self):
+    def test_br_asr_03_worktree_commit_allows_when_own_stamp_stale(self):
         inner = self._inner
         wt = inner.add_worktree()
         inner.set_tasks({"task": "x", "type": "feature"})
@@ -234,8 +234,27 @@ class TestBrAsr03ActingTree(unittest.TestCase):
         inner.configure_gates(inner.root)
         inner.stamp(inner.root)
         r = inner.commit_guard("git -C {} commit -m y".format(wt))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_br_asr_03_merge_on_main_stale_blocks_when_worktree_green(self):
+        inner = self._inner
+        wt = inner.add_worktree()
+        inner.set_tasks({"task": "x", "type": "feature"})
+        inner.configure_gates(wt)
+        inner.stamp(wt)
+        inner.configure_gates(inner.root)
+        inner.stale_stamp(inner.root)
+        r = inner.commit_guard("git merge task/x")
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn("stale", r.stderr)
+
+    def test_br_asr_03_merge_on_task_branch_allows_without_stamp(self):
+        inner = self._inner
+        wt = inner.add_worktree()
+        inner.set_tasks({"task": "x", "type": "feature"})
+        inner.configure_gates(wt)
+        r = inner.commit_guard("git -C {} merge main".format(wt))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_br_asr_03_unresolved_dash_c_does_not_invent_a_skip(self):
         inner = self._inner

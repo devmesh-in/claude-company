@@ -72,7 +72,9 @@ Every FR/BR ID in a live spec must appear in a test and in source (BR-ASR-10).
    company recognizes. The gate suite (`company/run-gates.sh`, defined per
    project in `company/gates.config`, contract in `company/GATES.md`) decides,
    never an agent's self-report. Every gate is blocking, none is ever waived,
-   and commits are hook-blocked while gates are red or stale. Freshness is
+   and integration onto a protected branch (`git merge` onto main/master) is
+   hook-blocked while gates are red or stale. Commits are not: a shared suite
+   can be red for reasons a lane cannot legally fix, so the stamp is a merge lock, not a commit lock (DECISIONS #25). Freshness is
    CONTENT-based: a stamp goes stale when the content of the work changes under
    it, not when HEAD moves, so a commit or a merge of already-green content
    invalidates nothing.

@@ -153,8 +153,9 @@ This file is yours alone. Subagents do not read it; they read the project's
 
     What actually enforces this: NOTHING blocks the edit itself. A missing
     execution decision costs you nothing at edit time. What does enforce:
-    the auditor on every merge (FR-ASR-14), and the commit hook's stamp and
-    undeclared frozen-drift checks. Decide while context is fresh anyway; the
+    the auditor on every merge (FR-ASR-14), the commit hook's undeclared
+    frozen-drift checks, and a green stamp on `git merge` onto main/master.
+    Decide while context is fresh anyway; the
     status line pinned to every turn shows each entry's decision, dispatch
     count, and idle flag. In PR mode, record the tracking issues ("issues":
     [<n>, ...]) on your entry before dispatch.
@@ -404,7 +405,8 @@ collision the registry exists to prevent.
 
 - **When a guard blocks, the block message is the recipe.** Follow it.
   A stale stamp after a run you already did this session means write the
-  stamp from those results, not re-run the project's test suite.
+  stamp from those results, not re-run the project's test suite. A red or
+  stale stamp blocks merge onto main, not commit.
 - **Work happens on task branches.** Commit on `task/<slug>`; integration is a
   merge or a PR onto main. A commit blocked on a protected branch is misplaced
   work to move, not a block to engineer around.

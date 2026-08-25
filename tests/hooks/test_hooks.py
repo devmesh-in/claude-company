@@ -749,12 +749,13 @@ class TestGateStampAndCommit(Base):
         self.assertEqual(r.returncode, 1)
         self.assertIn("stale", r.stdout.lower())
 
-    def test_commit_blocked_when_no_stamp(self):
+    def test_commit_allowed_when_no_stamp(self):
+        # DECISIONS #25: the stamp is not a commit lock.
         self.init_git()
         self.configure_gates()
         r = run_hook("guard_commit.py",
                      self.bash_payload("git commit -m wip"), self.root)
-        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_commit_allowed_when_green(self):
         self.init_git()
@@ -764,18 +765,31 @@ class TestGateStampAndCommit(Base):
                      self.bash_payload("git commit -m done"), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_commit_bypass_no_gates_config(self):
+    def test_commit_allowed_when_red_stamp(self):
+        self.init_git()
+        self.configure_gates()
+        self.stamp({"gates": [{"name": "tests", "ok": False}]})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m wip"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_commit_allowed_when_stale_stamp(self):
+        self.init_git()
+        self.configure_gates()
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        self.write("newfile.py", "print(1)")
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git commit -m wip"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_commit_no_gates_config_does_not_need_a_bypass(self):
+        # Stamp does not apply at commit, so there is nothing to bypass.
         self.init_git()
         r = run_hook("guard_commit.py",
                      self.bash_payload("git commit -m x"), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
-        log = os.path.join(self.root, "company", "state", "adherence.log")
-        self.assertIn("BYPASS", open(log).read())
 
-    def test_commit_bypass_placeholder_only_gates(self):
-        # A fresh project: gates.config exists but holds only CONFIGURE-ME
-        # placeholders. Founding commits must flow (logged BYPASS), not
-        # deadlock behind gates that cannot be green yet.
+    def test_commit_placeholder_only_gates_does_not_need_a_bypass(self):
         self.init_git()
         self.write("company/gates.config", json.dumps({"gates": [
             {"name": "tests", "command": "echo 'CONFIGURE ME' && exit 1",
@@ -786,20 +800,103 @@ class TestGateStampAndCommit(Base):
         r = run_hook("guard_commit.py",
                      self.bash_payload("git commit -m founding"), self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_merge_on_main_blocked_when_no_stamp(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("requires green, fresh gates", r.stderr)
+        self.assertIn("merge onto a protected branch", r.stderr)
+
+    def test_merge_on_main_blocked_when_red(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.stamp({"gates": [{"name": "tests", "ok": False}]})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("requires green, fresh gates", r.stderr)
+
+    def test_merge_on_main_blocked_when_stale(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        self.write("newfile.py", "print(1)")
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("stale", r.stderr.lower())
+
+    def test_merge_on_main_allowed_when_green(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.stamp({"gates": [{"name": "tests", "ok": True}]})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_merge_on_task_branch_allowed_when_no_stamp(self):
+        self.init_git()
+        self.configure_gates()
+        self.set_branch("task/feat-x")
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge main"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_merge_on_main_bypass_no_gates_config(self):
+        self.init_git()
+        self.set_branch("main")
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        contents = open(log).read()
+        self.assertIn("BYPASS", contents)
+        self.assertIn("no gates configured", contents)
+
+    def test_merge_on_main_bypass_placeholder_only_gates(self):
+        self.init_git()
+        self.set_branch("main")
+        self.write("company/gates.config", json.dumps({"gates": [
+            {"name": "tests", "command": "echo 'CONFIGURE ME' && exit 1",
+             "blocking": True},
+        ]}))
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
         log = os.path.join(self.root, "company", "state", "adherence.log")
         self.assertIn("CONFIGURE-ME placeholders", open(log).read())
 
-    def test_commit_enforced_once_any_real_gate_exists(self):
-        # One real gate beside a leftover placeholder: enforcement snaps on.
+    def test_merge_on_main_enforced_once_any_real_gate_exists(self):
         self.init_git()
+        self.set_branch("main")
         self.write("company/gates.config", json.dumps({"gates": [
             {"name": "tests", "command": "true", "blocking": True},
             {"name": "lint", "command": "echo 'CONFIGURE ME' && exit 1",
              "blocking": True},
         ]}))
         r = run_hook("guard_commit.py",
-                     self.bash_payload("git commit -m wip"), self.root)
+                     self.bash_payload("git merge task/x"), self.root)
         self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_merge_on_main_hotfix_bypass_logged(self):
+        self.init_git()
+        self.set_branch("main")
+        self.configure_gates()
+        self.set_task({"task": "hf", "type": "hotfix"})
+        r = run_hook("guard_commit.py",
+                     self.bash_payload("git merge task/x"), self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = os.path.join(self.root, "company", "state", "adherence.log")
+        contents = open(log).read()
+        self.assertIn("BYPASS", contents)
+        self.assertIn("hotfix mode", contents)
 
     def test_commit_bypass_hotfix(self):
         self.init_git()

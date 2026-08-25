@@ -13,9 +13,9 @@ untouched (OQ-ASR-10); session_start does not read it.
 
 | Slug | What |
 |---|---|
-| lean-prompts | Ceremony cut, `/company` door, `COMPANY.md`, 0.4.1. Branch `task/lean-prompts`. |
+| merge-gate-stamp | Stamp gates merge onto main, not commit. Shipping as 0.4.2. Branch `task/merge-gate-stamp`. |
 
-NEXT ACTION: six suites, stamp, PR, merge, then `gh release create v0.4.1`.
+NEXT ACTION: PR, merge, then `gh release create v0.4.2`. Six suites already green this session.
 
 CLOSED by this work (graduated from WORRIES): P0 unmechanized risk band
 (audit-by-default), P1 umbrella dirty-check (provenance enforcement cut),
