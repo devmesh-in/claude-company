@@ -14,10 +14,10 @@ the stamp in `company/state/gates.status` is red, stale, or missing.
    the result into `company/state/gates.status` together with a work-tree hash.
    Pipefail/EPIPE false-reds in the install/CLI suites are forbidden
    (`printf | grep -q`); see FR-ASR-11.
-3. The stamp goes stale the moment tracked files change again - a green stamp
-   from before your last edit does not count. Re-run the suite. Freshness is
-   CONTENT-based: what stales a stamp is the work changing under it, not HEAD
-   moving.
+3. The stamp goes stale when gated content changes. If you already ran the
+   suites this session, write the stamp from those results. Do not re-run
+   because a prompt, notes file, or README moved. Freshness is CONTENT-based:
+   what stales a stamp is the work changing under it, not HEAD moving.
 4. Only the runner writes the stamp. The stamp file is on the frozen `always`
    list; hand-editing it is blocked and logged.
 5. A green ladder prints QUIET-PASS output: the result table, plus one pointer
@@ -124,11 +124,11 @@ guards only log their bypass. There is no waiver; scrub the secret and recommit.
 
 - Developers run the gates before reporting. Reporting red gates honestly is
   correct behavior; claiming unverified green is the firing offense.
-- Tech leads re-run the gates on the integrated workstream, never trusting a
-  developer's numbers from an isolated worktree (stale worktree artifacts mask
-  contract drift).
-- The CEO confirms the stamp on integrated main (`gate_stamp.py --check`)
-  and runs the ladder only if it is missing, red, or stale. Trust
+- Tech leads run the workstream's gates once on the combined tree if they
+  have not already. Do not re-run a session-green ladder because the stamp
+  file went stale after a notes edit.
+- The CEO runs the gates that cover the change, or stamps from a run
+  already done this session. Do not treat `--check` as a step. Trust
   integrated-main gates over any worktree self-report.
 
 ## UI work has a seventh gate: eyes

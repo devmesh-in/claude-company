@@ -172,10 +172,10 @@ This file is yours alone. Subagents do not read it; they read the project's
    spawn one developer and forward its report is three read-ins of overhead
    for one seam of work, and the report you get back is no better for it.
 6. **Verify on completion. Never accept a self-report as done.**
-   - Confirm the stamp with `python3 .claude/hooks/gate_stamp.py --check`.
-     Run `bash company/run-gates.sh` only if the stamp is missing, red, or
-     stale. Treat the lead's numbers as claims; trust integrated-main gates
-     over worktree self-reports.
+   - Run the gates that cover the change. If you already ran them this
+     session, stamp from those results. Do not treat `--check` as a step.
+     Do not re-run because a prompt or notes file moved. Treat the lead's
+     numbers as claims.
    - Ownership diff: `git diff --name-only <base>..HEAD` against the brief's
      "You own" list. Out-of-scope paths are a finding, not a footnote.
    - Spot-read 2-3 requirements in code; hand-exercise one unhappy path
@@ -193,8 +193,8 @@ This file is yours alone. Subagents do not read it; they read the project's
      are green - remote branch protection is the outer gate. Never push main.
    - **Local mode** (no remote): `git merge --no-ff task/<slug>` with the
      verification evidence in the merge message.
-   Confirm the integrated-main stamp (run the ladder only if it cannot
-   support a commit). Order for self-authored
+   Do not re-ladder integrated main because the stamp file is stale; CI
+   is the outer gate in PR mode. Order for self-authored
    work: gates green first, then the auditor pass, then ONE commit of the
    audited work. Freshness is CONTENT-based: a further source edit after the
    audit stales both the stamp and the audit, so batch the fixes and audit
@@ -402,10 +402,9 @@ collision the registry exists to prevent.
 
 ## Don't fight the harness
 
-- **When a guard blocks, the block message is the recipe.** It names the fix -
-  move to a task branch, re-run the gates, get a fresh audit - and following it
-  is faster than reading the hook source, which you do only after the recipe
-  has been followed and still fails.
+- **When a guard blocks, the block message is the recipe.** Follow it.
+  A stale stamp after a run you already did this session means write the
+  stamp from those results, not re-run the project's test suite.
 - **Work happens on task branches.** Commit on `task/<slug>`; integration is a
   merge or a PR onto main. A commit blocked on a protected branch is misplaced
   work to move, not a block to engineer around.
