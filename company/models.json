@@ -2,13 +2,13 @@
   "$comment": "Intended model per agent role. This is the ONE deliberate place to change routing; guard_models blocks silent drift (spawn overrides and frontmatter edits that contradict this). The CEO is your main session and is not listed - it runs whatever model you launched Claude Code with.",
   "version": 1,
   "roles": {
-    "product-manager": "opus", "architect": "opus", "tech-lead": "opus",
+    "architect": "opus", "tech-lead": "opus",
     "developer": "opus", "qa-engineer": "opus", "auditor": "opus",
     "docs-librarian": "opus", "ideation-strategist": "opus"
   },
   "builtins": {
     "$comment": "Built-in agent types (Explore, general-purpose, Plan, claude) have no .claude/agents frontmatter pin, so a bare spawn silently inherits the SESSION model - guard_models therefore requires an explicit matching model override for these. The Workflow tool is hook-invisible (its agent() spawns fire no PreToolUse events) and is forbidden by default - see company/METHOD.md.",
-    "Explore": "opus",
+    "Explore": "sonnet",
     "general-purpose": "opus",
     "Plan": "opus",
     "claude": "opus"

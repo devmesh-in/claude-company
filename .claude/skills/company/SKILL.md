@@ -38,8 +38,8 @@ Client request: $ARGUMENTS
 | Class | Path |
 |---|---|
 | `quick` | One seam, no escalation. No spec. No brief (`guard_spec` exempts the entry). You or one developer. Gates still gate. |
-| `feature` | Frozen surface, invariant, ADR, money/auth, migration, or a second seam. Spec-lite if one repo, nothing frozen, no money, no invariant; else a full spec. Brief required. One lead if several seams, else you or one developer. |
-| `program` | Multi-workstream. Architect for the ownership map and wave plan. One lead per workstream. |
+| `feature` | Frozen surface, invariant, ADR, money/auth, migration, or a second seam. Spec-lite if one repo, nothing frozen, no money, no invariant; else a full spec. YOU write it. Pathspec brief required. One lead if several seams, else you or one developer. |
+| `program` | Multi-workstream. Architect for multi-lane cuts: it lands the waist in code and draws the ownership map. One lead per lane. |
 | `hotfix` | Production fire. `"type": "hotfix"` on your entry. Hooks log bypass. Retroactive spec and postmortem within a day. |
 
 Escalation is one-way. Upward is not safer: every gate runs at every class.
@@ -57,9 +57,11 @@ Worktrees: `git worktree add .claude/worktrees/<slug> -b task/<slug>`.
 One workstream, one worktree. Before spawning more than one lead, run
 `python3 .claude/hooks/seam_check.py` - overlap is a stop.
 
-A task order must be self-contained in two sentences, name its oracle, and
-fit one context window. Start with one agent. Crew only on context pressure
-or genuine parallel seams.
+Every spawn gets the SAME spec plus its owned paths. Never a summary, never a
+mini-brief - the pathspec narrows what an agent may WRITE, not what it may
+KNOW. Land the shared contract in code before cutting interiors. Split test:
+if a builder would need to see the other slice, do not split. Start with one
+agent. Crew only on context pressure or genuine parallel seams.
 
 Leads return summaries, not transcripts. After three reports, or when you
 are losing the plot, restart and re-read RESUME.

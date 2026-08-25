@@ -25,13 +25,13 @@
 
 ## :bulb: About
 
-You describe what you want built. A CEO agent plans the work, staffs a team of AI product managers, architects, tech leads, developers, and QA engineers, builds it, tests it in a real browser with screenshots, and reports back with proof.
+You describe what you want built. A CEO agent plans the work, staffs a team of AI architects, tech leads, developers, and QA engineers, builds it, tests it in a real browser with screenshots, and reports back with proof.
 
 ```text
 You>  /company build me a waitlist page with an admin view
 
 CEO   sized the request: feature
-CEO   product-manager wrote the spec (3 options considered, picked #2)
+CEO   wrote the spec with you (FR ids, fallbacks, verification plan)
 CEO   tech-lead "waitlist" spawned 2 developers + 1 QA engineer
 QA    captured: loaded / empty / error / after-signup screenshots
 CEO   gates: lint PASS  typecheck PASS  tests PASS (stamped)
@@ -89,8 +89,8 @@ The CEO sizes every request, so a typo fix never gets a committee and a product 
 flowchart LR
     A([Your request]) --> B{CEO sizes it}
     B -->|quick| D[One developer]
-    B -->|feature| E[Spec with options<br>Sealed brief<br>Tech-lead team]
-    B -->|program| F[Architect: scored designs<br>Waves of parallel teams]
+    B -->|feature| E[Spec<br>Pathspec brief<br>Tech-lead team]
+    B -->|program| F[Architect: landed waist<br>Waves of parallel teams]
     D --> G[Gates + evidence]
     E --> G
     F --> G
@@ -103,8 +103,8 @@ flowchart LR
 
 Five things happen on every build, regardless of size:
 
-1. **Plans come first.** For features and products, the product manager explores 8 to 15 directions before writing the spec, and the architect picks the design from 2 to 3 scored alternatives. Both record the options they rejected and why.
-2. **[Work orders](docs/glossary.md#work-order-task-order) are sealed.** Builders receive a brief: mission, exact owned directories, [definition of done](docs/glossary.md#definition-of-done-dod), and a decided fallback for every ambiguity. Ten parallel agents make the same assumption instead of ten different ones.
+1. **Plans come first.** Every feature gets a spec with testable requirement ids before a line is written. When your ask is open rather than a stated idea, the CEO explores 8 to 15 directions first and records the options it rejected and why.
+2. **[Work orders](docs/glossary.md#work-order-task-order) carry the whole requirement.** Every builder reads the SAME spec; its brief only names the directories it may write in. Nobody builds against a summary of a summary. Open questions get one decided fallback in the spec, so ten parallel agents make the same assumption instead of ten different ones.
 3. **Teams build in parallel.** Each tech lead runs its own developers on separate directories in an isolated git [worktree](docs/glossary.md#worktree), fills the gaps between their pieces, and sends a QA engineer through the running app.
 4. **Producers never grade their own work.** Developers report, leads verify, QA captures screenshots but does not judge them, the CEO judges. Every merge gets an independent [auditor](docs/glossary.md#auditor) whose brief is the negation of the builder's. Fresh-context reads are cheap, so the company does not ration them with a score.
 5. **The [gates](docs/glossary.md#gate) decide.** Your test suite, linter, and build run as a stamped ladder. The stamp goes stale the moment gated content changes, and `git merge` onto main/master is blocked while anything is red, stale, or unstamped. Commits are not stamp-gated.
@@ -118,8 +118,7 @@ Read [how it works](docs/how-it-works.md) for the full method, including diagram
 ```mermaid
 flowchart TD
     YOU(["You: the owner<br>business policy, deploys"]) --> CEO["CEO: your main session<br>plans, staffs, verifies, reports"]
-    CEO --> PM["product-manager<br>specs with testable requirements"]
-    CEO --> AR["architect<br>scored designs, boundaries"]
+    CEO --> AR["architect<br>landed contracts, boundaries"]
     CEO --> TL["tech-lead<br>one per workstream"]
     CEO --> AU["auditor<br>independent review"]
     CEO --> DL["docs-librarian<br>canon stays current"]

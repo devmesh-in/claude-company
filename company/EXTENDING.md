@@ -32,8 +32,8 @@ may not add transitions or edit the shell.
 
 1. **Specification first.** A module doc from `SPEC-TEMPLATE.md` with FR/BR/OQ
    IDs. No spec, no build.
-2. **Agent brief.** Derived from the spec via `BRIEF-TEMPLATE.md`; sealed and
-   self-contained.
+2. **Agent brief.** A pathspec pointer via `BRIEF-TEMPLATE.md`: which spec to
+   read, which paths the lane owns. It never restates the spec.
 3. **Canon deltas via CR.** Any needed schema/contracts/kernel change is filed
    and applied by the CEO in a dedicated gated PR before the module builds on it.
 4. **Owned directories.** The module gets exactly its own directories (API side
@@ -60,10 +60,16 @@ contracts, owned routes, and seams.
 
 ## Opt-in roles (not in the default payload)
 
-The standing team is product-manager, architect, tech-lead, developer,
-qa-engineer, auditor, docs-librarian. Two further roles are opt-in: copy
-the doctrine below into `.claude/agents/<role>.md` (with `model:` matching
-`company/models.json`) when the project needs them.
+The standing team is architect, tech-lead, developer, qa-engineer, auditor,
+docs-librarian. Phase 0 specs are written by the CEO itself, not by a
+separate role. Two further roles are opt-in: copy the doctrine below into
+`.claude/agents/<role>.md` (with `model:` matching `company/models.json`)
+when the project needs them.
+
+The **architect** is a live default for MULTI-LANE programs only. On a
+single-lane feature, its job (landing the shared contract in code before
+interiors are cut) belongs to the tech lead - a separate agent there just
+adds a handoff.
 
 ### devops-engineer
 

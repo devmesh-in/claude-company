@@ -56,6 +56,6 @@ option N' when ready" if they asked only for ideas.
 ## 5. Flow into the build
 
 If the client picks (or does not veto within the same conversation): the memo
-becomes Phase 0 input - dispatch the product-manager with the winning option
-and the memo path, and run the normal `/company` pipeline from there.
+becomes Phase 0 input - you write the spec from the winning option and the
+memo, then run the normal `/company` pipeline from there.
 Archive the divergence docs with the spec when it ships.

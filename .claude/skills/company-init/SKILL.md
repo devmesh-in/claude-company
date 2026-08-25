@@ -20,9 +20,11 @@ one question: "What are we building, and for whom?"
 
 Then, in order:
 
-1. product-manager: founding spec in `company/specs/` with FR/BR IDs and
-   fallbacks. If the client wants options first, `/brainstorm` already ran.
-2. architect: ownership map, wave plan, frozen-surface entries, gate proposal.
+1. You write the founding spec in `company/specs/` with FR/BR IDs and
+   fallbacks, with the owner. If the client wants options first,
+   `/brainstorm` already ran.
+2. architect: the landed waist, ownership map, wave plan, frozen-surface
+   entries, gate proposal.
 3. You wire: `company/frozen-surfaces.json`, `company/gates.config`
    (`python3 .claude/hooks/gates_detect.py --write` once code exists; until
    then wire `python3 .claude/hooks/guard_models.py --check` so founding

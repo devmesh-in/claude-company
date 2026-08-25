@@ -13,9 +13,15 @@ harness manages evidence, not intent.
 
 Four laws (FR-ASR-01):
 
-1. **Attention is the scarce resource.** An agent with a narrow scope goes
-   deep; a broad prompt goes shallow. Decomposition into sealed briefs IS the
-   quality engine, and it applies to the coordinator too.
+1. **Attention is the scarce resource, so the WRITE-SET is narrow - not the
+   intent.** An agent with a narrow set of owned paths goes deep. But narrowing
+   what it may WRITE is not a reason to narrow what it may KNOW: intent is
+   copied down verbatim, never compressed. Every layer that re-encodes the
+   requirement replaces the goal with a proxy, and a builder optimizing hard
+   against a proxy hits it perfectly while the product stays hollow. One spec
+   travels to every spawn at every depth. Judgment about HOW to make the
+   outcome true is required inside the slice; evidence that it IS true stays
+   mechanical.
 2. **Self-report is not evidence.** Every "done" must convert into proof the
    claimant cannot fabricate or reset: gates, tree-hash stamps, witnesses,
    trace checks. Blocks are reserved for the unrecoverable; everything
@@ -40,11 +46,13 @@ Every FR/BR ID in a live spec must appear in a test and in source (BR-ASR-10).
 
 1. **Canon before code (and spec before feature).** Features become spec-ready
    before any build. A spec (see `company/templates/SPEC-TEMPLATE.md`) carries
-   stable requirement IDs (FR/BR/OQ) and a build-readiness section. Agents
-   implement against the spec's derived brief and never resolve an ambiguity by
-   personal judgment - they implement the brief's stated fallback and tag the
-   site (`// OQ-XX-NN assumption`), or file a change request. Autonomy comes
-   from removing decisions from agents, not from making agents guess well.
+   stable requirement IDs (FR/BR/OQ) and a build-readiness section, and it is
+   handed to every agent that builds against it. Ambiguity splits in two:
+   CROSS-SLICE questions get one written fallback in the spec, which every lane
+   implements and tags (`// OQ-XX-NN assumption`), so parallel agents converge;
+   questions that live entirely inside one agent's own paths are that agent's
+   to decide well and report. Autonomy comes from pinning the shared decisions,
+   not from forbidding judgment.
 
 2. **Ownership boundaries are hard.** Every dispatched agent owns an explicit
    set of directories named in its brief; everything else is read-only to it.
@@ -122,13 +130,15 @@ on the outside, hard-gated on the inside:
 Owner (human)
   CEO           - the main session. Dispatches, arbitrates CRs, verifies,
                   integrates, reports upward. Codes only glue and small fixes.
-  Staff roles   - product-manager (Phase 0 specs), architect (boundaries,
-                  ownership map, wave plan), auditor (read-only pre-merge audit)
+  Staff roles   - architect (boundaries, ownership map, landed waist; for
+                  multi-lane programs), auditor (read-only pre-merge audit).
+                  Phase 0 specs are the CEO's own job.
   Tech leads    - one per workstream. Decompose the brief, spawn and manage
                   their own developers, fill the gaps between developers' work,
                   drive QA, run gates, report upward with evidence.
-  Developers    - build exactly what their task order says, inside owned
-                  directories, in a worktree.
+  Developers    - make the spec's outcome true inside their owned
+                  directories, in a worktree. They read the same spec the
+                  lead read.
   QA engineers  - drive the built surface (Playwright), capture evidence
                   screenshots for each CHANGED screen: loaded / empty /
                   error / after-action.
@@ -137,8 +147,8 @@ Owner (human)
 Depth is capped at two below the CEO by construction (CEO -> lead -> dev/QA).
 Deeper pyramids multiply handoff drift and token cost without adding judgment.
 
-Communication travels through typed artifacts, not conversation: spec -> brief ->
-report -> RESUME. A brief is sealed and self-contained; a report follows
+Communication travels through typed artifacts, not conversation: spec
+(replicated) -> pathspec -> report -> RESUME. A report follows
 `company/templates/REPORT-TEMPLATE.md` and contains facts, not adjectives.
 
 ## Ceremony scales with the task
@@ -148,7 +158,7 @@ The CEO classifies every incoming request; nobody hand-picks ceremony:
 | Class | What | Path |
 |---|---|---|
 | `quick` | The change fits ONE seam and trips none of the escalation conditions below. Internal engineering work counts and is the common case: a hook fix, a bug, a refactor inside one module, a test repair, a CLI flag, a copy or config change. Size is not the test and neither is how important the work feels - blast radius is. | No Phase 0, and a quick entry needs no brief - the request is the work order. The exemption is PER ENTRY: a briefless quick entry exempts itself and never the tree, so a feature entry beside it still needs its brief. One developer or the CEO itself; a tech-lead over a one-seam task is a layer that reads in and delegates to itself. Gates still gate - every one of them, unchanged. |
-| `feature` | Any ONE of the escalation conditions is tripped - a frozen surface, a stated invariant, an accepted ADR, money/auth/billing, a migration or schema change, a second repo - or the work spans more than one seam. New user-visible capability is the usual reason but not the test. | Phase 0 at one of two rungs, chosen on objective conditions and never on appetite. `spec-lite`: permitted only when ALL FOUR hold - one repo, nothing frozen, no money, no invariant in play - and the CEO derives the sealed brief straight from the request, recording the rung on the task's entry. Otherwise a full Phase 0 spec -> spec-ready gate. The escape upward is ONE-WAY: the moment the work touches a frozen surface, a second repo, or an invariant it becomes a full spec and never comes back down. Then brief (required at both rungs) -> one tech lead + team -> QA evidence -> verify -> integrate. |
+| `feature` | Any ONE of the escalation conditions is tripped - a frozen surface, a stated invariant, an accepted ADR, money/auth/billing, a migration or schema change, a second repo - or the work spans more than one seam. New user-visible capability is the usual reason but not the test. | Phase 0 at one of two rungs, chosen on objective conditions and never on appetite. `spec-lite`: permitted only when ALL FOUR hold - one repo, nothing frozen, no money, no invariant in play - and the CEO writes a short spec straight from the request, recording the rung on the task's entry. Otherwise a full Phase 0 spec -> spec-ready gate. The escape upward is ONE-WAY: the moment the work touches a frozen surface, a second repo, or an invariant it becomes a full spec and never comes back down. Then a pathspec brief (required at both rungs) -> one tech lead + team -> QA evidence -> verify -> integrate. |
 | `program` | Multi-workstream build (a v1, a big subsystem) | Architect produces ownership map + wave plan. Waves are merge barriers: a wave's exit criteria must be green on main before the next wave starts. One lead per workstream, parallel within a wave. |
 | `hotfix` | Production is on fire | Declared by the CEO on that task's entry in `company/state/active-task.json` (`"type": "hotfix"`). Hooks log the bypass instead of blocking. Retroactive spec/tests within a day, and no hotfix closes without a postmortem (`company/templates/POSTMORTEM-TEMPLATE.md`) filed next to its retroactive spec in `company/specs/shipped/` as `postmortem-<slug>.md`. The CEO checks its prevention line at close: the postmortem must name a real mechanical change that prevents recurrence (a new witness, a new gate, a new frozen pattern) or state why none is possible. |
 
@@ -168,15 +178,18 @@ start rather than to round up by reflex.
 
 ## The context discipline
 
-Spec context and build context are kept apart deliberately:
+Intent is replicated; the write-set is decomposed. Those are different axes and
+the harness treats them differently:
 
-- The **spec** is rich and human-facing. The builder never reads it.
-- The **brief** (`company/templates/BRIEF-TEMPLATE.md`) is the lean execution
-  slice derived from the spec: mission, read-first list, owned directories,
-  invariants in play, frozen surfaces nearby, ordered scope, DoD, fallbacks,
-  out-of-scope. A vague brief is the main cause of a bad agent run.
-- Agents read: the project's `CLAUDE.md`, their brief, and what the brief's
-  "Read first" list cites. Nothing else is assumed.
+- The **spec** is the requirement, and it is copied verbatim to every agent at
+  every depth. It is never summarized into a substitute.
+- The **brief** (`company/templates/BRIEF-TEMPLATE.md`) is a pathspec pointer:
+  which spec, which paths this lane owns, the outcome, and the evidence floor.
+  It restates nothing. A brief that contains a Mission paragraph or a
+  re-description of the product is a briefing error.
+- Agents read: the project's `CLAUDE.md`, `company/METHOD.md`, the spec their
+  brief names, and their brief. A narrower pathspec limits what an agent may
+  WRITE. It must never be used to limit what it may KNOW.
 
 ## State the company maintains
 
